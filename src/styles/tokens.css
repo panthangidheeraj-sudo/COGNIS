@@ -1,0 +1,326 @@
+/* ==========================================================================
+   COGNIS DESIGN TOKENS
+   Luxury midnight-navy workspace + ivory research surfaces, with restrained glass on small floating
+   layers only. Every color, size, radius, shadow and motion value used by components lives here.
+   Light mode redefines the same names.
+   Breakpoints (used in media queries; CSS vars can't be used there):
+     sm-mobile ≤ 400 · mobile ≤ 640 · tablet ≤ 960 · desktop ≤ 1440 · wide > 1440
+   ========================================================================== */
+
+:root {
+  /* ---- Raw palette ---- */
+  --c-midnight: #06111c;
+  --c-deep-navy: #0b1b2a;
+  --c-navy: #102a43;
+  --c-slate-navy: #17324d;
+  --c-cobalt: #2563eb;
+  --c-electric: #3b82f6;
+  --c-luminous: #60a5fa;
+  --c-ice: #a8d8ff;
+  --c-ivory: #f7f3ea;
+  --c-warm-white: #fbfaf7;
+  --c-cool-white: #f4f7fa;
+  --c-ink: #070b12;
+  --c-graphite: #0e131a;
+  --c-silver: #c6d3e4;
+  --c-frost: #eef2f8;
+  --c-blue-black: #040b17;
+  --c-navy-900: #071326;
+  --c-navy-850: #0a1830;
+  --c-navy-800: #0e1f3a;
+  --c-navy-750: #132845;
+
+  /* ---- Typography ---- */
+  --font-sans: 'Geist Variable', 'Geist', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-serif: 'Instrument Serif', 'Iowan Old Style', Georgia, serif;
+  --font-mono: 'Geist Mono Variable', 'Geist Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+
+  --fs-display: clamp(40px, 6.2vw, 80px);
+  --fs-h1: clamp(28px, 3vw, 42px);
+  --fs-h2: clamp(22px, 2.1vw, 30px);
+  --fs-h3: 19px;
+  --fs-body: 15px;
+  --fs-body-lg: 16px;
+  --fs-sm: 13.5px;
+  --fs-xs: 12px;
+  --fs-micro: 11px;
+  --fs-data: 17px;
+  --fs-data-lg: clamp(22px, 2vw, 28px);
+
+  --lh-tight: 1.08;
+  --lh-snug: 1.3;
+  --lh-body: 1.6;
+
+  --tracking-display: -0.045em;
+  --tracking-tight: -0.02em;
+  --tracking-micro: 0.08em;
+
+  /* ---- Spacing (4px base) ---- */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-7: 32px;
+  --sp-8: 40px;
+  --sp-9: 48px;
+  --sp-10: 64px;
+  --sp-11: 80px;
+  --sp-12: 112px;
+
+  /* ---- Radius ---- */
+  --r-xs: 6px;
+  --r-sm: 8px;
+  --r-md: 10px;
+  --r-lg: 12px;
+  --r-xl: 18px;
+  --r-pill: 999px;
+
+  /* ---- Borders ---- */
+  --bw: 1px;
+
+  /* ---- Motion ---- */
+  --motion-fast: 140ms;
+  --motion-base: 220ms;
+  --motion-slow: 360ms;
+  --motion-panel: 450ms;
+  --motion-cinematic: 800ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-std: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-spring: cubic-bezier(0.34, 1.3, 0.64, 1);
+
+  /* ---- Layout ---- */
+  --rail-w: 84px;
+  --topbar-h: 60px;
+  --mobile-nav-h: 64px;
+  --content-max: 1360px;
+  --drawer-w: 440px;
+  --z-nav: 40;
+  --z-tray: 45;
+  --z-modal: 70;
+  --z-drawer: 74; /* evidence can open on top of a brief or explanation */
+  --z-palette: 80;
+  --z-toast: 90;
+
+  /* ---- Density (overridden by [data-density]) ---- */
+  --row-h: 44px;
+  --cell-px: 14px;
+  --card-p: 20px;
+}
+
+/* ==========================================================================
+   DARK (primary) — midnight-navy workspace, solid surfaces, blue as a quiet accent
+   Large surfaces (canvas, cards, panels, tables, chrome) are SOLID navy tones with a faint top light.
+   Glass (--glass-*) is reserved for small floating layers: palette, search dropdowns, menus,
+   popovers, tooltips, toasts, drawers/modals, the compare tray and floating controls.
+   ========================================================================== */
+:root,
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --bg-canvas: var(--c-blue-black);
+  --bg-canvas-2: #06142b; /* midnight towards the bottom */
+  --bg-glow: rgba(58, 104, 186, 0.16); /* blue haze, top right */
+  --bg-glow-2: rgba(22, 52, 112, 0.22); /* deep blue, bottom */
+  --bg-glow-3: rgba(40, 86, 170, 0.14); /* blue depth, mid left */
+
+  /* Solid surfaces (deep navy steps) */
+  --surface-1: var(--c-navy-850); /* cards, panels */
+  --surface-2: var(--c-navy-800); /* raised controls, inputs, chips */
+  --surface-3: var(--c-navy-750); /* wells, hover */
+  --solid-1: var(--c-navy-850);
+  --solid-2: var(--c-navy-800);
+  --solid-3: var(--c-navy-750);
+  --solid-card: var(--c-navy-850);
+  --solid-card-head: #0d1c35;
+  --chrome-bg: var(--c-navy-900); /* rail, top bar, mobile nav */
+  --surface-inverse: var(--c-ivory);
+  --surface-paper: var(--c-ivory); /* artifact body / report pages */
+
+  /* A faint top light on solid surfaces (not glass). --frost-* names kept for compatibility. */
+  --frost-sheen: linear-gradient(180deg, rgba(190, 215, 255, 0.035), rgba(190, 215, 255, 0) 42%);
+  --frost-blur: 0px;
+  --frost-edge: inset 0 1px 0 rgba(200, 222, 255, 0.055);
+  /* Glass: small floating layers only */
+  --glass-bg: rgba(12, 27, 52, 0.68);
+  --glass-bg-strong: rgba(8, 19, 39, 0.92);
+  --glass-border: rgba(160, 192, 240, 0.16);
+  --glass-blur: 22px;
+  --glass-sheen: linear-gradient(180deg, rgba(200, 222, 255, 0.07), rgba(200, 222, 255, 0.012) 48%, rgba(200, 222, 255, 0.025));
+
+  --line: rgba(150, 182, 232, 0.105);
+  --line-strong: rgba(160, 192, 240, 0.19);
+  --line-focus: rgba(232, 240, 252, 0.75);
+
+  --text-1: #f4f7fb;
+  --text-2: #c4cfdd;
+  --text-3: #8d9cb1;
+  --text-4: #7d8da6; /* ≥ 4.5:1 on the card navy */
+  --text-on-accent: #ffffff;
+  --text-on-paper: #111827;
+  --text-on-paper-2: #475569;
+
+  /* Primary action is white; blue is reserved for links and live activity */
+  --primary-bg: #f2f4f7;
+  --primary-bg-hover: #ffffff;
+  --primary-fg: #071326;
+  --primary-border: rgba(255, 255, 255, 0.85);
+  --primary-shadow: inset 0 1px 0 #ffffff, 0 10px 26px -14px rgba(190, 210, 245, 0.45);
+
+  --accent: #5b8def;
+  --accent-strong: #3f72d8;
+  --accent-soft: #c6d3e4; /* silver highlight: icons, meters, active borders */
+  --accent-ice: #eef2f8; /* near white highlight */
+  --accent-wash: rgba(160, 192, 240, 0.075);
+  --accent-wash-2: rgba(160, 192, 240, 0.13);
+  --link: #a7c3ef;
+  --live: #7aa7f2; /* running research, active step */
+  --pressed-bg: rgba(170, 200, 245, 0.15); /* selected segment, pressed toggle */
+  --dot-glow: rgba(226, 235, 248, 0.55); /* halo on small live dots */
+
+  --ok: #3cbfa8;
+  --ok-wash: rgba(60, 191, 168, 0.12);
+  --warn: #d9ac5f;
+  --warn-wash: rgba(217, 172, 95, 0.13);
+  --err: #e0857c;
+  --err-wash: rgba(224, 133, 124, 0.13);
+  --info: #a7c3ef;
+  --info-wash: rgba(167, 195, 239, 0.1);
+  --neutral-wash: rgba(160, 192, 240, 0.065);
+
+  --shadow-1: inset 0 1px 0 rgba(200, 222, 255, 0.045), 0 14px 34px -22px rgba(0, 3, 12, 0.9);
+  --shadow-2: inset 0 1px 0 rgba(200, 222, 255, 0.055), 0 30px 64px -30px rgba(0, 3, 12, 0.95);
+  --shadow-3: 0 40px 120px -30px rgba(0, 2, 10, 0.92);
+  --glow-edge: 0 0 0 1px rgba(214, 228, 250, 0.32), 0 0 30px -10px rgba(150, 190, 250, 0.4);
+  --glow-soft: 0 0 40px -12px rgba(150, 190, 250, 0.32);
+
+  --chart-1: #9dbbea;
+  --chart-2: var(--c-ivory);
+  --chart-3: #6f82a0;
+  --chart-4: #dfe6f0;
+  --chart-5: #46597a;
+  --chart-grid: rgba(150, 182, 232, 0.08);
+  --chart-axis: #7d8ca3;
+
+  --grain-opacity: 0.03;
+}
+
+/* ==========================================================================
+   LIGHT — ivory canvas, solid warm-white surfaces, navy text and actions; glass only on floating layers
+   ========================================================================== */
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  --bg-canvas: var(--c-ivory);
+  --bg-canvas-2: #f1ede4;
+  --bg-glow: rgba(255, 255, 255, 0.9);
+  --bg-glow-2: rgba(16, 42, 67, 0.05);
+  --bg-glow-3: rgba(63, 114, 216, 0.07);
+
+  --surface-1: #fffdf8; /* warm white cards */
+  --surface-2: #ffffff; /* clean white controls */
+  --surface-3: #f2eee5; /* ivory wells, hover */
+  --solid-1: #fffdf8;
+  --solid-2: #ffffff;
+  --solid-3: #f2eee5;
+  --solid-card: #fffdf8;
+  --solid-card-head: #f8f5ee;
+  --chrome-bg: #fbf9f4;
+  --surface-inverse: var(--c-deep-navy);
+  --surface-paper: #fffdf8;
+
+  --frost-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0) 45%);
+  --frost-edge: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  --glass-bg: rgba(255, 253, 248, 0.78);
+  --glass-bg-strong: rgba(255, 253, 248, 0.94);
+  --glass-border: rgba(16, 42, 67, 0.1);
+  --glass-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.45));
+
+  --line: rgba(16, 42, 67, 0.085);
+  --line-strong: rgba(16, 42, 67, 0.16);
+  --line-focus: rgba(16, 42, 67, 0.6);
+
+  --text-1: #0f1b2a;
+  --text-2: #3d4b5e;
+  --text-3: #5a6a7e;
+  --text-4: #7a889a;
+  --text-on-accent: #ffffff;
+
+  --primary-bg: #0f1b2a;
+  --primary-bg-hover: #1a2a3f;
+  --primary-fg: #ffffff;
+  --primary-border: #0f1b2a;
+  --primary-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 10px 22px -14px rgba(15, 27, 42, 0.6);
+
+  --accent: #3f72d8;
+  --accent-strong: #2c5fc4;
+  --accent-soft: #34507a;
+  --accent-ice: #1f3656;
+  --accent-wash: rgba(16, 42, 67, 0.05);
+  --accent-wash-2: rgba(16, 42, 67, 0.09);
+  --link: #2a5bbf;
+  --live: #2f66d0;
+  --pressed-bg: #ffffff;
+  --dot-glow: rgba(16, 42, 67, 0.25);
+
+  --ok: #13836f;
+  --ok-wash: rgba(19, 131, 111, 0.09);
+  --warn: #9a6a12;
+  --warn-wash: rgba(176, 122, 26, 0.1);
+  --err: #b4473c;
+  --err-wash: rgba(180, 71, 60, 0.08);
+  --info: #2a5bbf;
+  --info-wash: rgba(42, 91, 191, 0.07);
+  --neutral-wash: rgba(16, 42, 67, 0.05);
+
+  --shadow-1: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 1px 2px rgba(16, 42, 67, 0.04), 0 10px 30px -20px rgba(16, 42, 67, 0.25);
+  --shadow-2: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 2px 4px rgba(16, 42, 67, 0.04), 0 28px 60px -30px rgba(16, 42, 67, 0.35);
+  --shadow-3: 0 40px 100px -40px rgba(16, 42, 67, 0.45);
+  --glow-edge: 0 0 0 1px rgba(16, 42, 67, 0.35), 0 8px 24px -12px rgba(16, 42, 67, 0.3);
+  --glow-soft: 0 10px 40px -16px rgba(16, 42, 67, 0.3);
+
+  --chart-1: #3f6fb8;
+  --chart-2: var(--c-navy);
+  --chart-3: #8a9ab0;
+  --chart-4: #6b8cc0;
+  --chart-5: #c3cfdf;
+  --chart-grid: rgba(16, 42, 67, 0.08);
+  --chart-axis: #66768a;
+
+  --grain-opacity: 0.03;
+}
+
+/* ---- Density ---- */
+:root[data-density='compact'] {
+  --row-h: 36px;
+  --cell-px: 10px;
+  --card-p: 14px;
+  --fs-body: 14px;
+}
+
+/* ---- Reduced motion (system or user setting) ---- */
+:root[data-motion='reduced'] {
+  --motion-fast: 1ms;
+  --motion-base: 80ms;
+  --motion-slow: 120ms;
+  --motion-panel: 140ms;
+  --motion-cinematic: 160ms;
+}
+@media (prefers-reduced-motion: reduce) {
+  :root:not([data-motion='full']) {
+    --motion-fast: 1ms;
+    --motion-base: 80ms;
+    --motion-slow: 120ms;
+    --motion-panel: 140ms;
+    --motion-cinematic: 160ms;
+  }
+}
+
+@media (max-width: 640px) {
+  :root {
+    --fs-body: 15px;
+    --card-p: 16px;
+    --topbar-h: 56px;
+  }
+}

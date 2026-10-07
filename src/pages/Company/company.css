@@ -1,0 +1,403 @@
+.co-head {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 18px;
+}
+.co-id {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  min-width: 0;
+}
+.co-name {
+  font-size: var(--fs-h1);
+  letter-spacing: -0.04em;
+  line-height: 1.05;
+  font-weight: 500;
+}
+.co-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+}
+.co-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.co-actions .btn[aria-pressed='true'],
+.co-actions .is-selected {
+  border-color: color-mix(in oklab, var(--accent-soft) 70%, transparent);
+  box-shadow: var(--glow-edge);
+  background: var(--accent-wash-2);
+}
+.co-tabs {
+  position: sticky;
+  top: var(--topbar-h);
+  z-index: 5;
+  margin: 0 -32px 22px;
+  padding: 0 32px;
+  background: linear-gradient(180deg, var(--bg-canvas) 70%, color-mix(in oklab, var(--bg-canvas) 0%, transparent));
+}
+.co-panel {
+  animation: cg-fade-up var(--motion-slow) var(--ease-out);
+}
+@media (max-width: 960px) {
+  .co-tabs {
+    margin: 0 -22px 20px;
+    padding: 0 22px;
+  }
+}
+@media (max-width: 640px) {
+  .co-head {
+    gap: 14px;
+  }
+  .co-actions {
+    width: 100%;
+    flex-wrap: nowrap;
+  }
+  .co-actions > .btn {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+  .co-id {
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .co-meta {
+    font-size: var(--fs-xs);
+    gap: 2px 12px;
+  }
+  .co-tabs {
+    margin: 0 -16px 16px;
+    padding: 0 16px;
+  }
+}
+
+.co-head > :not(.co-ambient) {
+  position: relative;
+  z-index: 1;
+}
+.co-meta > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.co-meta-ico {
+  width: 14px;
+  height: 14px;
+  color: var(--text-3);
+  flex-shrink: 0;
+}
+
+/* Ambient globe motif — a quiet, static hemisphere behind the identity block. */
+.ambient-globe {
+  display: block;
+  color: var(--accent-soft);
+  pointer-events: none;
+}
+.co-ambient {
+  position: absolute;
+  z-index: 0;
+  top: -84px;
+  right: 18%;
+  width: 260px;
+  height: 260px;
+  opacity: 0.22;
+  -webkit-mask-image: radial-gradient(circle at 50% 50%, #000 40%, transparent 72%);
+  mask-image: radial-gradient(circle at 50% 50%, #000 40%, transparent 72%);
+}
+:root[data-theme='light'] .ambient-globe {
+  color: #3f5f8a;
+}
+:root[data-theme='light'] .co-ambient {
+  opacity: 0.16;
+}
+
+/* ==========================================================================
+   SNAPSHOT — five-second understanding, one calm glass band of six facts
+   ========================================================================== */
+.snap {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  margin-bottom: 12px;
+  border-radius: var(--r-lg);
+  border: var(--bw) solid var(--line);
+  background: var(--frost-sheen), var(--surface-1);
+  box-shadow: var(--frost-edge), var(--shadow-1);
+  overflow: hidden;
+}
+.snap-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  min-width: 0;
+  padding: 15px 18px 14px;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  background: transparent;
+  border: 0;
+  /* Hairlines drawn up/left of every tile; the band clips the outer edges,
+     so the grid stays correct at any column count or tile order. */
+  box-shadow: -1px -1px 0 0 var(--line);
+  transition: background var(--motion-fast) var(--ease-out);
+}
+button.snap-tile {
+  cursor: pointer;
+}
+button.snap-tile:hover {
+  background: var(--accent-wash);
+}
+button.snap-tile:focus-visible {
+  outline: 2px solid var(--line-focus);
+  outline-offset: -2px;
+}
+.snap-tile--warn {
+  box-shadow:
+    -1px -1px 0 0 var(--line),
+    inset 0 2px 0 color-mix(in oklab, var(--warn) 70%, transparent);
+}
+.snap-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+  font-weight: 500;
+}
+.snap-period {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  color: var(--text-3);
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: var(--bw) solid var(--line-strong);
+}
+.snap-flag {
+  font-size: 10.5px;
+  font-weight: 500;
+  padding: 1px 7px;
+  border-radius: 999px;
+  color: var(--warn);
+  background: color-mix(in oklab, var(--warn) 14%, transparent);
+}
+.snap-value {
+  font-size: clamp(20px, 1.6vw, 24px);
+  letter-spacing: -0.03em;
+  font-weight: 500;
+  line-height: 1.12;
+  color: var(--text-1);
+  white-space: nowrap;
+  max-width: 100%;
+}
+.snap-value--text {
+  font-size: clamp(16px, 1.25vw, 19px);
+  letter-spacing: -0.015em;
+}
+.snap-value--na {
+  font-size: 16px;
+  font-weight: 400;
+  color: var(--text-3);
+  letter-spacing: 0;
+}
+.snap-unit {
+  font-size: 12.5px;
+  letter-spacing: 0;
+  font-weight: 400;
+  color: var(--text-3);
+}
+.snap-sub {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--fs-xs);
+  color: var(--text-2);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.snap-tile--missing .snap-sub {
+  color: var(--text-3);
+  white-space: normal;
+}
+.snap-ico {
+  width: 12px;
+  height: 12px;
+  color: var(--text-3);
+  flex-shrink: 0;
+}
+.snap-delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+.snap-delta svg {
+  width: 13px;
+  height: 13px;
+}
+.snap-delta.is-up {
+  color: var(--ok);
+}
+.snap-delta.is-down {
+  color: var(--warn);
+}
+.snap-cov {
+  display: flex;
+  min-height: 28px;
+  align-items: center;
+}
+.snap-link {
+  font-size: var(--fs-xs);
+}
+.snap .vline {
+  margin-top: auto;
+  max-width: 100%;
+}
+@media (max-width: 1240px) {
+  .snap {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 640px) {
+  /* Mobile five-second order: coverage, revenue, employees, CEO, hiring, freshness */
+  .snap-tile--cov {
+    order: -1;
+  }
+  .snap {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .snap-tile {
+    padding: 12px 14px;
+  }
+}
+
+/* ==========================================================================
+   WHAT CHANGED? — verified material changes, in decision order
+   ========================================================================== */
+.wc {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 10px 14px 10px 16px;
+  margin-bottom: 22px;
+  border-radius: var(--r-lg);
+  border: var(--bw) solid var(--line);
+  background: var(--surface-1);
+}
+.wc-lead {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--text-1);
+}
+.wc-lead svg {
+  width: 15px;
+  height: 15px;
+  color: var(--accent-soft);
+}
+.wc-lead h2 {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  letter-spacing: 0;
+}
+.wc-since {
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+}
+.wc-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+.wc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 11px 0 9px;
+  border-radius: var(--r-pill);
+  border: var(--bw) solid var(--line-strong);
+  background: var(--accent-wash);
+  color: var(--text-1);
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background var(--motion-fast) var(--ease-out),
+    border-color var(--motion-fast) var(--ease-out);
+}
+.wc-chip svg {
+  width: 13px;
+  height: 13px;
+  color: var(--accent-soft);
+}
+.wc-chip.is-up svg {
+  color: var(--ok);
+}
+.wc-chip.is-down svg {
+  color: var(--warn);
+}
+.wc-chip:hover,
+.wc-chip[aria-expanded='true'] {
+  background: var(--accent-wash-2);
+  border-color: color-mix(in oklab, var(--accent-soft) 55%, transparent);
+}
+.wc-empty {
+  flex: 1;
+  min-width: 240px;
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+}
+.wc-all {
+  margin-left: auto;
+  font-size: var(--fs-xs);
+}
+@media (max-width: 640px) {
+  .wc {
+    padding: 10px 12px;
+    margin-bottom: 18px;
+  }
+  .wc-since {
+    flex-basis: 100%;
+    order: 1;
+  }
+  .wc-chips {
+    order: 2;
+    flex-basis: 100%;
+  }
+  .wc-all {
+    order: 0;
+  }
+}
+
+/* Compact density: tighter header band */
+:root[data-density='compact'] .co-head {
+  margin-bottom: 12px;
+}
+:root[data-density='compact'] .snap-tile {
+  padding: 10px 14px;
+  gap: 3px;
+}
+:root[data-density='compact'] .snap-value {
+  font-size: 19px;
+}
+:root[data-density='compact'] .wc {
+  padding: 7px 12px;
+  margin-bottom: 14px;
+}

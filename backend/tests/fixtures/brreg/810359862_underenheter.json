@@ -1,0 +1,112 @@
+{
+  "_embedded": {
+    "underenheter": [
+      {
+        "_links": {
+          "self": {
+            "href": "https://data.brreg.no/enhetsregisteret/api/underenheter/975014436"
+          },
+          "overordnetEnhet": {
+            "href": "https://data.brreg.no/enhetsregisteret/api/enheter/810359862"
+          }
+        },
+        "beliggenhetsadresse": {
+          "adresse": [
+            "Cecilie Thoresens vei 7"
+          ],
+          "kommune": "OSLO",
+          "kommunenummer": "0301",
+          "land": "Norge",
+          "landkode": "NO",
+          "postnummer": "1153",
+          "poststed": "OSLO"
+        },
+        "harRegistrertAntallAnsatte": false,
+        "historiskeNavn": [],
+        "naeringskode1": {
+          "beskrivelse": "Detaljhandel med motorvogner",
+          "kode": "47.810"
+        },
+        "navn": "AUTOBJØRN AS AVD SALG",
+        "oppstartsdato": "1980-01-01",
+        "organisasjonsform": {
+          "_links": {
+            "self": {
+              "href": "https://data.brreg.no/enhetsregisteret/api/organisasjonsformer/BEDR"
+            }
+          },
+          "beskrivelse": "Underenhet til næringsdrivende og offentlig forvaltning",
+          "kode": "BEDR"
+        },
+        "organisasjonsnummer": "975014436",
+        "overordnetEnhet": "810359862",
+        "registreringsdatoEnhetsregisteret": "1998-04-24",
+        "registrertIMvaregisteret": false,
+        "respons_klasse": "Underenhet"
+      },
+      {
+        "_links": {
+          "self": {
+            "href": "https://data.brreg.no/enhetsregisteret/api/underenheter/974072599"
+          },
+          "overordnetEnhet": {
+            "href": "https://data.brreg.no/enhetsregisteret/api/enheter/810359862"
+          }
+        },
+        "antallAnsatte": 12,
+        "beliggenhetsadresse": {
+          "adresse": [
+            "Cecilie Thoresens vei 7"
+          ],
+          "kommune": "OSLO",
+          "kommunenummer": "0301",
+          "land": "Norge",
+          "landkode": "NO",
+          "postnummer": "1153",
+          "poststed": "OSLO"
+        },
+        "harRegistrertAntallAnsatte": true,
+        "historiskeNavn": [
+          {
+            "fraDato": "1995-02-22 22:15:00",
+            "navn": "AUTOBJØRN A/S",
+            "tilDato": "1998-04-24 18:19:04"
+          }
+        ],
+        "naeringskode1": {
+          "beskrivelse": "Reparasjon og vedlikehold av motorvogner",
+          "kode": "95.310"
+        },
+        "navn": "AUTOBJØRN AS AVD VERKSTED",
+        "oppstartsdato": "1965-12-31",
+        "organisasjonsform": {
+          "_links": {
+            "self": {
+              "href": "https://data.brreg.no/enhetsregisteret/api/organisasjonsformer/BEDR"
+            }
+          },
+          "beskrivelse": "Underenhet til næringsdrivende og offentlig forvaltning",
+          "kode": "BEDR"
+        },
+        "organisasjonsnummer": "974072599",
+        "overordnetEnhet": "810359862",
+        "registreringsdatoAntallAnsatteEnhetsregisteret": "2026-07-14",
+        "registreringsdatoAntallAnsatteNAVAaregisteret": "2026-07-10",
+        "registreringsdatoEnhetsregisteret": "1995-02-22",
+        "registrertIMvaregisteret": false,
+        "respons_klasse": "Underenhet"
+      }
+    ]
+  },
+  "_links": {
+    "self": {
+      "href": "https://data.brreg.no/enhetsregisteret/api/underenheter?overordnetEnhet=810359862&size=1000"
+    }
+  },
+  "page": {
+    "number": 0,
+    "size": 1000,
+    "totalElements": 2,
+    "totalPages": 1
+  }
+}

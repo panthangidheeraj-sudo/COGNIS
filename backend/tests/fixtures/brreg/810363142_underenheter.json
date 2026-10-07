@@ -1,0 +1,80 @@
+{
+  "_embedded": {
+    "underenheter": [
+      {
+        "_links": {
+          "self": {
+            "href": "https://data.brreg.no/enhetsregisteret/api/underenheter/980997537"
+          },
+          "overordnetEnhet": {
+            "href": "https://data.brreg.no/enhetsregisteret/api/enheter/810363142"
+          }
+        },
+        "beliggenhetsadresse": {
+          "adresse": [
+            "c/o Front Real Estate AS",
+            "Fridtjof Nansens plass 4"
+          ],
+          "kommune": "OSLO",
+          "kommunenummer": "0301",
+          "land": "Norge",
+          "landkode": "NO",
+          "postnummer": "0160",
+          "poststed": "OSLO"
+        },
+        "harRegistrertAntallAnsatte": false,
+        "historiskeNavn": [
+          {
+            "fraDato": "1999-08-18 18:16:16",
+            "navn": "A K EIENDOM AS",
+            "tilDato": "2008-10-15 20:28:23"
+          }
+        ],
+        "naeringskode1": {
+          "beskrivelse": "Utleie av egen eller leid fast eiendom",
+          "kode": "68.200"
+        },
+        "navn": "BJØRNSTJERNE BJØRNSONSGATE AS",
+        "oppstartsdato": "1999-01-01",
+        "organisasjonsform": {
+          "_links": {
+            "self": {
+              "href": "https://data.brreg.no/enhetsregisteret/api/organisasjonsformer/BEDR"
+            }
+          },
+          "beskrivelse": "Underenhet til næringsdrivende og offentlig forvaltning",
+          "kode": "BEDR"
+        },
+        "organisasjonsnummer": "980997537",
+        "overordnetEnhet": "810363142",
+        "postadresse": {
+          "adresse": [
+            "c/o Malling & Co Forvaltning AS",
+            "Postboks 1883 Vika"
+          ],
+          "kommune": "OSLO",
+          "kommunenummer": "0301",
+          "land": "Norge",
+          "landkode": "NO",
+          "postnummer": "0124",
+          "poststed": "OSLO"
+        },
+        "registreringsdatoEnhetsregisteret": "1999-08-18",
+        "registrertIMvaregisteret": false,
+        "respons_klasse": "Underenhet",
+        "telefon": "32 21 03 71"
+      }
+    ]
+  },
+  "_links": {
+    "self": {
+      "href": "https://data.brreg.no/enhetsregisteret/api/underenheter?overordnetEnhet=810363142&size=1000"
+    }
+  },
+  "page": {
+    "number": 0,
+    "size": 1000,
+    "totalElements": 1,
+    "totalPages": 1
+  }
+}

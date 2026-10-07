@@ -1,0 +1,336 @@
+.cmp-picker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+.cmp-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 280px;
+  height: 40px;
+  padding: 0 8px 0 6px;
+  border-radius: var(--r-md);
+  border: var(--bw) solid color-mix(in oklab, var(--accent-soft) 60%, transparent);
+  background: var(--accent-wash);
+  box-shadow: var(--glow-edge);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+}
+.cmp-add {
+  position: relative;
+  width: 260px;
+}
+.cmp-add .input {
+  height: 40px;
+}
+.cmp-sugg {
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  max-height: 300px;
+  overflow-y: auto;
+}
+.cmp-charts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: 16px;
+}
+.cmp-bars {
+  display: grid;
+  gap: 12px;
+}
+.cmp-bars li {
+  display: grid;
+  grid-template-columns: minmax(0, 170px) 1fr 70px;
+  gap: 12px;
+  align-items: center;
+}
+.cmp-bar {
+  height: 10px;
+  border-radius: 5px;
+  background: var(--neutral-wash);
+  overflow: hidden;
+}
+.cmp-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 5px;
+}
+@media (max-width: 640px) {
+  .cmp-add {
+    width: 100%;
+  }
+  .cmp-charts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Section anchors */
+.cmp-anchors {
+  position: sticky;
+  top: calc(var(--topbar-h) + 6px);
+  z-index: 6;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px;
+  margin: -8px 0 -6px;
+  width: fit-content;
+  max-width: 100%;
+  border-radius: var(--r-pill);
+  border: var(--bw) solid var(--line-strong);
+  background: var(--chrome-bg); /* sticky anchor bar: solid */
+  box-shadow: var(--shadow-1);
+}
+.cmp-anchor-target {
+  scroll-margin-top: calc(var(--topbar-h) + 64px);
+}
+@media (max-width: 640px) {
+  .cmp-anchors {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    width: 100%;
+    border-radius: var(--r-md);
+  }
+}
+
+
+/* ==================== Side-by-side board ====================
+   Companies are peer columns: a solid column band runs from the header card down through every
+   section; the same metric is on the same row for every company. The label column is narrow and
+   quiet, pinned left while the columns scroll horizontally on narrow screens (never stacked). */
+.cmp-board {
+  --label-w: 152px;
+  --col-min: 228px;
+  --gap: 10px;
+  overflow-x: auto;
+  margin: 0 calc(var(--gap) * -1);
+  padding-bottom: 6px;
+  outline: none;
+  scrollbar-width: thin;
+}
+.cmp-board:focus-visible {
+  box-shadow: 0 0 0 2px var(--line-focus);
+  border-radius: var(--r-lg);
+}
+.cmp-grid {
+  width: 100%;
+  min-width: calc(var(--label-w) + var(--n) * var(--col-min) + (var(--n) + 1) * var(--gap));
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: var(--gap) 0;
+}
+.cmp-col-label {
+  width: var(--label-w);
+}
+
+/* label column: quiet, narrow, pinned */
+.cmp-label {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  padding: 12px 10px 12px 2px;
+  vertical-align: top;
+  text-align: left;
+  font-size: var(--fs-xs);
+  font-weight: 400;
+  line-height: 1.45;
+  color: var(--text-3);
+  background: transparent;
+  transition: background var(--motion-fast);
+}
+.cmp-board[data-scrolled] .cmp-label {
+  background: var(--bg-canvas);
+  box-shadow: 8px 0 14px -10px rgba(0, 0, 0, 0.6);
+}
+.cmp-unit {
+  color: var(--text-4);
+}
+.cmp-corner {
+  vertical-align: bottom;
+  padding-bottom: 16px;
+}
+.cmp-corner > span {
+  display: block;
+}
+.cmp-corner .t-xs {
+  margin-top: 6px;
+  max-width: 18ch;
+}
+
+/* company columns: one continuous solid band */
+.cmp-head,
+.cmp-cell,
+.cmp-sec-co {
+  background: var(--surface-1);
+  box-shadow:
+    inset 1px 0 0 var(--line),
+    inset -1px 0 0 var(--line);
+  text-align: left;
+}
+.cmp-head {
+  padding: 18px 18px 16px;
+  vertical-align: top;
+  font-weight: 400;
+  border-radius: 14px 14px 0 0;
+  box-shadow:
+    inset 0 3px 0 var(--co),
+    inset 1px 0 0 var(--line),
+    inset -1px 0 0 var(--line);
+  background: var(--frost-sheen), var(--surface-1);
+}
+.cmp-head-in {
+  display: grid;
+  gap: 14px;
+}
+.cmp-head-name {
+  font-size: 16.5px;
+  font-weight: 500;
+  letter-spacing: -0.015em;
+  line-height: 1.25;
+  color: var(--text-1);
+  overflow-wrap: break-word;
+  hyphens: auto;
+}
+.cmp-head-in .t-mono {
+  white-space: nowrap;
+}
+.cmp-head-name:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.cmp-head-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: var(--bw) solid var(--line);
+}
+.cmp-cell {
+  padding: 12px 18px;
+  vertical-align: top;
+  border-top: var(--bw) solid var(--line);
+  font-size: 14.5px;
+  color: var(--text-1);
+  overflow-wrap: break-word;
+  transition: background var(--motion-fast);
+}
+/* long values wrap inside their own column instead of running into the next company */
+.cmp-cell .fact {
+  max-width: 100%;
+}
+.cmp-cell .fact-btn {
+  white-space: normal;
+  display: inline;
+  overflow-wrap: break-word;
+}
+.cmp-cell .fact-count {
+  white-space: nowrap;
+}
+.cmp-cell .freshness {
+  display: block;
+  margin-top: 3px;
+}
+.cmp-cell .fact--missing {
+  font-size: var(--fs-sm);
+}
+.cmp-group--glance .cmp-cell {
+  font-size: 17px;
+  font-weight: 500;
+  letter-spacing: -0.015em;
+}
+.cmp-group--glance .cmp-cell .fact--missing {
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.cmp-group:last-of-type .cmp-row:last-child .cmp-cell {
+  border-radius: 0 0 14px 14px;
+  box-shadow:
+    inset 1px 0 0 var(--line),
+    inset -1px 0 0 var(--line),
+    inset 0 -1px 0 var(--line);
+  padding-bottom: 16px;
+}
+
+/* section divisions: a small label + a thin rule, with each column's name repeated quietly */
+.cmp-sec > * {
+  padding-top: 22px;
+  padding-bottom: 8px;
+  border-top: var(--bw) solid var(--line-strong);
+}
+.cmp-group:first-of-type .cmp-sec > * {
+  padding-top: 14px;
+}
+.cmp-sec .cmp-label {
+  font-family: var(--font-mono);
+  font-size: var(--fs-micro);
+  letter-spacing: var(--tracking-micro);
+  text-transform: uppercase;
+  color: var(--accent-ice);
+}
+.cmp-sec-co {
+  font-size: 11px;
+  color: var(--text-4);
+  vertical-align: bottom;
+  padding-left: 18px;
+  padding-right: 18px;
+}
+.cmp-sec-co > span {
+  display: inline-block;
+  max-width: calc(100% - 16px);
+  vertical-align: bottom;
+}
+.cmp-sec-co i {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 7px;
+  border-radius: 2px;
+  vertical-align: 1px;
+}
+
+/* scan a row across all companies */
+.cmp-row:hover .cmp-cell {
+  background: color-mix(in oklab, var(--surface-1) 90%, var(--accent-ice));
+}
+.cmp-row:hover .cmp-label {
+  color: var(--text-1);
+}
+
+@media (max-width: 640px) {
+  .cmp-board {
+    --label-w: 104px;
+    --col-min: 178px;
+    --gap: 6px;
+  }
+  .cmp-head {
+    padding: 14px 12px 12px;
+  }
+  .cmp-cell {
+    padding: 10px 12px;
+    font-size: 14px;
+  }
+  .cmp-group--glance .cmp-cell {
+    font-size: 15.5px;
+  }
+  .cmp-sec-co {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+}
+:root[data-density='compact'] .cmp-cell {
+  padding-top: 7px;
+  padding-bottom: 7px;
+}
+:root[data-density='compact'] .cmp-label {
+  padding-top: 7px;
+  padding-bottom: 7px;
+}
+:root[data-density='compact'] .cmp-group--glance .cmp-cell {
+  font-size: 15px;
+}

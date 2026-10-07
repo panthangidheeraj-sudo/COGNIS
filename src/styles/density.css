@@ -1,0 +1,103 @@
+/* ==========================================================================
+   DENSITY — Comfortable (default) / Compact
+   Compact is for analysts working through many rows: it tightens page
+   padding, cards, metrics, tables, data sheets, compare and research panels.
+   Typography sizes for values stay legible; only spacing and secondary text
+   shrink. Set on <html data-density="compact"> by PreferenceSync.
+   ========================================================================== */
+:root[data-density='compact'] {
+  --row-h: 34px;
+  --cell-px: 10px;
+  --card-p: 14px;
+}
+
+/* Page frame */
+:root[data-density='compact'] .page {
+  padding-top: 18px;
+  padding-bottom: 44px;
+}
+:root[data-density='compact'] .page-head {
+  margin-bottom: 14px;
+}
+:root[data-density='compact'] .card-head {
+  margin-bottom: 10px;
+}
+
+/* Metrics */
+:root[data-density='compact'] .metric {
+  padding: 10px 12px 9px;
+  gap: 3px;
+}
+:root[data-density='compact'] .metric-value {
+  font-size: 19px;
+}
+
+/* Tables */
+:root[data-density='compact'] .table {
+  font-size: 13px;
+}
+:root[data-density='compact'] .table thead th {
+  font-size: 11px;
+}
+
+/* Compare (side-by-side board) */
+:root[data-density='compact'] .cmp-head {
+  padding-top: 12px;
+  padding-bottom: 10px;
+}
+:root[data-density='compact'] .cmp-sec > * {
+  padding-top: 12px;
+  padding-bottom: 5px;
+}
+
+/* Research workspace */
+:root[data-density='compact'] .rs-grid {
+  gap: 10px;
+  margin-top: 14px;
+}
+:root[data-density='compact'] .rs-col {
+  gap: 10px;
+}
+:root[data-density='compact'] .rs-panel {
+  padding: 12px 14px;
+}
+:root[data-density='compact'] .step {
+  padding: 5px 6px;
+}
+:root[data-density='compact'] .evtl-row {
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+
+/* Data sheets */
+:root[data-density='compact'] .sg-cell {
+  font-size: 13px;
+}
+
+/* Library */
+:root[data-density='compact'] .lib-grid {
+  gap: 10px;
+}
+:root[data-density='compact'] .lib-body {
+  padding: 10px 12px;
+}
+
+/* Sections */
+:root[data-density='compact'] .tl-item {
+  padding: 6px 0;
+}
+:root[data-density='compact'] .change {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+/* Top-bar toggle state */
+.topbar-density[aria-pressed='true'] {
+  color: var(--text-1);
+  background: var(--accent-wash);
+}
+@media (max-width: 640px) {
+  .topbar-density {
+    display: none;
+  }
+}

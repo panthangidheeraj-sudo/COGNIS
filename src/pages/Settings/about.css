@@ -1,0 +1,777 @@
+/* ==================== ABOUT — scroll story ====================
+   Acts are tall sections; each `.pin` stage sticks under the top bar while `--p` (0 → 1, set by
+   useScrollStory) drives the choreography. Motion rules are scoped to `.story:not(.story--static)`;
+   reduced motion gets the same content as a calm static page (and `--p: 1`, the finished state). */
+.story {
+  --p: 0;
+  position: relative;
+  margin-top: calc(var(--topbar-h) * -1);
+}
+.act {
+  position: relative;
+  height: 230vh;
+}
+.act--earth {
+  height: 340vh;
+}
+.act--precision {
+  height: auto;
+}
+.pin {
+  position: sticky;
+  top: var(--topbar-h);
+  height: calc(100svh - var(--topbar-h));
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 0 clamp(24px, 5vw, 80px);
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+  align-items: center;
+  gap: clamp(28px, 4vw, 64px);
+}
+.act-visual {
+  position: relative;
+  min-width: 0;
+}
+.act--earth .act-visual,
+.act--evidence .act-visual,
+.act--workflow .act-visual,
+.act--understand .act-visual {
+  order: 2;
+}
+
+/* ---- copy ---- */
+.act-copy {
+  display: grid;
+  min-width: 0;
+}
+.act-copy > .copy {
+  grid-area: 1 / 1;
+}
+.copy {
+  max-width: 34rem;
+}
+.copy-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-micro);
+  letter-spacing: var(--tracking-micro);
+  text-transform: uppercase;
+  color: var(--accent-ice);
+}
+.copy-rule {
+  width: 28px;
+  height: 1px;
+  background: currentColor;
+  opacity: 0.6;
+}
+.copy-title {
+  margin-top: 18px;
+  font-size: clamp(32px, 3.6vw, 54px);
+  line-height: 1.04;
+  letter-spacing: -0.035em;
+  font-weight: 450;
+  color: var(--text-1);
+}
+.copy-title--lead {
+  font-size: clamp(40px, 5vw, 76px);
+  letter-spacing: var(--tracking-display);
+  line-height: 0.98;
+}
+.copy-title em {
+  font-style: italic;
+  color: var(--accent-ice);
+}
+.copy-body {
+  margin-top: 22px;
+  font-size: clamp(15.5px, 1.2vw, 17.5px);
+  line-height: 1.65;
+  color: var(--text-2);
+}
+.copy-points {
+  display: grid;
+  gap: 12px;
+  margin-top: 26px;
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+}
+.copy-points li {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+.copy-points svg {
+  width: 17px;
+  height: 17px;
+  margin-top: 2px;
+  color: var(--accent-soft);
+}
+.story-scroll-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 34px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-micro);
+  letter-spacing: var(--tracking-micro);
+  text-transform: uppercase;
+  color: var(--text-4);
+}
+.story-scroll-hint svg {
+  width: 14px;
+  height: 14px;
+  transform: rotate(90deg);
+}
+
+/* ---- chapter index (a small floating navigation overlay: glass is allowed here) ---- */
+.story-index {
+  position: fixed;
+  z-index: 20;
+  right: 18px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+.story-index ol {
+  display: grid;
+  gap: 2px;
+  padding: 6px;
+  border-radius: var(--r-lg);
+  border: var(--bw) solid var(--glass-border);
+  background: var(--glass-sheen), var(--glass-bg);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  backdrop-filter: blur(14px) saturate(140%);
+  box-shadow: var(--shadow-2);
+}
+.story-index button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 6px 10px;
+  border-radius: var(--r-sm);
+  font-size: 11.5px;
+  color: var(--text-4);
+  transition:
+    color var(--motion-base),
+    background var(--motion-base);
+}
+.story-index button:hover {
+  color: var(--text-2);
+  background: var(--accent-wash);
+}
+.story-index button.is-active {
+  color: var(--text-1);
+  background: var(--accent-wash-2);
+}
+.story-index .t-mono {
+  font-size: 10.5px;
+}
+.story-index-label {
+  max-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  opacity: 0;
+  transition:
+    max-width var(--motion-slow) var(--ease-out),
+    opacity var(--motion-base);
+}
+.story-index:hover .story-index-label,
+.story-index:focus-within .story-index-label,
+.story-index .is-active .story-index-label {
+  max-width: 120px;
+  opacity: 1;
+}
+
+/* ==================== 01 + 02 · Earth ==================== */
+.earth-visual {
+  display: grid;
+  place-items: center;
+}
+.story-globe {
+  width: min(680px, 100%, 82svh);
+  aspect-ratio: 1;
+}
+
+/* ==================== 03 · dossier layers ==================== */
+.dossier {
+  display: grid;
+  gap: 10px;
+  perspective: 1400px;
+}
+.dossier-layer {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  border-radius: var(--r-lg);
+  border: var(--bw) solid var(--line);
+  background: var(--frost-sheen), var(--surface-1);
+  box-shadow: var(--shadow-1);
+}
+.dossier-icon,
+.tier-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--r-md);
+  color: var(--accent-ice);
+  background: var(--accent-wash);
+  border: var(--bw) solid var(--line);
+}
+.dossier-icon svg,
+.tier-icon svg {
+  width: 18px;
+  height: 18px;
+}
+.dossier-text,
+.tier-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.dossier-text strong,
+.tier-text strong {
+  font-weight: 500;
+  color: var(--text-1);
+}
+.dossier-src,
+.tier-rank {
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+
+/* ==================== 04 · verification rings ==================== */
+.rings {
+  display: grid;
+  place-items: center;
+  min-height: min(520px, 70svh);
+}
+.rings-svg {
+  width: min(460px, 100%);
+  aspect-ratio: 1;
+  overflow: visible;
+}
+.ring {
+  fill: none;
+  stroke: var(--accent-soft);
+}
+.ring--outer {
+  stroke-opacity: 0.25;
+  stroke-dasharray: 3 7;
+}
+.ring--mid {
+  stroke-opacity: 0.4;
+}
+.ring--inner {
+  stroke-opacity: 0.7;
+}
+.ring-node,
+.ring-tip {
+  fill: var(--accent-ice);
+}
+.ring-ray {
+  stroke: var(--accent-ice);
+  stroke-opacity: 0.75;
+  stroke-linecap: round;
+}
+.labels {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  align-content: center;
+  justify-items: end;
+  gap: 10px;
+  pointer-events: none;
+}
+.label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: var(--r-pill);
+  border: var(--bw) solid var(--line-strong);
+  background: var(--surface-2);
+  box-shadow: var(--shadow-1);
+  font-size: var(--fs-sm);
+  color: var(--text-1);
+}
+.label svg {
+  width: 15px;
+  height: 15px;
+}
+.label--ok svg {
+  color: var(--ok);
+}
+.label--info svg {
+  color: var(--info);
+}
+.label--warn svg {
+  color: var(--warn);
+}
+.label--muted {
+  color: var(--text-3);
+}
+.label--muted svg {
+  color: var(--text-4);
+}
+
+/* ==================== 05 · source tiers ==================== */
+.tiers {
+  display: grid;
+  gap: 12px;
+  perspective: 1400px;
+}
+.tier {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
+  border-radius: var(--r-lg);
+  border: var(--bw) solid var(--line);
+  background: var(--frost-sheen), var(--surface-1);
+  box-shadow: var(--shadow-1);
+}
+.tier--discovery {
+  border-style: dashed;
+  background: transparent;
+  box-shadow: none;
+}
+.tier--discovery .tier-icon {
+  color: var(--text-3);
+  background: transparent;
+}
+.tier--discovery .tier-rank {
+  color: var(--warn);
+}
+
+/* ==================== 06 · workflow ==================== */
+.flow {
+  --fill: 0;
+  position: relative;
+  display: grid;
+  gap: 14px;
+  padding-left: 4px;
+}
+.flow::before,
+.flow::after {
+  content: '';
+  position: absolute;
+  left: 23px;
+  top: 22px;
+  bottom: 22px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--line-strong);
+}
+.flow::after {
+  background: var(--accent-soft);
+  transform-origin: top;
+  transform: scaleY(var(--fill));
+}
+.flow-step {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+}
+.flow-dot {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: var(--bw) solid var(--line-strong);
+  background: var(--surface-1);
+  color: var(--text-3);
+}
+.flow-dot svg {
+  width: 17px;
+  height: 17px;
+}
+.flow-text {
+  display: grid;
+  gap: 1px;
+}
+.flow-text strong {
+  font-weight: 500;
+  color: var(--text-1);
+}
+
+/* ==================== 07 · positioning (not pinned) ==================== */
+.final {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: clamp(80px, 14vh, 140px) clamp(24px, 5vw, 56px) 72px;
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  gap: 22px;
+}
+.final-motif {
+  color: var(--accent-soft);
+}
+.final-title {
+  font-size: clamp(34px, 4.4vw, 64px);
+  line-height: 1.02;
+  letter-spacing: -0.04em;
+  font-weight: 450;
+}
+.final-title em {
+  display: block;
+  font-style: italic;
+  color: var(--accent-ice);
+}
+.final-lead {
+  max-width: 46ch;
+  font-size: clamp(16px, 1.3vw, 18.5px);
+  line-height: 1.6;
+  color: var(--text-2);
+}
+.final-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 6px;
+}
+.final-notes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 36px;
+  text-align: left;
+}
+.final-notes section {
+  padding: 18px 20px;
+  border-radius: var(--r-lg);
+  border: var(--bw) solid var(--line);
+  background: var(--frost-sheen), var(--surface-1);
+}
+.final-notes h3 {
+  font-size: var(--fs-body);
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+.final-notes p {
+  font-size: var(--fs-sm);
+  line-height: 1.6;
+  color: var(--text-2);
+}
+.inline-icon {
+  display: inline;
+  width: 13px;
+  height: 13px;
+  vertical-align: -2px;
+  margin-right: 4px;
+  color: var(--text-3);
+}
+.final .notice {
+  justify-content: center;
+}
+.final-meta {
+  margin-top: 6px;
+}
+
+/* ==================== Choreography (full motion only) ====================
+   --in: entrance as the stage arrives (p 0 → 0.18) · --out: hand-over at the end (p 0.88 → 1) */
+.story:not(.story--static) .pin {
+  --in: clamp(0, calc(var(--p) * 5.5), 1);
+  --out: clamp(0, calc((var(--p) - 0.88) * 8.3), 1);
+}
+.story:not(.story--static) .pin > * {
+  opacity: calc(1 - var(--out));
+  transform: translate3d(0, calc(var(--out) * -36px), 0);
+  will-change: opacity, transform;
+}
+.story:not(.story--static) .copy-kicker,
+.story:not(.story--static) .copy-title,
+.story:not(.story--static) .copy-body {
+  opacity: calc(0.3 + var(--in) * 0.7);
+  transform: translate3d(0, calc((1 - var(--in)) * 26px), 0);
+}
+.story:not(.story--static) .copy-title {
+  transform: translate3d(0, calc((1 - var(--in)) * 40px), 0);
+}
+
+/* Earth act: two chapters cross-fade over one pinned Earth */
+.story:not(.story--static) .act--earth .pin {
+  --in: 1;
+  --out: clamp(0, calc((var(--p) - 0.9) * 10), 1);
+  --a: clamp(0, calc((var(--p) - 0.36) * 7), 1);
+  --b: clamp(0, calc((var(--p) - 0.5) * 7), 1);
+}
+.story:not(.story--static) .act--earth .copy--a {
+  opacity: calc(1 - var(--a));
+  transform: translate3d(0, calc(var(--a) * -40px), 0);
+  pointer-events: none;
+}
+.story:not(.story--static) .act--earth .copy--a .copy-kicker,
+.story:not(.story--static) .act--earth .copy--a .copy-title,
+.story:not(.story--static) .act--earth .copy--a .copy-body,
+.story:not(.story--static) .act--earth .copy--b .copy-kicker,
+.story:not(.story--static) .act--earth .copy--b .copy-title,
+.story:not(.story--static) .act--earth .copy--b .copy-body {
+  opacity: 1;
+  transform: none;
+}
+.story:not(.story--static) .act--earth .copy--b {
+  opacity: var(--b);
+  transform: translate3d(0, calc((1 - var(--b)) * 40px), 0);
+}
+.story:not(.story--static) .story-globe {
+  transform: translate3d(calc(var(--p) * -3%), 0, 0) scale(calc(0.94 + var(--p) * 0.14));
+}
+
+/* dossier layers assemble one by one */
+.story:not(.story--static) .dossier {
+  transform: rotateY(calc((1 - var(--in)) * -10deg)) rotateX(4deg);
+  transform-style: preserve-3d;
+}
+.story:not(.story--static) .dossier-layer {
+  --lp: clamp(0, calc((var(--p) - 0.06 - var(--i) * 0.09) * 6), 1);
+  opacity: calc(0.1 + var(--lp) * 0.9);
+  transform: translate3d(calc((1 - var(--lp)) * 70px), 0, calc((1 - var(--lp)) * -60px));
+}
+
+/* rings tighten and turn; labels arrive in order */
+.story:not(.story--static) .rings-svg {
+  transform: scale(calc(0.84 + var(--p) * 0.2)) rotate(calc(var(--p) * 24deg));
+}
+.story:not(.story--static) .ring--outer {
+  transform-origin: 200px 200px;
+  transform: rotate(calc(var(--p) * -60deg));
+}
+.story:not(.story--static) .label {
+  --lp: clamp(0, calc((var(--p) - 0.12 - var(--i) * 0.1) * 6), 1);
+  opacity: var(--lp);
+  transform: translate3d(calc((1 - var(--lp)) * 30px), 0, 0);
+}
+
+/* source tiers separate and light up in rank order */
+.story:not(.story--static) .tiers {
+  transform: rotateX(calc((1 - var(--in)) * 12deg));
+}
+.story:not(.story--static) .tier {
+  --lp: clamp(0, calc((var(--p) - 0.08 - var(--i) * 0.13) * 6), 1);
+  opacity: calc(0.18 + var(--lp) * 0.82);
+  transform: translate3d(0, calc((1 - var(--lp)) * 24px), 0) scale(calc(0.97 + var(--lp) * 0.03));
+}
+
+/* workflow: the track fills and each step switches on as it is reached */
+.story:not(.story--static) .flow {
+  --fill: clamp(0, calc(var(--p) * 1.25 - 0.05), 1);
+}
+.story:not(.story--static) .flow-step {
+  --lp: clamp(0, calc((var(--p) * 1.25 - 0.05 - var(--i) * 0.155) * 8), 1);
+  opacity: calc(0.3 + var(--lp) * 0.7);
+}
+.story:not(.story--static) .flow-dot {
+  color: color-mix(in oklab, var(--text-3) calc((1 - var(--lp)) * 100%), var(--primary-fg));
+  background: color-mix(in oklab, var(--surface-1) calc((1 - var(--lp)) * 100%), var(--primary-bg));
+}
+.story--static .flow {
+  --fill: 1;
+}
+.story--static .flow-dot {
+  color: var(--primary-fg);
+  background: var(--primary-bg);
+}
+
+/* ==================== Reduced motion: a calm static page ==================== */
+.story--static {
+  margin-top: 0;
+}
+.story--static .act {
+  height: auto;
+}
+.story--static .pin {
+  position: relative;
+  top: 0;
+  height: auto;
+  padding-top: 64px;
+  padding-bottom: 64px;
+}
+.story--static .act-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 56px;
+}
+.story--static .story-globe {
+  width: min(520px, 100%);
+}
+.story--static .story-index {
+  display: none; /* a normal page: no chapter tracking */
+}
+
+/* ==================== Responsive ==================== */
+@media (min-width: 1101px) {
+  /* leave room for the chapter index on the right */
+  .pin {
+    padding-right: max(clamp(24px, 5vw, 80px), 150px);
+  }
+  .final {
+    padding-right: max(clamp(24px, 5vw, 56px), 150px);
+  }
+}
+@media (max-width: 1100px) {
+  .story-index {
+    display: none;
+  }
+}
+@media (max-width: 860px) {
+  .pin {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 0.9fr) auto;
+    align-content: center;
+    gap: 18px;
+    padding: 12px 20px 20px;
+  }
+  .act-visual {
+    order: 0 !important;
+    min-height: 0;
+    max-height: 42svh;
+    display: grid;
+    place-items: center;
+  }
+  .act-visual.dossier,
+  .act-visual.tiers,
+  .act-visual.flow {
+    place-items: stretch;
+    align-content: center;
+  }
+  .labels {
+    justify-items: center;
+  }
+  .act-copy {
+    order: 1;
+  }
+  .story-globe {
+    width: min(340px, 40svh);
+  }
+  .copy-title {
+    margin-top: 12px;
+    font-size: clamp(26px, 7vw, 34px);
+  }
+  .copy-title--lead {
+    font-size: clamp(32px, 9vw, 44px);
+  }
+  .copy-body {
+    margin-top: 12px;
+    font-size: 15px;
+  }
+  .copy-points {
+    margin-top: 14px;
+    gap: 8px;
+  }
+  .story-scroll-hint {
+    margin-top: 16px;
+  }
+  .dossier,
+  .tiers {
+    gap: 6px;
+    width: 100%;
+  }
+  .dossier-layer,
+  .tier {
+    padding: 8px 12px;
+    grid-template-columns: 32px minmax(0, 1fr);
+  }
+  .dossier-icon,
+  .tier-icon {
+    width: 32px;
+    height: 32px;
+  }
+  .dossier-text .t-xs,
+  .tier-text .t-xs,
+  .dossier-src,
+  .tier-rank {
+    display: none;
+  }
+  .rings {
+    min-height: 0;
+    width: 100%;
+  }
+  .rings-svg {
+    width: min(260px, 34svh);
+  }
+  .label {
+    height: 28px;
+    font-size: 12px;
+  }
+  .flow {
+    gap: 6px;
+    width: 100%;
+  }
+  .flow-text .t-xs {
+    display: none;
+  }
+  .flow-dot {
+    width: 32px;
+    height: 32px;
+  }
+  .flow::before,
+  .flow::after {
+    left: 19px;
+  }
+  .final-notes {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .story--static .act-visual {
+    max-height: none;
+  }
+}
+@media (max-width: 640px) {
+  /* the stage sits between the top bar and the bottom navigation */
+  .pin {
+    height: calc(100svh - var(--topbar-h) - var(--mobile-nav-h) - env(safe-area-inset-bottom));
+  }
+  .act-visual {
+    max-height: 36svh;
+  }
+  .story-globe {
+    width: min(300px, 34svh);
+  }
+  .copy-points {
+    display: none; /* supplementary on small screens; the body text carries the chapter */
+  }
+  .copy-body {
+    font-size: 14.5px;
+    line-height: 1.55;
+  }
+  .dossier-layer,
+  .tier {
+    padding: 5px 10px;
+    border-radius: var(--r-md);
+  }
+  .dossier-icon,
+  .tier-icon,
+  .flow-dot {
+    width: 28px;
+    height: 28px;
+  }
+  .dossier-layer,
+  .tier,
+  .flow-step {
+    grid-template-columns: 28px minmax(0, 1fr);
+    gap: 10px;
+    font-size: 13.5px;
+  }
+  .flow {
+    gap: 4px;
+  }
+  .flow::before,
+  .flow::after {
+    left: 17px;
+  }
+}

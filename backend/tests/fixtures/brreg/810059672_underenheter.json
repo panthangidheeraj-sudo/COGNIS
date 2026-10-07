@@ -1,0 +1,62 @@
+{
+  "_embedded": {
+    "underenheter": [
+      {
+        "_links": {
+          "self": {
+            "href": "https://data.brreg.no/enhetsregisteret/api/underenheter/971802685"
+          },
+          "overordnetEnhet": {
+            "href": "https://data.brreg.no/enhetsregisteret/api/enheter/810059672"
+          }
+        },
+        "beliggenhetsadresse": {
+          "adresse": [
+            "Sjøgardsvegen 8"
+          ],
+          "kommune": "MOLDE",
+          "kommunenummer": "1506",
+          "land": "Norge",
+          "landkode": "NO",
+          "postnummer": "6460",
+          "poststed": "EIDSVÅG I ROMSDAL"
+        },
+        "harRegistrertAntallAnsatte": false,
+        "historiskeNavn": [],
+        "mobil": "41643007",
+        "naeringskode1": {
+          "beskrivelse": "Utleie av egen eller leid fast eiendom",
+          "kode": "68.200"
+        },
+        "navn": "AASEN & FARSTAD AS",
+        "oppstartsdato": "1965-12-31",
+        "organisasjonsform": {
+          "_links": {
+            "self": {
+              "href": "https://data.brreg.no/enhetsregisteret/api/organisasjonsformer/BEDR"
+            }
+          },
+          "beskrivelse": "Underenhet til næringsdrivende og offentlig forvaltning",
+          "kode": "BEDR"
+        },
+        "organisasjonsnummer": "971802685",
+        "overordnetEnhet": "810059672",
+        "registreringsdatoEnhetsregisteret": "1995-02-23",
+        "registrertIMvaregisteret": false,
+        "respons_klasse": "Underenhet",
+        "telefon": "71 23 24 56"
+      }
+    ]
+  },
+  "_links": {
+    "self": {
+      "href": "https://data.brreg.no/enhetsregisteret/api/underenheter?overordnetEnhet=810059672&size=1000"
+    }
+  },
+  "page": {
+    "number": 0,
+    "size": 1000,
+    "totalElements": 1,
+    "totalPages": 1
+  }
+}

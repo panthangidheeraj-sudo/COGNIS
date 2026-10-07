@@ -1,0 +1,250 @@
+.disc-search {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 58px;
+  padding: 0 8px 0 18px;
+  border-radius: var(--r-xl);
+  margin-bottom: 14px;
+}
+.disc-search:focus-within {
+  border-color: color-mix(in oklab, var(--accent-soft) 55%, transparent);
+  box-shadow:
+    var(--shadow-2),
+    0 0 0 4px var(--accent-wash);
+}
+.disc-search > svg {
+  width: 19px;
+  height: 19px;
+  color: var(--accent-soft);
+  flex-shrink: 0;
+}
+.disc-search input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  outline: none;
+  font-size: 15.5px;
+}
+.disc-search input::placeholder {
+  color: var(--text-4);
+}
+.disc-examples {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+.interp {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  margin-bottom: 18px;
+  border-radius: var(--r-lg);
+  border: var(--bw) solid color-mix(in oklab, var(--accent-soft) 25%, var(--line));
+  background:
+    radial-gradient(120% 200% at 0% 0%, var(--accent-wash), transparent 60%),
+    var(--frost-sheen),
+    var(--surface-1);
+  animation: cg-fade-up var(--motion-slow) var(--ease-out);
+}
+.interp-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-xs);
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-micro);
+  color: var(--accent-ice);
+  margin-right: 4px;
+}
+.interp-label svg {
+  width: 13px;
+  height: 13px;
+}
+/* Results own the full width; filters live in a slide-over drawer (secondary control). */
+.disc-body {
+  display: block;
+}
+.filters {
+  display: grid;
+  gap: 16px;
+}
+.disc-filter-btn {
+  gap: 7px;
+}
+.disc-filter-btn.is-active {
+  border-color: color-mix(in oklab, var(--accent-soft) 55%, var(--line-strong));
+  color: var(--text-1);
+}
+.disc-filter-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--r-pill);
+  background: var(--primary-bg);
+  color: var(--primary-fg);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.disc-filter-drawer {
+  --drawer-w: 400px;
+}
+.disc-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.co-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 14px;
+}
+.co-card {
+  position: relative;
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border-radius: var(--r-lg);
+  border: var(--bw) solid var(--line);
+  background: var(--frost-sheen), var(--surface-1);
+  box-shadow: var(--shadow-1);
+  transition:
+    transform var(--motion-base) var(--ease-out),
+    border-color var(--motion-base) var(--ease-out),
+    box-shadow var(--motion-base) var(--ease-out);
+  animation: cg-fade-up var(--motion-slow) var(--ease-out) both;
+}
+.co-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--line-strong);
+  box-shadow: var(--shadow-2);
+}
+.co-card--selected {
+  border-color: color-mix(in oklab, var(--accent-soft) 70%, transparent);
+  box-shadow: var(--glow-edge);
+}
+.co-card-link {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  z-index: 0;
+}
+.co-card > *:not(.co-card-link) {
+  position: relative;
+  z-index: 1;
+  pointer-events: none;
+}
+.co-card .btn,
+.co-card .cov--btn,
+.co-card a:not(.co-card-link) {
+  pointer-events: auto;
+}
+.co-card-name {
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: -0.015em;
+}
+.co-card-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 0;
+  padding: 12px 0;
+  border-top: var(--bw) solid var(--line);
+  border-bottom: var(--bw) solid var(--line);
+}
+.co-card-metrics dt {
+  font-size: 11px;
+  color: var(--text-3);
+}
+.co-card-metrics dd {
+  margin: 2px 0 0;
+  white-space: nowrap;
+  font-size: 15px;
+  font-weight: 500;
+}
+.co-card-na {
+  font-size: 12.5px;
+  font-weight: 400;
+  color: var(--text-3);
+}
+.co-card-web {
+  font-size: 11px;
+}
+.co-card-foot {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+.btn.is-selected {
+  border-color: color-mix(in oklab, var(--accent-soft) 70%, transparent);
+  background: var(--accent-wash-2);
+  color: var(--text-1);
+}
+.pager {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 14px;
+  margin-top: 22px;
+}
+@media (max-width: 640px) {
+  .disc-search {
+    height: 52px;
+    padding-left: 14px;
+  }
+  .disc-search .btn--primary {
+    display: none;
+  }
+  .co-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ---------- Globe: the results' geography, beside the search ---------- */
+.disc-top {
+  position: relative;
+  padding-right: min(310px, 27%);
+  min-height: 286px;
+  margin-bottom: 4px;
+}
+.disc-globe {
+  position: absolute;
+  top: -30px;
+  right: -8px;
+  width: min(280px, 25%);
+  aspect-ratio: 1;
+  display: grid;
+}
+.disc-globe-stage {
+  position: absolute;
+  inset: 0;
+}
+.disc-globe-cap {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -14px;
+  text-align: center;
+}
+.disc-card {
+  display: grid;
+  min-width: 0;
+}
+@media (max-width: 1100px) {
+  .disc-top {
+    padding-right: 0;
+    min-height: 0;
+  }
+  .disc-globe {
+    display: none;
+  }
+}

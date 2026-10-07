@@ -1,0 +1,86 @@
+/* Globe stage — shared by Home (hero) and Discover (results map).
+   Imported by GlobeStage so any page that renders the globe gets it.
+   The Earth is an atmospheric anchor: its glow stays soft so text and actions stay dominant. */
+.globe-stage {
+  position: relative;
+  pointer-events: none;
+}
+.globe-glow {
+  position: absolute;
+  inset: 12%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 46% 46%, rgba(86, 150, 240, 0.2), rgba(40, 92, 180, 0.08) 52%, transparent 72%);
+  filter: blur(34px);
+}
+:root[data-theme='light'] .globe-glow {
+  background: radial-gradient(circle at 46% 46%, rgba(63, 114, 216, 0.14), rgba(16, 42, 67, 0.04) 52%, transparent 70%);
+}
+.globe-canvas,
+.globe-fallback {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+/* The WebGL Earth fades in over the static globe once its imagery is on screen */
+.globe-canvas {
+  opacity: 0;
+  transition: opacity 700ms var(--ease-out);
+}
+.globe-canvas.is-ready {
+  opacity: 1;
+}
+.globe-canvas canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+/* Play / pause for the idle spin (WCAG 2.2.2: moving content can be paused).
+   A small floating control, so it keeps a light glass treatment. */
+.globe-toggle {
+  position: absolute;
+  left: 80%;
+  top: 77%;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  color: var(--text-2);
+  border: var(--bw) solid var(--glass-border);
+  background: var(--glass-sheen), var(--glass-bg);
+  box-shadow: var(--frost-edge);
+  -webkit-backdrop-filter: blur(12px) saturate(150%);
+  backdrop-filter: blur(12px) saturate(150%);
+  opacity: 0.8;
+  transition:
+    opacity var(--motion-fast),
+    color var(--motion-fast),
+    border-color var(--motion-fast);
+}
+.globe-toggle:hover,
+.globe-toggle:focus-visible {
+  opacity: 1;
+  color: var(--text-1);
+  border-color: var(--line-strong);
+}
+.globe-toggle svg {
+  width: 14px;
+  height: 14px;
+}
+.globe-label {
+  position: absolute;
+  left: 50%;
+  bottom: 14%;
+  transform: translateX(-50%);
+  /* strong glass: stays readable over oceans and land */
+  background: var(--glass-sheen), var(--glass-bg-strong);
+  animation: cg-fade-up var(--motion-slow) var(--ease-out);
+  color: var(--text-1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .globe-canvas {
+    transition: none;
+  }
+}

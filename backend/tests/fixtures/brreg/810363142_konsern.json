@@ -1,0 +1,27 @@
+{
+  "children": [
+    {
+      "dato": "2021-09-25",
+      "grunnlag": "100%",
+      "knytningsform": {
+        "beskrivelse": "Konsern datter",
+        "kode": "KDAT"
+      },
+      "navn": "BJØRNSTJERNE BJØRNSONSGATE AS",
+      "nivaa": 1,
+      "organisasjonsform": {
+        "beskrivelse": "Aksjeselskap",
+        "kode": "AS"
+      },
+      "organisasjonsnummer": "810363142",
+      "parentNavn": "STEPHAN INVEST AS",
+      "parentOrganisasjonsnummer": "953506955"
+    }
+  ],
+  "navn": "STEPHAN INVEST AS",
+  "organisasjonsform": {
+    "beskrivelse": "Aksjeselskap",
+    "kode": "AS"
+  },
+  "organisasjonsnummer": "953506955"
+}

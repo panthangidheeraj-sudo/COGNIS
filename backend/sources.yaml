@@ -1,0 +1,255 @@
+# Machine-readable source manifest. The orchestrator reasons from capabilities,
+# not connector names. `enabled_by_default` is the competition default; ENABLE_*
+# environment switches and API keys can turn optional sources on.
+#
+# Permission basis follows the Builderr Signalpost source policy:
+#  - official Norwegian registers and APIs are permitted;
+#  - company-owned websites (verified to the exact legal entity) and profiles
+#    linked from them are permitted, subject to robots.txt and rate limits;
+#  - search APIs generate candidates only — never claim evidence;
+#  - LinkedIn / Meta / Glassdoor / Indeed are NOT scraped; only links that a
+#    verified company website publishes are recorded.
+sources:
+  - id: brreg_entity
+    name: "Brønnøysundregistrene — Enhetsregisteret"
+    category: norwegian_registry
+    authority: primary
+    source_class: official_registry_live
+    access: official_api
+    endpoint: "https://data.brreg.no/enhetsregisteret/api/enheter/{org}"
+    licence: "NLOD 2.0"
+    auth_required: false
+    rate_limit: "polite; shared host concurrency 6"
+    enabled_by_default: true
+    capabilities: [identity, status, locations, website, history, contact]
+
+  - id: brreg_bulk
+    name: "Brønnøysundregistrene — Enhetsregisteret bulk snapshot"
+    category: norwegian_registry
+    authority: primary
+    source_class: official_registry_bulk
+    access: official_bulk_download
+    endpoint: "https://data.brreg.no/enhetsregisteret/api/enheter/lastned/csv"
+    licence: "NLOD 2.0"
+    auth_required: false
+    enabled_by_default: true
+    capabilities: [identity, status]
+    notes: "Optional --bulk frozen anchor; used when the live API is unavailable."
+
+  - id: brreg_roles
+    name: "Brønnøysundregistrene — roller"
+    category: norwegian_registry
+    authority: primary
+    source_class: official_roles
+    access: official_api
+    endpoint: "https://data.brreg.no/enhetsregisteret/api/enheter/{org}/roller"
+    licence: "NLOD 2.0"
+    auth_required: false
+    enabled_by_default: true
+    capabilities: [leadership, people, ownership]
+    notes: "Birth dates are discarded; people only in company-role context."
+
+  - id: brreg_subunits
+    name: "Brønnøysundregistrene — underenheter"
+    category: norwegian_registry
+    authority: primary
+    source_class: official_subunits
+    access: official_api
+    endpoint: "https://data.brreg.no/enhetsregisteret/api/underenheter?overordnetEnhet={org}&size=1000"
+    licence: "NLOD 2.0"
+    auth_required: false
+    enabled_by_default: true
+    capabilities: [locations]
+
+  - id: brreg_group
+    name: "Brønnøysundregistrene — konsernstruktur"
+    category: norwegian_registry
+    authority: primary
+    source_class: official_group_structure
+    access: official_api
+    endpoint: "https://data.brreg.no/enhetsregisteret/api/konsernstruktur/{org}"
+    licence: "NLOD 2.0"
+    auth_required: false
+    enabled_by_default: true
+    capabilities: [ownership]
+    notes: "Only called when the entity reports erIKonsern=true."
+
+  - id: brreg_accounts
+    name: "Regnskapsregisteret"
+    category: norwegian_registry
+    authority: primary
+    source_class: official_annual_accounts
+    access: official_api
+    endpoint: "https://data.brreg.no/regnskapsregisteret/regnskap/{org}"
+    licence: "NLOD 2.0"
+    auth_required: false
+    enabled_by_default: true
+    capabilities: [financials]
+
+  - id: brreg_account_copies
+    name: "Regnskapsregisteret — årsregnskap (kopi)"
+    category: norwegian_registry
+    authority: primary
+    source_class: official_annual_account_copies
+    access: official_api
+    endpoint: "https://data.brreg.no/regnskapsregisteret/regnskap/aarsregnskap/kopi/{org}/aar"
+    licence: "NLOD 2.0"
+    auth_required: false
+    rate_limit: "≈30 request starts per minute (spaced ≥2.1 s)"
+    enabled_by_default: true
+    capabilities: [financials, history]
+
+  - id: company_website
+    name: "Official company website"
+    category: company_owned
+    authority: primary
+    source_class: company_owned
+    access: http_fetch
+    licence: "company-published; robots.txt respected"
+    auth_required: false
+    rate_limit: "max 2 concurrent requests per host; MAX_PAGES_PER_SITE pages"
+    enabled_by_default: true
+    capabilities: [website, business, contact, leadership, locations, jobs, public_activity]
+    notes: "Content claims are published only after the website identity gate verifies the exact legal entity."
+
+  - id: company_ats
+    name: "Company-linked job board (ATS)"
+    category: company_owned
+    authority: primary
+    source_class: company_linked_job_board
+    access: http_fetch
+    auth_required: false
+    enabled_by_default: true
+    capabilities: [jobs]
+    notes: "Only ATS pages linked from the verified company website are visited."
+
+  - id: tavily_search
+    name: "Tavily Search API"
+    category: discovery
+    authority: discovery
+    source_class: search_discovery
+    access: api
+    endpoint: "https://api.tavily.com/search"
+    auth_required: true
+    env: TAVILY_API_KEY
+    cost: "free plan: 1,000 credits/month (basic search = 1 credit); pay-as-you-go ≈ USD 0.008 per credit"
+    enabled_by_default: true
+    capabilities: [discovery, website, news, jobs]
+    notes: "Candidates only. A result is never claim evidence; the fetched page must pass the identity gate."
+
+  - id: norid
+    name: "Norid RDAP"
+    category: norwegian_registry
+    authority: secondary
+    source_class: domain_registry
+    access: official_api
+    endpoint: "https://rdap.norid.no/domain/{domain}"
+    auth_required: false
+    enabled_by_default: true
+    capabilities: [website, identity]
+    notes: "Identity signal only (holder organisation number when disclosed)."
+
+  - id: geonorge
+    name: "Kartverket / Geonorge address API"
+    category: norwegian_registry
+    authority: primary
+    source_class: official_geodata
+    access: official_api
+    endpoint: "https://ws.geonorge.no/adresser/v1/sok"
+    licence: "CC BY 4.0"
+    auth_required: false
+    enabled_by_default: true
+    capabilities: [locations]
+    notes: "Geocodes registered addresses for maps; not published as an evaluator claim."
+
+  - id: ssb_classification
+    name: "SSB — standard for counties (KLASS 104)"
+    category: statistics
+    authority: primary
+    source_class: official_classification
+    access: static_classification
+    auth_required: false
+    enabled_by_default: true
+    capabilities: [locations]
+    notes: "Municipality → county mapping from the first two digits of the municipality number (2024 county structure)."
+
+  - id: proff
+    name: "Proff.no API"
+    category: business_database
+    authority: secondary
+    source_class: licensed_business_database
+    access: api
+    auth_required: true
+    env: PROFF_API_KEY
+    enabled_by_default: false
+    capabilities: [financials, leadership, ownership]
+    notes: "Requires a licensed API key. Secondary to Regnskapsregisteret for financial values."
+
+  - id: doffin
+    name: "Doffin public procurement API"
+    category: procurement
+    authority: primary
+    source_class: official_procurement
+    access: api
+    auth_required: true
+    env: DOFFIN_API_KEY
+    enabled_by_default: false
+    capabilities: [procurement, public_activity]
+    notes: "Requires a subscription key; endpoint shape requires review before competition use."
+
+  - id: patentstyret
+    name: "Patentstyret open API"
+    category: ip_registry
+    authority: primary
+    source_class: official_ip_registry
+    access: api
+    auth_required: true
+    env: PATENTSTYRET_API_KEY
+    enabled_by_default: false
+    capabilities: [ip]
+    notes: "Requires a subscription key; endpoint shape requires review before competition use."
+
+  - id: nav_jobs
+    name: "NAV Arbeidsplassen stillingsfeed"
+    category: jobs
+    authority: primary
+    source_class: official_job_feed
+    access: api
+    auth_required: true
+    env: NAV_FEED_TOKEN
+    enabled_by_default: false
+    capabilities: [jobs]
+    notes: "Feed summaries carry employer names, not organisation numbers — name-only matching is not exact enough to publish."
+
+  - id: linkedin
+    name: "LinkedIn"
+    category: social
+    authority: secondary
+    source_class: company_linked_social_profile
+    access: none
+    auth_required: true
+    enabled_by_default: false
+    capabilities: [people, jobs]
+    notes: "Not scraped (terms). Only profile URLs linked from a verified company website are recorded."
+
+  - id: skatteetaten
+    name: "Skatteetaten — aksjonærregisteret"
+    category: norwegian_registry
+    authority: primary
+    source_class: official_shareholder_register
+    access: by_request
+    auth_required: true
+    enabled_by_default: false
+    capabilities: [ownership]
+    notes: "Available by formal request only (days); not a runtime dependency."
+
+  - id: industry_registries
+    name: "Sector registries (Finanstilsynet, Sjøfartsdirektoratet, Fiskeridirektoratet, NVE, Nkom, …)"
+    category: sector_registry
+    authority: primary
+    source_class: official_sector_registry
+    access: router
+    auth_required: false
+    enabled_by_default: false
+    capabilities: [industry]
+    notes: "NACE-based router decides applicability; sector connectors stay disabled until each access path is reviewed."

@@ -1,0 +1,527 @@
+/* ==========================================================================
+   KNOWLEDGE LAYER — the ivory surface system
+   Dark ink is the investigation workspace (navigation, search, research,
+   dense analysis, graphs, globe, live source activity). Ivory is where
+   knowledge is read: research artifacts, executive briefs, reports,
+   evidence and synthesis. `.paper` re-scopes the tokens (components.css);
+   this file gives paper its institutional research-note character.
+   ========================================================================== */
+
+.paper {
+  --paper-rule: rgba(16, 42, 67, 0.14);
+  --paper-rule-soft: rgba(16, 42, 67, 0.08);
+  --paper-ink: #0f1b2a;
+  --paper-ink-2: #3d4b5e;
+  --paper-serif: var(--font-serif);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0) 220px),
+    var(--surface-paper);
+}
+
+/* Masthead used by briefs and the dossier: mono label, hairline rules */
+.note-mast {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--paper-rule);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--paper-ink-2);
+}
+.note-mast strong {
+  font-weight: 500;
+  color: var(--paper-ink);
+  letter-spacing: 0.32em;
+}
+.note-mast .spacer {
+  flex: 1;
+}
+.note-title {
+  font-family: var(--paper-serif);
+  font-weight: 400;
+  font-size: clamp(30px, 3vw, 40px);
+  line-height: 1.05;
+  letter-spacing: -0.01em;
+  color: var(--paper-ink);
+}
+.note-sub {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-size: 13px;
+  color: var(--paper-ink-2);
+}
+.note-sec-title {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-family: var(--paper-serif);
+  font-weight: 400;
+  font-size: 21px;
+  letter-spacing: -0.005em;
+  color: var(--paper-ink);
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--paper-rule-soft);
+}
+.note-sec-num {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--accent-soft);
+}
+.note-ref {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  margin-left: 3px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1;
+  vertical-align: 2px;
+  color: var(--accent-ice);
+  background: var(--accent-wash);
+  border: 1px solid var(--paper-rule-soft);
+}
+button.note-ref:hover {
+  background: var(--accent-wash-2);
+}
+.note-footnotes {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--paper-ink-2);
+}
+.note-footnotes li {
+  display: grid;
+  grid-template-columns: 26px 1fr;
+  gap: 6px;
+}
+.note-footnotes .t-mono {
+  color: var(--accent-soft);
+}
+
+/* ---------- Evidence panel (drawer) on paper ---------- */
+.drawer.drawer--paper {
+  background: var(--surface-paper);
+  border-color: rgba(16, 42, 67, 0.14);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.8),
+    0 40px 120px -30px rgba(0, 0, 0, 0.75);
+}
+.drawer--paper .drawer-head {
+  border-bottom-color: var(--paper-rule);
+}
+.drawer--paper .drawer-head .eyebrow {
+  color: var(--accent-soft);
+}
+.ev-stack {
+  gap: 20px;
+}
+.ev-answer {
+  display: grid;
+  gap: 12px;
+  padding: 18px 18px 16px;
+  border-radius: var(--r-lg);
+  background: #ffffff;
+  border: 1px solid var(--paper-rule);
+  box-shadow: 0 12px 28px -20px rgba(16, 42, 67, 0.45);
+}
+.ev-answer .vbadge {
+  justify-self: start;
+}
+.ev-value-num {
+  font-size: 28px;
+  letter-spacing: -0.03em;
+  font-weight: 500;
+  line-height: 1.12;
+  word-break: break-word;
+  color: var(--text-1);
+}
+.ev-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 16px;
+  margin: 2px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--paper-rule-soft);
+}
+.ev-facts div {
+  display: grid;
+  gap: 2px;
+}
+.ev-facts dt {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.ev-facts dd {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-1);
+  font-variant-numeric: tabular-nums;
+}
+.ev-demo {
+  margin: 0;
+}
+.ev-links {
+  display: grid;
+  gap: 4px;
+}
+.ev-links a {
+  display: grid;
+  grid-template-columns: 1fr auto 14px;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--paper-rule-soft);
+  background: #fff;
+  font-size: 13px;
+  color: var(--link);
+  transition: border-color var(--motion-fast);
+}
+.ev-links a:hover {
+  border-color: var(--paper-rule);
+}
+.ev-links svg {
+  width: 14px;
+  height: 14px;
+}
+.ev-link-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ev-link-host {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-3);
+}
+.ev-tech {
+  border-top: 1px solid var(--paper-rule-soft);
+  padding-top: 12px;
+}
+.ev-tech summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-2);
+  list-style: none;
+  border-radius: var(--r-xs);
+}
+.ev-tech summary::-webkit-details-marker {
+  display: none;
+}
+.ev-tech summary svg {
+  width: 14px;
+  height: 14px;
+  transition: transform var(--motion-fast);
+}
+.ev-tech[open] summary svg {
+  transform: rotate(180deg);
+}
+.ev-tech-item {
+  padding-top: 10px;
+  border-top: 1px dashed var(--paper-rule-soft);
+}
+.ev-url {
+  word-break: break-all;
+}
+
+/* Conflict panel — competing values side by side */
+.conflict-icon {
+  width: 18px;
+  height: 18px;
+  color: var(--warn);
+}
+.conflict-v {
+  font-size: 17px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+.conflict-cand {
+  display: grid;
+  gap: 6px;
+}
+.conflict-cand.is-displayed {
+  border-color: color-mix(in oklab, var(--warn) 45%, transparent);
+}
+
+/* ---------- Verification badge / line ---------- */
+.vline {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--text-3);
+  min-width: 0;
+}
+.vline svg {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+}
+.vline span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.vline--ok svg {
+  color: var(--ok);
+}
+.vline--warn {
+  color: var(--warn);
+}
+.vline--err {
+  color: var(--err);
+}
+
+/* ---------- Paper modal (Executive brief) ---------- */
+.modal.modal--paper {
+  width: min(880px, 100%);
+  background: var(--surface-paper);
+  border-color: rgba(16, 42, 67, 0.14);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.8),
+    0 50px 140px -30px rgba(0, 0, 0, 0.8);
+}
+.modal--paper .modal-head,
+.modal--paper .modal-foot {
+  border-color: var(--paper-rule);
+}
+.modal--paper .modal-head h2 {
+  font-family: var(--paper-serif);
+  font-weight: 400;
+  font-size: 26px;
+  letter-spacing: -0.005em;
+}
+.modal--paper .modal-body {
+  padding: 22px 28px 26px;
+}
+
+/* ---------- Analysis layers (Explain this change) ---------- */
+.layer {
+  display: grid;
+  gap: 10px;
+  padding: 16px 18px;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--paper-rule);
+  background: #fff;
+}
+.layer-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.layer-head h3 {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+.layer-head .spacer {
+  flex: 1;
+}
+.layer-kind {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.layer--observed {
+  border-left: 3px solid var(--ok);
+}
+.layer--observed .layer-kind {
+  color: var(--ok);
+}
+.layer--reported {
+  border-left: 3px solid #34507a;
+}
+.layer--reported .layer-kind {
+  color: #34507a;
+}
+.layer--synthesis {
+  border-left: 3px dashed #8a6d3b;
+  background: repeating-linear-gradient(135deg, rgba(138, 109, 59, 0.035) 0 8px, transparent 8px 16px), #fffdf8;
+}
+.layer--synthesis .layer-kind {
+  color: #8a6d3b;
+}
+.layer ul {
+  display: grid;
+  gap: 8px;
+}
+.layer li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: start;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text-1);
+}
+.layer blockquote {
+  margin: 4px 0 0;
+  padding-left: 10px;
+  border-left: 2px solid var(--paper-rule);
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: 15px;
+  color: var(--text-2);
+}
+.layer-caveat {
+  font-size: 12px;
+  color: #6f5a30;
+}
+
+/* ==========================================================================
+   EXECUTIVE BRIEF — one screen, factual, numbered sources
+   ========================================================================== */
+.modal.brief-modal {
+  width: min(940px, 100%);
+}
+.brief {
+  display: grid;
+  gap: 22px;
+  color: var(--paper-ink);
+}
+.brief-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px 34px;
+}
+.brief-sec {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-width: 0;
+}
+.brief-sec .note-sec-title {
+  font-size: 18px;
+}
+.brief-sec ul {
+  display: grid;
+  gap: 2px;
+}
+.brief-sec li {
+  position: relative;
+  padding: 4px 0 4px 14px;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--paper-ink);
+}
+.brief-sec li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 13px;
+  width: 6px;
+  height: 1px;
+  background: var(--paper-ink-2);
+  opacity: 0.6;
+}
+.brief-empty {
+  font-size: 13.5px;
+  font-style: italic;
+  color: var(--paper-ink-2);
+}
+.brief-changes {
+  padding: 14px 16px 12px;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--paper-rule);
+  background: rgba(255, 255, 255, 0.6);
+}
+.brief-changes .note-sec-title {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+.brief-foot {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px 34px;
+  padding-top: 14px;
+  border-top: 1px solid var(--paper-rule);
+}
+.brief-foot h4 {
+  color: var(--paper-ink-2);
+}
+.brief-gaps {
+  display: grid;
+  gap: 4px;
+}
+.brief-gaps li {
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--paper-ink-2);
+}
+.brief-gaps li::before {
+  content: '— ';
+  opacity: 0.6;
+}
+.brief-disclaimer {
+  max-width: 46ch;
+}
+@media (max-width: 720px) {
+  .brief-grid,
+  .brief-foot {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .brief-disclaimer {
+    display: none;
+  }
+  .modal--paper .modal-body {
+    padding: 18px 18px 22px;
+  }
+}
+
+/* ---------- Print: brief only, on white paper ---------- */
+@media print {
+  html.print-brief body > *:not(.modal-wrap) {
+    display: none !important;
+  }
+  html.print-brief .modal-wrap {
+    position: static;
+    display: block;
+    padding: 0;
+  }
+  html.print-brief .scrim,
+  html.print-brief .modal-head .btn,
+  html.print-brief .modal-foot {
+    display: none !important;
+  }
+  html.print-brief .modal {
+    width: 100% !important;
+    max-height: none;
+    overflow: visible;
+    border: 0;
+    box-shadow: none;
+    animation: none;
+    background: #fff;
+  }
+  html.print-brief .modal-body {
+    overflow: visible;
+    padding: 0;
+  }
+  html.print-brief .note-ref {
+    border: 0;
+    background: none;
+    color: #3d4b5e;
+  }
+  html.print-brief .brief-sec,
+  html.print-brief .brief-changes {
+    break-inside: avoid;
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "_links": {
+    "self": {
+      "href": "https://data.brreg.no/enhetsregisteret/api/underenheter?overordnetEnhet=810324562&size=1000"
+    }
+  },
+  "page": {
+    "number": 0,
+    "size": 1000,
+    "totalElements": 0,
+    "totalPages": 0
+  }
+}
