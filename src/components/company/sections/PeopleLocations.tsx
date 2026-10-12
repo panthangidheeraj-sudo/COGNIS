@@ -141,7 +141,7 @@ export function LocationsSection({ profile, mapHeight = 380 }: { profile: Compan
             <div className="stack" style={{ gap: 2, minWidth: 0, flex: 1 }}>
               <span className="row-wrap" style={{ gap: 6 }}>
                 <strong style={{ fontWeight: 500 }}>{l.municipality}</strong>
-                <span className="pill pill--sm">{KIND_LABEL[l.kind]}</span>
+                <span className="tag">{KIND_LABEL[l.kind]}</span>
                 {!l.verified && <span className="pill pill--sm pill--warn">Not verified</span>}
               </span>
               <FactValue fact={l.fact} sourceIndex={profile.sourceIndex} context={profile.company.legalName} className="t-sm" />

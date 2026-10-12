@@ -43,10 +43,8 @@
 .exec .eyebrow {
   color: #34507a;
 }
-.exec .pill {
-  color: #3d4b5e;
-  border-color: rgba(16, 42, 67, 0.15);
-  background: rgba(16, 42, 67, 0.04);
+.exec .tag {
+  color: #5a6a7e;
 }
 .exec-text {
   font-size: clamp(16px, 1.25vw, 18.5px);
@@ -73,8 +71,8 @@
 }
 :root[data-theme='light'] .exec {
   background:
-    radial-gradient(140% 120% at 100% 0%, rgba(140, 180, 245, 0.14), transparent 55%),
-    linear-gradient(160deg, #10284c, #071530);
+    radial-gradient(140% 120% at 100% 0%, rgba(180, 198, 228, 0.1), transparent 55%),
+    linear-gradient(160deg, #18243a, #0a111d);
   color: #f8fafc;
 }
 :root[data-theme='light'] .exec .eyebrow {
@@ -83,10 +81,8 @@
 :root[data-theme='light'] .exec .link-btn {
   color: #a7c3ef;
 }
-:root[data-theme='light'] .exec .pill {
-  color: #cbd5e1;
-  border-color: rgba(255, 255, 255, 0.18);
-  background: rgba(255, 255, 255, 0.06);
+:root[data-theme='light'] .exec .tag {
+  color: #a6b0bd;
 }
 :root[data-theme='light'] .exec-foot {
   color: #8f9aa8;
@@ -803,6 +799,78 @@ a.page-tile:hover {
   }
   .fin-src li > :nth-child(n + 3) {
     grid-column: span 1;
+  }
+}
+
+/* ---------- Financial reading views on ivory (DARK = INVESTIGATE, IVORY = UNDERSTAND) ----------
+   Trend, annual values, ratios, cash/debt and sources are where filed accounts are read, so they sit
+   on a flat ivory sheet (`.paper` re-scopes the tokens) while the headline strip stays in the workspace. */
+.paper.fin-paper {
+  padding: 24px 26px 22px;
+  background: var(--surface-ivory);
+  border-color: transparent;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.6) inset, 0 34px 70px -42px rgba(0, 0, 0, 0.75);
+}
+.fin-paper .card-head {
+  gap: 10px 16px;
+  padding-bottom: 14px;
+  margin-bottom: 18px;
+  border-bottom: 1px solid var(--paper-rule);
+}
+.fin-paper .card-head h2 {
+  font-family: var(--paper-serif);
+  font-size: 27px;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  line-height: 1.1;
+  color: var(--paper-ink);
+}
+.fin-paper .table-wrap {
+  background: transparent;
+  border-color: var(--paper-rule-soft);
+}
+.fin-paper .table thead th,
+.fin-paper .table thead .sticky-col,
+.fin-paper .table .sticky-col {
+  background: var(--surface-ivory);
+}
+.fin-paper .table thead th {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  border-bottom-color: var(--paper-rule);
+}
+.fin-paper .table td,
+.fin-paper .table th {
+  border-bottom-color: var(--paper-rule-soft);
+}
+.fin-paper .table tbody tr:hover,
+.fin-paper .table tbody tr:hover .sticky-col {
+  background: #f3eee3;
+}
+.fin-paper .table td.num {
+  font-size: 14.5px;
+  color: var(--paper-ink);
+}
+.fin-paper .ratios--grid li {
+  background: #fffdf8;
+  border-color: var(--paper-rule-soft);
+}
+.fin-paper .fin-src li {
+  border-bottom-color: var(--paper-rule-soft);
+}
+:root[data-theme='light'] .paper.fin-paper {
+  border-color: var(--line);
+  box-shadow: var(--shadow-1);
+}
+@media (max-width: 640px) {
+  .paper.fin-paper {
+    padding: 18px 16px;
+  }
+  .fin-paper .card-head h2 {
+    font-size: 23px;
   }
 }
 

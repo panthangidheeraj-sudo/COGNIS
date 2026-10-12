@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from ..config import Settings, get_settings
-from ..connectors import brreg, geonorge, norid, optional, search
+from ..connectors import brreg, geonorge, job_discovery, nav, norid, optional, procurement, search
 from ..connectors import jobs as jobs_conn
 from ..connectors.base import ConnectorContext, not_run
 from ..connectors.website import ENRICHMENT_KINDS, SiteCrawl, crawl_site, fetch_page, site_links
@@ -32,7 +32,8 @@ from ..net.http import HttpClient
 from ..providers.llm_base import LLMProvider
 from ..runtime.budgets import CompanyBudget, RunBudget
 from ..security.urls import canonical_url, host_of, normalize_website, registrable_domain
-from . import llm_tasks
+from ..storage.db import Database
+from . import hiring, llm_tasks
 from .record import build_record
 
 log = get_logger("agent")
@@ -48,7 +49,7 @@ STEP_META: dict[str, tuple[str, str, str]] = {
     "accounts": ("Annual accounts", "financial", "Regnskapsregisteret"),
     "filings": ("Filed annual reports", "financial", "Regnskapsregisteret — årsregnskap (kopi)"),
     "website": ("Official website", "website", "Official company website"),
-    "jobs": ("Careers and job postings", "jobs", "Company careers pages"),
+    "jobs": ("Careers and job postings", "jobs", "Company careers pages and NAV Arbeidsplassen"),
     "news": ("Company news", "news", "Company newsroom"),
     "geo": ("Map location", "registry", "Kartverket — Geonorge"),
     "extract": ("Read verified pages", "website", "Language model (quote-verified)"),
@@ -84,6 +85,12 @@ class ResearchState:
     jobs: list[jobs_conn.JobItem] = field(default_factory=list)
     jobs_note: str | None = None
     jobs_checked: bool = False
+    company_jobs: jobs_conn.CompanyJobs | None = None  # what the company's own careers sources returned (incl. sources that could not be read)
+    job_candidates: list[dict[str, Any]] = field(default_factory=list)  # search-suggested job pages and why each was or was not used (internal)
+    hiring: dict[str, Any] | None = None  # outcome: verified | none_found | source_unavailable | incomplete (see agent/hiring.py)
+    hiring_wanted: bool = False
+    nav_summary: dict[str, Any] | None = None  # NAV lookup outcome incl. unverified candidates (internal, never published)
+    procurement_candidates: list[dict[str, Any]] = field(default_factory=list)  # name-only notices (internal, never published)
     roles: list[dict[str, Any]] = field(default_factory=list)
     locations: list[dict[str, Any]] = field(default_factory=list)
     financial_records: list[dict[str, Any]] = field(default_factory=list)
@@ -97,11 +104,14 @@ class ResearchState:
 
 
 class Orchestrator:
-    def __init__(self, *, http: HttpClient, run_budget: RunBudget, provider: LLMProvider | None = None, settings: Settings | None = None):
+    def __init__(self, *, http: HttpClient, run_budget: RunBudget, provider: LLMProvider | None = None, settings: Settings | None = None,
+                 db: Database | None = None):
         self.http = http
         self.run_budget = run_budget
         self.provider = provider
         self.settings = settings or get_settings()
+        self.db = db  # local indexes of free bulk sources (NAV job-ad feed, Doffin open data); optional
+        self.nav_index = nav.NavIndex(db) if db is not None else None
 
     async def research(
         self,
@@ -211,6 +221,7 @@ class Orchestrator:
         # ---- 2. official modules (parallel) --------------------------------
         emit("stage", {"stage": "gather"})
         wanted = set(st.options.step_keys or STEP_META)
+        st.hiring_wanted = s.enable_jobs and "jobs" in wanted and st.options.mode != "registry"
         quick = st.options.mode in ("quick", "registry")
 
         async def run_step(key: str, coro):
@@ -255,6 +266,7 @@ class Orchestrator:
         st.observations += _compat_observations(st)
         self._publish_progress(st, emit)
 
+        t_jobs: float | None = None
         # ---- 3. website: discover → verify identity → enrich ---------------
         if s.enable_website and st.options.include_website and "website" in wanted:
             await self._website(st, ctx, budget, emit)
@@ -266,7 +278,7 @@ class Orchestrator:
             emit("stage", {"stage": "verify"})
             await self._research_loop(st, ctx, budget, runner, emit)
             if s.enable_jobs and "jobs" in wanted:
-                await self._jobs(st, ctx, emit)
+                t_jobs = await self._jobs(st, ctx, emit)
             st.observations += wf.website_observations(st.crawl)
             st.observations += wf.news_observations(st.crawl)
             llm_obs: list[Observation] = []
@@ -283,14 +295,28 @@ class Orchestrator:
                     st.observations.append(desc)
         if "jobs" not in st.modules:
             st.modules["jobs"] = _derived_module("jobs", "Company careers pages", st.modules.get("website"), "No verified website, so no company-owned careers sources could be checked.")
+        if s.enable_jobs and "jobs" in wanted and st.options.mode != "registry":
+            if s.enable_nav_jobs and t_jobs is None:
+                t_jobs = _step_start(emit, "jobs")
+            if s.enable_nav_jobs:
+                await self._nav(st, ctx)
+            self._assess_hiring(st)
+            if t_jobs is not None:
+                self._jobs_done(st, emit, t_jobs)
         self._publish_progress(st, emit)
 
-        # ---- 5. sources that need licences or review (reported, never scraped) -
-        for mod in (await optional.proff_company(ctx), await optional.doffin_notices(ctx, identity), await optional.patentstyret_rights(ctx, identity),
-                    optional.linkedin_module(), optional.shareholder_module(), optional.industry_module(identity, s.enable_industry_registries)):
+        # ---- 5. public procurement (free: TED + Doffin open data; exact org-number matches only) -
+        if st.options.mode != "registry":
+            for res in (await procurement.ted_notices(ctx, identity), procurement.doffin_open_data(self.db, identity, enabled=s.enable_doffin_open_data)):
+                st.extra_modules += res.modules
+                st.observations += res.observations
+                st.procurement_candidates += res.candidates
+        # ---- 6. sources that need permission or review (reported, never scraped) -
+        for mod in (await optional.patentstyret_rights(ctx, identity), optional.linkedin_module(), optional.shareholder_module(),
+                    optional.industry_module(identity, s.enable_industry_registries)):
             st.extra_modules.append(mod)
 
-        # ---- 6. synthesis ---------------------------------------------------
+        # ---- 7. synthesis ---------------------------------------------------
         emit("stage", {"stage": "reconcile"})
         st.claims, st.rejections = publish(st.observations, st.org_number)
         emit("stage", {"stage": "synthesize"})
@@ -405,26 +431,95 @@ class Orchestrator:
                 break
         return best
 
-    async def _jobs(self, st: ResearchState, ctx: ConnectorContext, emit: EventSink) -> None:
+    async def _jobs(self, st: ResearchState, ctx: ConnectorContext, emit: EventSink) -> float:
+        """Company-owned careers sources (verified site), then search-suggested job pages if those found nothing current.
+        Returns the step start; ``_jobs_done`` reports the step after NAV."""
         crawl = st.crawl
         assert crawl is not None and st.identity is not None
         t = _step_start(emit, "jobs")
-        modules, items, note = await jobs_conn.collect_jobs(ctx, crawl, st.identity.legal_name or "")
-        st.extra_modules += modules
+        company = await jobs_conn.collect_jobs(ctx, crawl, st.identity.legal_name or "")
+        st.company_jobs = company
+        st.extra_modules += company.modules
+        items, note = company.jobs, company.note
+        if not any(j.state == "current" for j in items):
+            disc = await self._discover_jobs(st, ctx, items)
+            if disc.jobs:
+                items = jobs_conn.dedupe_jobs([*items, *disc.jobs])[: self.settings.max_jobs_per_company]
+                note = f"{sum(1 for j in items if j.state == 'current')} current posting(s) found (company pages and verified search results)"
         st.jobs, st.jobs_note = items, note
-        st.jobs_checked = bool(crawl.docs("careers") or crawl.ats_links)
+        st.jobs_checked = company.careers_found
         st.observations += wf.job_observations(crawl, items, note, st.jobs_checked)
         careers = crawl.docs("careers")
         src_doc = careers[0] if careers else crawl.homepage
         state = "available" if (items or st.jobs_checked) else "not_available"
+        if company.failures and not items:
+            state = "failed"
         st.modules["jobs"] = ModuleResult(module="jobs", source_id="jobs", source_name=f"Company careers ({crawl.domain})", source_class=crawl.source_class, state=state,
                                           url=src_doc.final_url if src_doc else crawl.start_url, retrieved_at=src_doc.retrieved_at if src_doc else None,
                                           content_sha256=src_doc.content_sha256 if src_doc else None, note=note, tier="B",
                                           value={"current": sum(1 for j in items if j.state == "current"), "total": len(items), "checked": st.jobs_checked})
-        current = sum(1 for j in items if j.state == "current")
-        emit("step_completed", {"key": "jobs", "facts": len(items), "evidence": len(items), "duration_ms": _ms(t), "source_name": f"Company careers ({crawl.domain})",
-                                "outcome": "verified" if items else "not_available",
-                                "message": (f"{current} current opening(s) on company-owned pages" if items else note)})
+        return t
+
+    async def _discover_jobs(self, st: ResearchState, ctx: ConnectorContext, known: list[jobs_conn.JobItem]) -> job_discovery.DiscoveryResult:
+        assert st.crawl is not None and st.identity is not None
+        try:
+            disc = await job_discovery.discover_jobs(ctx, st.crawl, st.identity, known)
+        except Exception as exc:  # discovery is a bonus: its failure never breaks the research
+            disc = job_discovery.DiscoveryResult(module=not_run(job_discovery.MODULE, source_id=job_discovery.SOURCE_ID, source_name=job_discovery.SOURCE_NAME,
+                                                                source_class="search_discovery", state="failed", note=f"internal error ({type(exc).__name__})", tier="C"))
+        st.extra_modules += disc.modules
+        if disc.module is not None:
+            st.modules[job_discovery.MODULE] = disc.module
+        st.job_candidates = disc.candidates
+        if disc.searched:
+            st.trace.append({"action": "search_jobs", "state": disc.module.state if disc.module else None, "accepted": len(disc.jobs), "considered": len(disc.candidates)})
+        return disc
+
+    def _jobs_done(self, st: ResearchState, emit: EventSink, t: float) -> None:
+        navs = [j for j in st.jobs if j.source == "nav"]
+        current = sum(1 for j in st.jobs if j.state == "current")
+        parts = []
+        if st.jobs and current:
+            parts.append(f"{current} current opening(s) after merging duplicates" + (f" ({len(navs)} from NAV Arbeidsplassen)" if navs else ""))
+        source = (f"Company careers ({st.crawl.domain})" if st.crawl is not None and st.crawl.verified else "Company careers pages") + (" and NAV Arbeidsplassen" if self.settings.enable_nav_jobs else "")
+        outcome = (st.hiring or {}).get("outcome")
+        emit("step_completed", {"key": "jobs", "facts": len(st.jobs), "evidence": len(st.jobs), "duration_ms": _ms(t), "source_name": source,
+                                "outcome": "verified" if current else "not_available",
+                                "message": (st.hiring or {}).get("message") if outcome and outcome != "verified" else ("; ".join(parts) if parts else
+                                                                                                                      (st.jobs_note or "No verified job postings were found."))})
+
+    async def _nav(self, st: ResearchState, ctx: ConnectorContext) -> None:
+        """NAV Arbeidsplassen ads whose employer resolves to this exact organisation (see connectors/nav.py).
+
+        NAV is one source among several: whatever happens here (timeout, refusal, bug) is recorded as "NAV unavailable" and never
+        removes, replaces or zeroes what the company's own pages already established."""
+        assert st.identity is not None
+        verified_domain = st.crawl.domain if st.crawl is not None and st.crawl.verified else None
+        limit = self.settings.nav_step_timeout_seconds
+        failed = lambda note: nav.NavResult(not_run(nav.MODULE, source_id=nav.SOURCE_ID, source_name=nav.SOURCE_NAME, source_class=nav.SOURCE_CLASS, state="failed", note=note))  # noqa: E731
+        try:
+            res = await asyncio.wait_for(nav.nav_jobs(ctx, st.identity, st.locations, verified_domain, self.nav_index), timeout=limit)
+        except TimeoutError:
+            res = failed(f"NAV Arbeidsplassen did not answer within {limit:.0f} s, so its ads were not checked. This is not evidence that the company is not hiring.")
+        except Exception as exc:  # connector bug → failed module, research continues
+            res = failed(f"NAV Arbeidsplassen could not be checked (internal error: {type(exc).__name__}). This is not evidence that the company is not hiring.")
+        st.modules[nav.MODULE] = res.module
+        st.nav_summary = {"note": res.module.note, "state": res.module.state, **(res.module.value or {}), "candidates": res.candidates[:25]}
+        if not res.jobs:
+            return
+        st.observations += res.observations
+        st.jobs = jobs_conn.dedupe_jobs([*st.jobs, *res.jobs])
+        st.jobs_note = "; ".join(x for x in (st.jobs_note, f"{len(res.jobs)} active NAV ad(s) verified to this organisation") if x)
+        st.observations = _combined_count(st.observations, st.jobs)
+
+    def _assess_hiring(self, st: ResearchState) -> None:
+        """Decide what the hiring research established (see agent/hiring.py). Runs before publication, so a zero never outlives an unavailable source."""
+        if not st.hiring_wanted or st.hiring is not None or st.identity is None:
+            return
+        current = sum(1 for j in st.jobs if j.state == "current")
+        zero = any(o.field == "open_positions_count" and o.value == 0 for o in st.observations)
+        st.hiring = hiring.assess(st, self.settings, current=current, zero_stated=zero)
+        st.observations = hiring.drop_zero_count(st.observations, st.hiring)
 
     async def _research_loop(self, st: ResearchState, ctx: ConnectorContext, budget: CompanyBudget, runner: llm_tasks.LLMRunner, emit: EventSink) -> None:
         """Bounded follow-up: fetch more pages of the verified site. LLM chooses when available; otherwise a fixed rule."""
@@ -473,6 +568,7 @@ class Orchestrator:
                 emit("fact", {"claim": claim})
 
     def _finalise(self, st: ResearchState) -> None:
+        self._assess_hiring(st)  # also after a time-out: "incomplete" is reported, never an empty "no openings"
         if not st.claims and st.observations:
             st.claims, st.rejections = publish(st.observations, st.org_number)
         for name in ("roles", "locations", "financials", "group", "financial_history", "website", "jobs"):
@@ -591,6 +687,39 @@ def _page_options(crawl: SiteCrawl) -> list[dict[str, str]]:
         if canonical_url(link.url) not in fetched:
             options.append({"tool": "fetch_page", "arg": link.url, "hint": "careers"})
     return options[:8]
+
+
+def _combined_count(observations: list[Observation], jobs: list[jobs_conn.JobItem]) -> list[Observation]:
+    """Current openings across company pages, verified search results and verified NAV ads, one per distinct opening.
+
+    ``jobs`` is already merged by ``jobs_conn.dedupe_jobs``. Each source that lists a current opening gets its own count observation of the
+    same total, so the count's evidence points at all of them. A source that adds nothing never lowers a count or makes one zero."""
+    current = [j for j in jobs if j.state == "current"]
+    if not current:
+        return observations
+    by_id = {o.key_suffix: o for o in observations if o.field == "job_posting"}
+    listed: dict[str, list[jobs_conn.JobItem]] = {}
+    for j in current:
+        for family in dict.fromkeys([j.source, *[m["source"] for m in j.details.get("merged") or []]]):
+            listed.setdefault(family, []).append(j)
+    total = len(current)
+    merged = sum(len(j.details.get("merged") or []) for j in current)
+    names = {"company": "on company-owned careers pages", "discovered": "on job pages found by search and verified", "nav": "NAV Arbeidsplassen ad(s) verified to this organisation"}
+    span = (f"{total} distinct current opening(s): " + ", ".join(f"{len(v)} {names.get(k, k)}" for k, v in listed.items())
+            + (f"; {merged} duplicate listing(s) merged and counted once" if merged else "") + ": " + "; ".join(j.title for j in current[:6]))
+    out = [o for o in observations if o.field != "open_positions_count"]
+    for family, members in listed.items():
+        ids = [i for j in members for i in [*([j.id] if j.source == family else []), *[m["id"] for m in j.details.get("merged") or [] if m["source"] == family]]]
+        tpl = next((by_id[i] for i in ids if i in by_id), None)
+        if tpl is None:
+            continue
+        out.append(Observation(field="open_positions_count", value=total, claim_span=truncate(span, 600), extraction_method="count_of_postings", label="Open positions",
+                               numeric=True, unit="roles", as_of=(tpl.retrieved_at or "")[:10] or None,
+                               attributes={"identity_basis": (tpl.attributes or {}).get("identity_basis") or "verified_website", "families": {k: len(v) for k, v in listed.items()},
+                                           "merged": merged},
+                               **{k: getattr(tpl, k) for k in ("module", "source_id", "source_name", "source_class", "source_url", "retrieved_at", "content_sha256", "tier",
+                                                               "identity_score")}))
+    return out
 
 
 def _derived_module(name: str, source_name: str, website: ModuleResult | None, note: str) -> ModuleResult:

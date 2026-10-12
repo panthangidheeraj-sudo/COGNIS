@@ -160,8 +160,10 @@ Besides the frontend contract the API offers: `POST /api/research/company` (one 
 
 See `docs/SOURCES.md` and `sources.yaml`. In short: official Norwegian registers are used directly;
 company-owned websites (and the job boards / social pages they link to) only after identity
-verification; search results are leads, never evidence; LinkedIn, Proff, Doffin, Patentstyret and NAV
-are not scraped — licensed APIs can be enabled with keys, otherwise they report `not_configured`.
+verification; search results are leads, never evidence; NAV job ads and procurement notices (TED, Doffin
+open data) are used only when they resolve to the exact organisation; hiring data comes from company careers pages and linked job boards first (Fakt.no's paid API is not used); no paid API is used — Proff's company data
+comes from the free registers (`app/connectors/capabilities.py`) and Doffin's subscription API is replaced by TED and
+DFØ's open Doffin dataset; LinkedIn is not collected.
 robots.txt is respected (unreachable robots.txt ⇒ treated as disallow, RFC 9309).
 
 ## 10. Identity and evidence rules (deterministic)
@@ -217,14 +219,21 @@ app/evidence      data model + publication gate
 app/extraction    HTML parsing, registry facts, website facts
 app/identity      org-number checks, canonical identity, website identity scoring
 app/net, runtime, security, storage, providers
-scripts/          run_agent, run_competition_batch, run_refresh_replay, smoke_test, benchmark, inspect_profile, serve_offline
+scripts/          run_agent, run_competition_batch, run_refresh_replay, smoke_test, benchmark, inspect_profile, serve_offline,
+                  sync_nav_feed, import_doffin_open_data
 tests/            offline test-suite and recorded fixtures
 ```
 
 ## 14. Limitations
 
-* NAV job postings, LinkedIn, Glassdoor etc. are deliberately not collected (no permitted matching by
-  organisation number / not permitted). Hiring comes from company-owned careers pages and linked ATS.
+* Hiring comes from company-owned careers pages and the job boards they link to (primary), job pages found by search once
+  verified (candidates only), and NAV Arbeidsplassen ads resolved to the exact employer (supplementary). Fakt.no's API needs
+  a paid plan and is not used; LinkedIn, Glassdoor etc. are not collected. Missing data is never read as "not hiring": each
+  profile says whether openings were verified, none were found in the sources checked, a source was unavailable (for
+  example a NAV timeout), or the research was incomplete (`docs/SOURCES.md`).
+* Procurement covers TED (EU-published, above-threshold notices) and, when imported, DFØ's open Doffin dataset for its
+  stated period — not complete Norwegian procurement coverage.
+* Shareholders, ownership shares and credit ratings have no free official source and stay unavailable.
 * Without `TAVILY_API_KEY`, companies whose register entry lists no website and whose e-mail uses a
   webmail domain get no website (reported as `not_available`, never guessed).
 * Websites that render content only with JavaScript expose little HTML; the agent reports what it can

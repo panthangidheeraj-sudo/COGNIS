@@ -64,7 +64,7 @@ export function ActivitySection({ profile }: { profile: CompanyProfile }) {
                     </button>
                     <div className="tl-meta">
                       <time dateTime={e.date}>{formatDate(e.date)}</time>
-                      <span className="pill pill--sm">{EVENT_LABEL[e.type]}</span>
+                      <span className="tag">{EVENT_LABEL[e.type]}</span>
                       {view === 'all' && e.significance === 'minor' && <span className="t-xs t-muted">Minor</span>}
                       <span>{e.sourceIds.map((s) => profile.sourceIndex[s]?.name ?? s).join(', ')}</span>
                     </div>
@@ -115,7 +115,7 @@ export function ChangesSection({ profile, onExplain }: { profile: CompanyProfile
               <div className="stack" style={{ gap: 4, minWidth: 0 }}>
                 <span className="row-wrap" style={{ gap: 8 }}>
                   <span style={{ fontWeight: 500 }}>{c.label}</span>
-                  <span className="pill pill--sm">{CHANGE_CATEGORY_LABEL[c.category]}</span>
+                  <span className="tag">{CHANGE_CATEGORY_LABEL[c.category]}</span>
                   {!c.material && <span className="t-xs t-muted">Minor</span>}
                 </span>
                 <span className="change-vals">
@@ -220,8 +220,8 @@ export function SourcesSection({ profile }: { profile: CompanyProfile }) {
                   </div>
                   <div className="row-wrap" style={{ gap: 6 }}>
                     <span className={`pill pill--sm ${s.source.tier === 'primary' ? 'pill--ok' : ''}`}>{SOURCE_TIER_LABEL[s.source.tier]}</span>
-                    <span className="pill pill--sm">{SOURCE_KIND_LABEL[s.source.kind]}</span>
-                    {s.source.official && <span className="pill pill--sm">Official</span>}
+                    <span className="tag">{SOURCE_KIND_LABEL[s.source.kind]}</span>
+                    {s.source.official && <span className="tag">Official</span>}
                   </div>
                   <dl className="kv" style={{ gridTemplateColumns: '100px 1fr', fontSize: 12.5, gap: 4 }}>
                     <dt>Facts</dt>

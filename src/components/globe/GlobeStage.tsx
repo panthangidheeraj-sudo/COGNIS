@@ -7,7 +7,15 @@ import { ErrorBoundary } from '@/components/common/ErrorState';
 import { GlobeFallback } from './GlobeFallback';
 import './globe.css';
 
-const GlobeCanvas = lazy(() => import('./GlobeCanvas'));
+// Two looks, two lazy chunks: a page only downloads the one it renders (and the Earth imagery only with `earth`).
+const IntelGlobe = lazy(() => import('./IntelGlobe'));
+const EarthGlobe = lazy(() => import('./EarthGlobe'));
+
+/**
+ * `intel` (default): the monochrome corporate-intelligence globe of the workspace (Home, Discover).
+ * `earth`: the natural Blue Marble Earth, reserved for the About story.
+ */
+export type GlobeVariant = 'intel' | 'earth';
 
 function hasWebGL() {
   try {
@@ -23,10 +31,10 @@ function isLowPower() {
 }
 
 /**
- * Hero globe controller. Defers the WebGL chunk until after first paint,
+ * Globe controller. Defers the WebGL chunk until after first paint,
  * falls back to a static globe when WebGL is missing or fails.
  */
-export function GlobeStage({ className }: { className?: string }) {
+export function GlobeStage({ className, variant = 'intel' }: { className?: string; variant?: GlobeVariant }) {
   const { focus, points } = useGlobe();
   const reduced = useReducedMotion();
   const spinPref = usePreferences((s) => s.globeSpin);
@@ -35,7 +43,7 @@ export function GlobeStage({ className }: { className?: string }) {
   const pref = usePreferences((s) => s.theme);
   const theme: 'dark' | 'light' = pref === 'system' ? (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark') : pref;
   const [ready, setReady] = useState(false);
-  // The static globe stays underneath until the WebGL Earth has its imagery on screen, then fades out.
+  // The static globe stays underneath until the WebGL globe is on screen, then fades out.
   const [glReady, setGlReady] = useState(false);
   const [webgl] = useState(hasWebGL);
   const [lowPower] = useState(isLowPower);
@@ -44,18 +52,19 @@ export function GlobeStage({ className }: { className?: string }) {
     const id = idle ? idle(() => setReady(true)) : window.setTimeout(() => setReady(true), 200);
     return () => window.clearTimeout(id);
   }, []);
-  const fallback = <GlobeFallback theme={theme} lat={focus?.lat ?? 25} lon={focus?.lon ?? 14} />;
-  // keep the static globe until the WebGL Earth has faded in (globe.css: 700 ms)
+  const Globe = variant === 'earth' ? EarthGlobe : IntelGlobe;
+  const fallback = <GlobeFallback variant={variant} theme={theme} lat={focus?.lat ?? 25} lon={focus?.lon ?? 14} />;
+  // keep the static globe until the WebGL globe has faded in (globe.css: 700 ms)
   const onGlReady = () => window.setTimeout(() => setGlReady(true), 760);
   return (
-    <div className={`globe-stage ${className ?? ''}`}>
+    <div className={`globe-stage globe-stage--${variant} ${className ?? ''}`}>
       <div className="globe-glow" aria-hidden />
       {!glReady && fallback}
       {webgl && ready && (
-        // On failure the static globe simply stays (it is already shown until the Earth is ready).
+        // On failure the static globe simply stays (it is already shown until the globe is ready).
         <ErrorBoundary label="Globe" fallback={glReady ? fallback : <></>}>
           <Suspense fallback={<></>}>
-            <GlobeCanvas focus={focus} points={points} reducedMotion={reduced} spin={spin} lowPower={lowPower} theme={theme} onReady={onGlReady} />
+            <Globe focus={focus} points={points} reducedMotion={reduced} spin={spin} lowPower={lowPower} theme={theme} onReady={onGlReady} />
           </Suspense>
         </ErrorBoundary>
       )}

@@ -417,13 +417,16 @@ export interface SystemCapabilities {
   discoverFilters: FilterCapability[];
 }
 
+/** `alternative`: a free official source is used instead (e.g. Proff, Doffin's API) · `not_used`: deliberately not collected (e.g. LinkedIn). */
+export type SourceAvailability = 'available' | 'degraded' | 'unavailable' | 'alternative' | 'not_used';
+
 export interface SystemStatus {
   mode: 'mock' | 'live';
   backend: 'connected' | 'degraded' | 'offline';
   research: 'online' | 'offline';
   version: string;
   baseUrl?: string;
-  sources: { name: string; kind: string; status: 'available' | 'degraded' | 'unavailable'; note?: string }[];
+  sources: { name: string; kind: string; status: SourceAvailability; note?: string }[];
   capabilities: SystemCapabilities;
   checkedAt: ISODateTime;
 }

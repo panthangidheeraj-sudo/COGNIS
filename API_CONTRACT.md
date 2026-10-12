@@ -23,7 +23,7 @@ Messages are shown to users, so they must never contain stack traces or secrets.
 
 | Method | Path | Body / query | Returns |
 | --- | --- | --- | --- |
-| GET | `/status` | — | `SystemStatus` (health, sources, **capabilities**: export formats, pause/cancel, discover filters…) |
+| GET | `/status` | — | `SystemStatus` (health, sources, **capabilities**: export formats, pause/cancel, discover filters…). Source `status`: `available` · `degraded` · `unavailable` · `alternative` (deliberately replaced by a free source, e.g. Proff, Doffin's API) · `not_used` (deliberately not collected or paid and not integrated, e.g. LinkedIn, Fakt.no) |
 | GET | `/search?q=` | — | `SearchResult` (grouped results + `intent` used for routing) |
 | POST | `/companies/discover` | `DiscoverQuery` | `DiscoverResult` (+ `interpretation`, `appliedFilters`) |
 | POST | `/companies/interpret` | `{ text }` | `QueryInterpretation` |
@@ -100,3 +100,14 @@ Research event order (typical): `run.started` → `stage.changed(identify)` → 
 - A monetary `Fact` carries `value` (the unrounded number exactly as filed), `currency` and `unit` (the ISO code the filing states, e.g. `NOK`, `USD`) and a `displayValue` built from that same code. The evidence `excerpt` states the same amount and code. The frontend never assumes a currency: with none stated it shows the bare number.
 - `FinancialSeries.unit` is a currency code, `"mixed currencies"` (filings in different currencies; `currencies[]` lists them), `"currency not stated"`, `"people"` or `"%"`. `FinancialsSection.currency` follows the same rule. `CompanySummary.revenue.currency` is the latest filing's currency (`""` when none is stated).
 - Amounts are never converted between currencies: growth, ratios and comparisons are only computed within one currency; `ComparisonRow.unit` / `ComparisonSeries.unit` may be `"mixed currencies"` (`mixedCurrency: true`, per-company `currencies`) and are then shown per company rather than on one axis. `DataSheetCell.currency` and the export column `currency` carry the same code. The Discover revenue filter is a NOK threshold and only matches companies whose revenue is stated in NOK.
+
+### Hiring section (`CompanyProfile.hiring`)
+
+`status` (`available` · `partial` · `not_available` · `blocked` · `ambiguous` · `pending`), `message?`, `totalCurrent: number | null`, `jobs[]`,
+`locations[]`, `categories[]`, `searchedSourceIds[]`, plus:
+
+* `outcome?`: `verified` (≥ 1 verified current opening) · `none_found` (sources checked, none found — not "not hiring") · `source_unavailable` (a source
+  could not be reached or read, e.g. a NAV timeout) · `incomplete` (research did not check every source) · `pending`.
+* `checks?`: `{ id, name, state: checked | unavailable | incomplete, note, required }[]` — what each hiring source returned.
+* `totalCurrent` is `null` whenever nothing is verified; a `0` appears only when the company's own careers page says it has no open positions and no source was unavailable.
+* `Job`: `title`, `url`, `state` (`current` | `stale` | `closed`), `postedAt?`, `updatedAt?`, `validThrough?`, `checkedAt?`, `alsoListed?` (`{ source, url, state, posted_at?, updated_at? }[]` — the same opening on other sources, counted once), `evidence[]`.

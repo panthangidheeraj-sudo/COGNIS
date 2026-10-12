@@ -1,6 +1,7 @@
-/* Globe stage — shared by Home (hero) and Discover (results map).
+/* Globe stage — shared by Home (hero), Discover (results map) and About (the natural Earth).
    Imported by GlobeStage so any page that renders the globe gets it.
-   The Earth is an atmospheric anchor: its glow stays soft so text and actions stay dominant. */
+   Two looks: `globe-stage--intel` (monochrome, the workspace) and `globe-stage--earth` (natural, About only).
+   The globe is an atmospheric anchor: its glow stays soft so text and actions stay dominant. */
 .globe-stage {
   position: relative;
   pointer-events: none;
@@ -14,6 +15,15 @@
 }
 :root[data-theme='light'] .globe-glow {
   background: radial-gradient(circle at 46% 46%, rgba(63, 114, 216, 0.14), rgba(16, 42, 67, 0.04) 52%, transparent 70%);
+}
+/* The workspace globe is monochrome: its halo is a faint silver-white wash, never a blue glow */
+.globe-stage--intel .globe-glow {
+  inset: 14%;
+  background: radial-gradient(circle at 46% 46%, rgba(228, 232, 240, 0.06), rgba(168, 176, 192, 0.024) 54%, transparent 72%);
+  filter: blur(40px);
+}
+:root[data-theme='light'] .globe-stage--intel .globe-glow {
+  background: radial-gradient(circle at 46% 46%, rgba(22, 36, 61, 0.06), rgba(22, 36, 61, 0.02) 54%, transparent 70%);
 }
 .globe-canvas,
 .globe-fallback {

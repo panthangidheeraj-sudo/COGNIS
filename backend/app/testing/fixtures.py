@@ -155,7 +155,7 @@ def verified_site(name: str, org: str, *, city: str = "Oslo", jobs: list[str] | 
     about_text = about or (f"{name} leverer tjenester innen sin bransje til kunder i hele {city}-regionen. Vi har lang erfaring og et sterkt fagmiljø, "
                            f"og vi hjelper bedrifter med å gjennomføre prosjekter trygt og effektivt.")
     job_items = "".join(f'<li><a href="/karriere/stilling-{i}">{t}</a></li>' for i, t in enumerate(jobs or []))
-    postings = [{"@context": "https://schema.org", "@type": "JobPosting", "title": t, "datePosted": "2026-09-20", "validThrough": "2027-01-31",
+    postings = [{"@context": "https://schema.org", "@type": "JobPosting", "title": t, "datePosted": "2026-09-20", "validThrough": "2099-01-31",
                  "hiringOrganization": {"@type": "Organization", "name": name}, "jobLocation": {"@type": "Place", "address": {"addressLocality": city}}}
                 for t in (jobs or [])]
     footer = f"{name} · Org.nr. {spaced} · {city}"

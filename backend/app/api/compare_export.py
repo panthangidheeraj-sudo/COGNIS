@@ -8,6 +8,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from ..connectors import nav
 from ..core.util import currency_unit, format_money, now_iso, stable_id, stated_currencies
 from ..errors import ApiError
 from ..providers.registry import describe
@@ -261,28 +262,55 @@ async def export(s: Any, req: dict[str, Any]) -> dict[str, Any]:
 
 
 # ------------------------------------------------------------------- status --
+def _failing(recent: list[Any], prefix: str) -> bool:
+    calls = [r for r in recent if (r["connector"] or "").startswith(prefix)]
+    return bool(calls) and sum(1 for r in calls if r["classification"] in ("timeout", "network", "server_error", "blocked", "client_error")) > len(calls) / 2
+
+
 def system_status(s: Any) -> dict[str, Any]:
+    """Source availability as it really is. Sources COGNIS deliberately does not use are reported as ``not_used`` or
+    ``alternative`` (a free source covers them) — never as "unavailable"."""
     st = s.settings
     recent = s.db.all("SELECT connector, classification FROM tool_calls ORDER BY id DESC LIMIT 200")
-    brreg_calls = [r for r in recent if (r["connector"] or "").startswith("brreg")]
-    brreg_failing = brreg_calls and sum(1 for r in brreg_calls if r["classification"] in ("timeout", "network", "server_error")) > len(brreg_calls) / 2
+    brreg_failing = _failing(recent, "brreg")
     llm = describe(st)
+    nav_health = nav.index_health(s.db, st)
+    if nav_health["status"] == "available" and _failing(recent, "nav"):
+        nav_health = {"status": "degraded", "note": "Recent NAV requests failed or timed out. Profiles researched meanwhile say that NAV could not be checked; "
+                                                    "that is never shown as \"no openings\"."}
+    doffin_periods = [r["dataset_period"] for r in s.db.all("SELECT DISTINCT dataset_period FROM procurement_notices WHERE dataset_period IS NOT NULL ORDER BY 1")]
+    procurement_note = ("Doffin's subscription API is not used. Free alternatives: the TED Search API (EU-published, above-threshold notices)"
+                        + (f" and DFØ's open Doffin dataset (imported periods: {', '.join(doffin_periods)})" if doffin_periods else
+                           "; DFØ's open Doffin dataset can be imported (scripts/import_doffin_open_data.py)")
+                        + ". Coverage of Norwegian procurement is not complete; notices are linked only by organisation number.")
     sources = [
-        {"name": "Brønnøysundregistrene — Enhetsregisteret", "kind": "registry", "status": "degraded" if brreg_failing else "available"},
+        {"name": "BRREG — Enhetsregisteret (with Foretaksregisteret data, roles and sub-units)", "kind": "registry", "status": "degraded" if brreg_failing else "available"},
         {"name": "Regnskapsregisteret", "kind": "financial", "status": "degraded" if brreg_failing else "available"},
         {"name": "Company websites (identity-verified)", "kind": "website", "status": "available" if st.enable_website else "unavailable"},
-        {"name": "Company careers pages and linked job boards", "kind": "jobs", "status": "available" if st.enable_jobs else "unavailable"},
-        {"name": "Web search discovery (Tavily)", "kind": "web", "status": "available" if st.search_enabled else "unavailable",
-         **({} if st.search_enabled else {"note": "Not configured (TAVILY_API_KEY). Registry-listed and e-mail-domain websites are still checked."})},
+        {"name": "Company careers pages and linked job boards", "kind": "jobs", "status": "available" if st.enable_jobs else "unavailable",
+         "note": ("Primary hiring source: careers pages of identity-verified company websites (structured job postings and job links) and the job boards they link to. "
+                  "robots.txt and rate limits are respected; postings past their end date, or with no recent date, are shown as stale." if st.enable_jobs else
+                  "Disabled (ENABLE_JOBS=false).")},
+        {"name": "Tavily web search (discovery)", "kind": "web", "status": "available" if st.search_enabled else "unavailable",
+         "note": ("Discovery only: suggests the company website and job pages. Every page is fetched, identity-checked and re-verified before anything is published."
+                  + ("" if st.enable_job_discovery else " Job-page discovery is switched off (ENABLE_JOB_DISCOVERY=false).") if st.search_enabled else
+                  "Not configured (TAVILY_API_KEY). Registry-listed and e-mail-domain websites are still checked.")},
+        {"name": "NAV Arbeidsplassen job ads", "kind": "jobs", "status": nav_health["status"],
+         "note": nav_health["note"] + " A supplementary source: if NAV cannot be reached the profile says so, it never reports \"no openings\"."},
+        {"name": "Fakt.no", "kind": "jobs", "status": "not_used",
+         "note": "Not used — its API needs a paid Business or Enterprise plan. Hiring data comes from the sources above."},
+        {"name": "Public procurement — TED (EU)", "kind": "regulatory",
+         "status": ("degraded" if _failing(recent, "ted") else "available") if st.enable_ted else "unavailable",
+         "note": "Free, anonymous EU notice search; above-threshold Norwegian notices only." if st.enable_ted else "Disabled (ENABLE_TED=false)."},
         {"name": "Norid domain holder (RDAP)", "kind": "registry", "status": "available" if st.enable_norid else "unavailable"},
         {"name": "Kartverket — Geonorge", "kind": "registry", "status": "available" if st.enable_geocoding else "unavailable"},
         {"name": f"Language model ({llm['model'] or 'none'})", "kind": "web", "status": "available" if llm["enabled"] else "unavailable",
          **({} if llm["enabled"] else {"note": "No LLM configured — deterministic extraction and templated summaries are used."})},
-        {"name": "Proff.no", "kind": "financial", "status": "available" if (st.enable_proff and st.proff_api_key) else "unavailable", "note": "Requires a licensed API key."},
-        {"name": "Doffin (public procurement)", "kind": "regulatory", "status": "available" if (st.enable_doffin and st.doffin_api_key) else "unavailable",
-         "note": "Requires a subscription key and access review."},
-        {"name": "LinkedIn", "kind": "people", "status": "unavailable", "note": "Automated collection is not permitted; only company pages linked from verified websites are shown."},
-        {"name": "NAV — arbeidsplassen", "kind": "jobs", "status": "unavailable", "note": "The public feed carries no organisation numbers, so postings cannot be matched safely."},
+        {"name": "Proff.no", "kind": "financial", "status": "alternative",
+         "note": "Not used (paid). Enhetsregisteret, Foretaksregisteret data, the roles register and Regnskapsregisteret cover its company data; "
+                 "shareholders and credit ratings have no free source and are left empty."},
+        {"name": "Doffin (public procurement)", "kind": "regulatory", "status": "alternative", "note": procurement_note},
+        {"name": "LinkedIn", "kind": "people", "status": "not_used", "note": "Not used — automated collection is not permitted. Only company pages linked from verified websites are shown."},
     ]
     return {"mode": "live", "backend": "degraded" if brreg_failing else "connected", "research": "online", "version": st.version, "sources": sources,
             "capabilities": {"exports": ["csv", "xlsx", "json"], "pdfReports": False, "pauseResearch": False, "cancelResearch": True, "watchlist": True, "versions": True,

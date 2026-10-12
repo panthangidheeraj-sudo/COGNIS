@@ -285,6 +285,18 @@ async def fetch_locations(ctx: ConnectorContext, *, optional: bool = False) -> M
     return mod
 
 
+async def subunit_parent(ctx: ConnectorContext, org: str) -> str | None:
+    """Parent (overordnet enhet) of a registered sub-unit: the parent's number, "" when ``org`` is not a sub-unit, None when unknown."""
+    res = await ctx.fetch(BRREG_SUBUNIT.format(org=org), connector="brreg", optional=True, accept=JSON, expect="json", cache_ttl=ctx.settings.cache_ttl_registry_seconds)
+    if res.classification in ("not_found", "gone"):
+        return ""
+    if not res.ok:
+        return None
+    body = res.json()
+    parent = str((body or {}).get("overordnetEnhet") or "") if isinstance(body, dict) else ""
+    return parent if len(parent) == 9 and parent.isdigit() else ""
+
+
 async def fetch_group(ctx: ConnectorContext, identity: CanonicalIdentity | None, *, optional: bool = True) -> ModuleResult:
     url = BRREG_GROUP.format(org=ctx.org_number)
     if identity is not None and identity.in_group is False:

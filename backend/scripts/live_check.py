@@ -4,8 +4,8 @@
     python scripts/live_check.py            # writes out/live-check.md and out/live-check.json
 
 Sections: configuration · register reachability · LLM (Groq / OpenAI-compatible) · web search ·
-end-to-end deep research on three real companies · the API with real data (status, profile,
-brief, ask, interpret, research run with live events).
+free sources (NAV job-ad feed, TED procurement) · end-to-end deep research on three real companies ·
+the API with real data (status, profile, brief, ask, interpret, research run with live events).
 """
 from __future__ import annotations
 
@@ -150,9 +150,16 @@ async def _network_checks(s: Any, report: dict[str, Any], section: Any, say: Any
             if mod.state not in ("available", "not_available"):
                 say("Tavily did not answer normally. 401 = key wrong/missing 'tvly-'; 432/433 = plan credits used up; otherwise check the network.")
 
+        # ------------------------------------------------ 4b free sources
+        section("4b. Free sources: NAV job-ad feed and TED procurement")
+        await _free_source_checks(s, http, report, say)
+
         # ---------------------------------------------------- 5 end-to-end
         section("5. End-to-end deep research (live sources, LLM if configured)")
-        orch = Orchestrator(http=http, run_budget=RunBudget(BudgetLimits(max_requests=300, max_cost_usd=1.0, max_runtime_seconds=900)), provider=provider)
+        from app.storage.db import get_db
+
+        orch = Orchestrator(http=http, run_budget=RunBudget(BudgetLimits(max_requests=300, max_cost_usd=1.0, max_runtime_seconds=900)), provider=provider,
+                            db=get_db())
         report["companies"] = []
         for org, label in COMPANIES:
             t = time.monotonic()
@@ -188,8 +195,87 @@ async def _network_checks(s: Any, report: dict[str, Any], section: Any, say: Any
                 say(f"   LLM issues: {row['llm_errors'][:2]}")
             if row["other_errors"]:
                 say(f"   other issues: {row['other_errors'][:2]}")
+            mods = rec.get("modules") or {}
+            for key, label_ in (("nav_jobs", "NAV"), ("job_discovery", "Job-page search (Tavily)"), ("procurement_ted", "TED"), ("procurement_doffin", "Doffin open data")):
+                if key in mods:
+                    say(f"   {label_}: {mods[key].get('state')} · {(mods[key].get('note') or '')[:260]}")
+            hiring = (rec.get("jobs") or {}).get("outcome") or {}  # what the hiring research established (never "not hiring" from missing data)
+            if hiring:
+                row["hiring"] = {"outcome": hiring.get("outcome"), "checks": {c.get("id"): c.get("state") for c in hiring.get("checks") or []}}
+                say(f"   hiring: **{hiring.get('outcome')}** · " + ", ".join(f"{c.get('name')} {c.get('state')}" for c in hiring.get("checks") or []))
+            row["nav_candidates"] = [{k: c.get(k) for k in ("status", "reason")} for c in ((rec.get("jobs") or {}).get("nav") or {}).get("candidates") or []][:5]
             if row["summary"]:
                 say(f"   “{row['summary'][:400]}”")
+
+
+async def _free_source_checks(s: Any, http: Any, report: dict[str, Any], say: Any) -> None:
+    """NAV: token, a bounded index sync (also shows the real page size) and one full ad's employer fields (no contact data printed).
+    TED: one search for Equinor. Nothing here needs a paid key."""
+    import urllib.parse
+
+    from app.connectors import brreg, nav, procurement
+    from app.connectors.base import ConnectorContext
+    from app.identity.employer import valid_org_number
+    from app.identity.model import CanonicalIdentity
+    from app.runtime.budgets import unlimited_budget
+    from app.security.redaction import redact
+    from app.storage.db import get_db
+
+    out: dict[str, Any] = {}
+    report["free_sources"] = out
+    if not s.enable_nav_jobs:
+        say("NAV job ads: disabled (ENABLE_NAV_JOBS=false)")
+    else:
+        try:
+            token, kind = await nav.TOKEN.get(http, s)
+            say(f"NAV token: {'present' if token else 'MISSING'} ({kind}; never printed)")
+            db = get_db()
+            t = time.monotonic()
+            sync = await nav.sync_feed(http, db, s, max_pages=min(60, s.nav_sync_max_pages), max_seconds=min(90.0, s.nav_sync_max_seconds))
+            per_page = round((sync.get("active_upserts", 0) + sync.get("inactive_masked", 0)) / sync["pages"]) if sync.get("pages") else None
+            out["nav_sync"] = {**{k: sync.get(k) for k in ("status", "pages", "active_upserts", "inactive_masked", "purged", "index", "newest_modified", "error")},
+                               "items_per_page": per_page, "seconds": round(time.monotonic() - t, 1)}
+            say(f"NAV feed sync → {sync.get('status')} · {sync.get('pages')} page(s) · ~{per_page} items/page · index {sync.get('index')} · newest change "
+                f"{sync.get('newest_modified')}" + (f" · error: {redact(str(sync.get('error')))}" if sync.get("error") else ""))
+            if sync.get("status") == "partial":
+                say("   (not caught up yet — run `python scripts/sync_nav_feed.py --until-done` once; the API keeps it fresh afterwards)")
+            row = db.one("SELECT uuid, entry_url FROM nav_ads WHERE status = 'ACTIVE' ORDER BY modified_at DESC LIMIT 1")
+            if row:
+                res = await nav._get(http, s, urllib.parse.urljoin(s.nav_feed_base.rstrip("/") + "/", row["entry_url"] or f"api/v1/feedentry/{row['uuid']}"), budget=None)
+                ad = nav.parse_entry(res.json()) if res.ok else None
+                if ad:
+                    org = valid_org_number(ad.employer_orgnr)
+                    ctx = ConnectorContext(org_number=org or "", http=http, budget=unlimited_budget(), run_id="live-check", settings=s)
+                    parent = await brreg.subunit_parent(ctx, org) if org else None
+                    kind_ = "no organisation number" if not org else ("registered establishment (sub-unit) of " + parent if parent else "main unit (or not a sub-unit)")
+                    out["nav_sample"] = {"has_orgnr": bool(org), "orgnr_kind": kind_, "status": ad.status, "has_link": bool(ad.link), "has_expires": bool(ad.expires)}
+                    say(f"NAV sample ad: status {ad.status} · employer organisation number: {kind_} · link {'yes' if ad.link else 'no'} · expires "
+                        f"{'yes' if ad.expires else 'no'} (contact persons are never read)")
+                else:
+                    say(f"NAV sample ad could not be read ({res.classification} HTTP {res.status})")
+        except Exception as exc:
+            out["nav_error"] = f"{type(exc).__name__}: {redact(str(exc))[:200]}"
+            say(f"NAV CHECK FAILED: {out['nav_error']}")
+    if not s.enable_ted:
+        say("TED: disabled (ENABLE_TED=false)")
+        return
+    try:
+        equinor = CanonicalIdentity(org_number="923609016", legal_name="EQUINOR ASA", legal_form="ASA")
+        ctx = ConnectorContext(org_number="923609016", http=http, budget=unlimited_budget(), run_id="live-check", settings=s, fresh=True)
+        res = await procurement.ted_notices(ctx, equinor)
+        mod = res.modules[0]
+        roles: dict[str, int] = {}
+        for o in res.observations:
+            roles[o.attributes["role"]] = roles.get(o.attributes["role"], 0) + 1
+        out["ted"] = {"state": mod.state, "http_status": mod.http_status, "matches": len(res.observations), "roles": roles, "unverified": len(res.candidates),
+                      "note": mod.note}
+        say(f"TED search for EQUINOR ASA → {mod.state} (HTTP {mod.http_status}) · {len(res.observations)} notice(s) with the org. number {roles or ''} · "
+            f"{len(res.candidates)} name-only (not used)")
+        if mod.state != "available":
+            say(f"   {mod.note}")
+    except Exception as exc:
+        out["ted_error"] = f"{type(exc).__name__}: {redact(str(exc))[:200]}"
+        say(f"TED CHECK FAILED: {out['ted_error']}")
 
 
 def _api_checks(report: dict[str, Any], section: Any, say: Any) -> None:

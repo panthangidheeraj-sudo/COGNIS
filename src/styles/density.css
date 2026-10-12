@@ -45,9 +45,9 @@
   padding-top: 12px;
   padding-bottom: 10px;
 }
-:root[data-density='compact'] .cmp-sec > * {
-  padding-top: 12px;
-  padding-bottom: 5px;
+:root[data-density='compact'] .cmp-group:not(.cmp-group--glance) .cmp-sec > * {
+  padding-top: 22px;
+  padding-bottom: 6px;
 }
 
 /* Research workspace */

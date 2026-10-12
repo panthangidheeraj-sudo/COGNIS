@@ -14,7 +14,8 @@ from app.config import Settings, override_settings
 @pytest.fixture(autouse=True)
 def settings(tmp_path: Path) -> Iterator[Settings]:
     s = Settings(_env_file=None, app_env="test", llm_provider="fake", data_dir=tmp_path / "data", brreg_account_copies_min_interval_seconds=0,
-                 retry_base_delay_seconds=0, retry_max_delay_seconds=1, tavily_api_key=None, groq_api_key=None)
+                 retry_base_delay_seconds=0, retry_max_delay_seconds=1, tavily_api_key=None, groq_api_key=None, ted_min_interval_seconds=0,
+                 nav_min_interval_seconds=0, nav_feed_token=None)
     override_settings(s)
     yield s
     override_settings(None)

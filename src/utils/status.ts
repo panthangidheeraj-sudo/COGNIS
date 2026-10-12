@@ -2,7 +2,7 @@
  * Single place that maps backend states to UI language.
  * Every state has a text label so status is never communicated by color only.
  */
-import type { ChangeCategory, CompanyStatus, CoverageArea, CoverageAreaStatus, Evidence, EvidenceState, Fact, ResearchStepStatus, SectionStatus, Source, SourceKind, SourceTier, ValueStatus, ArtifactType, SignalKind, TimelineEventType } from '@/types';
+import type { ChangeCategory, CompanyStatus, CoverageArea, CoverageAreaStatus, Evidence, EvidenceState, Fact, ResearchStepStatus, SectionStatus, Source, SourceKind, SourceTier, ValueStatus, ArtifactType, SignalKind, SourceAvailability, TimelineEventType } from '@/types';
 
 export type Tone = 'ok' | 'warn' | 'err' | 'info' | 'neutral';
 
@@ -217,6 +217,18 @@ export const CHANGE_CATEGORY_LABEL: Record<ChangeCategory, string> = {
   employees: 'Employees',
   event: 'Public activity',
   website: 'Website',
+};
+
+/**
+ * Backend source availability (Settings, status center). `alternative` (a free source covers it) and `not_used`
+ * (deliberately not collected) are choices, not failures, so they never read as "Unavailable".
+ */
+export const SOURCE_AVAILABILITY: Record<SourceAvailability, { label: string; tone: Tone }> = {
+  available: { label: 'Available', tone: 'ok' },
+  degraded: { label: 'Degraded', tone: 'warn' },
+  unavailable: { label: 'Unavailable', tone: 'err' },
+  alternative: { label: 'Free alternative', tone: 'info' },
+  not_used: { label: 'Not used', tone: 'neutral' },
 };
 
 export function toneClass(tone: Tone) {

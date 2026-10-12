@@ -416,6 +416,13 @@
 .state-banner--partial svg {
   color: var(--warn);
 }
+.hire-checks {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
 
 /* ---------- Timeline ---------- */
 .timeline {

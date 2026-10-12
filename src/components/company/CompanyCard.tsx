@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Check, Plus } from 'lucide-react';
+import { Check, Globe, Plus } from 'lucide-react';
 import type { CompanySummary } from '@/types';
 import { BrandMark } from '@/components/common/BrandMark';
 import { CoverageMeter } from './Coverage';
@@ -36,21 +36,29 @@ export function CompareToggle({ c, small }: { c: CompanySummary; small?: boolean
   );
 }
 
-/** Discovery result card: identity, 1–2 key metrics, coverage, research state. */
+/**
+ * Discovery result card, set editorially: a quiet place/org kicker, the company name as the headline,
+ * the industry as a standfirst, the website domain, then three key figures and the research state.
+ */
 export function CompanyCard({ c }: { c: CompanySummary }) {
   const selected = useCompare((s) => s.selected.some((x) => x.orgNumber === c.orgNumber));
   return (
-    <article className={cn('co-card', selected && 'co-card--selected')}>
+    <article className={cn('co-card', selected && 'co-card--selected', c.researchState === 'not_researched' && 'co-card--registry')}>
       <Link to={`/company/${c.orgNumber}`} className="co-card-link" aria-label={`${c.legalName}, ${c.municipality}. Open research.`} />
-      <div className="row" style={{ gap: 12, alignItems: 'flex-start' }}>
-        <BrandMark name={c.legalName} org={c.orgNumber} logoUrl={c.logoUrl} size={42} />
-        <div className="stack" style={{ gap: 2, minWidth: 0, flex: 1 }}>
-          <h3 className="co-card-name truncate">{c.legalName}</h3>
-          <span className="t-xs t-muted truncate">
+      <div className="co-card-head">
+        <BrandMark name={c.legalName} org={c.orgNumber} logoUrl={c.logoUrl} size={40} />
+        <div className="co-card-id">
+          <span className="co-card-kicker truncate">
             {c.municipality}, Norway · Org <span className="t-mono">{formatOrgNumber(c.orgNumber)}</span>
           </span>
-          <span className="t-xs t-soft truncate">{c.industry?.description ?? 'Industry not registered'}</span>
-          {c.website && <span className="t-xs t-mono t-muted truncate co-card-web">{c.website}</span>}
+          <h3 className="co-card-name">{c.legalName}</h3>
+          <span className="co-card-industry truncate">{c.industry?.description ?? 'Industry not registered'}</span>
+          {c.website && (
+            <span className="co-card-web truncate">
+              <Globe aria-hidden />
+              {c.website}
+            </span>
+          )}
         </div>
         {c.status !== 'active' && <span className={`pill pill--sm ${toneClass(COMPANY_STATUS_TONE[c.status])}`}>{c.statusLabel}</span>}
       </div>

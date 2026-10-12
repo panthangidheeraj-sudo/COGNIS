@@ -136,7 +136,10 @@ def build_record(st: ResearchState, *, operations: dict[str, Any], completed_at:
         "rejections": [_jsonable(r.__dict__) for r in st.rejections[:150]],
         "website": _jsonable(website),
         "site_attempts": _jsonable(st.site_attempts),
-        "jobs": {"items": [j.to_dict() for j in st.jobs], "note": st.jobs_note, "checked": st.jobs_checked},
+        "jobs": {"items": [j.to_dict() for j in st.jobs], "note": st.jobs_note, "checked": st.jobs_checked, "nav": _jsonable(st.nav_summary),
+                 "outcome": _jsonable(st.hiring), "discovery_candidates": _jsonable(st.job_candidates[:20])},
+        # name-only procurement notices: kept for review, never published (no organisation number in the role's identifier)
+        "procurement_candidates": _jsonable(st.procurement_candidates[:25]),
         "roles": _jsonable(st.roles),
         "locations": _jsonable(st.locations),
         "financial_records": _jsonable(st.financial_records),

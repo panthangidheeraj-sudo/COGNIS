@@ -2,6 +2,9 @@
 # not connector names. `enabled_by_default` is the competition default; ENABLE_*
 # environment switches and API keys can turn optional sources on.
 #
+# Paid sources are not used: Proff → free official registers (app/connectors/capabilities.py);
+# Doffin's subscription API → TED Search API + DFØ's open Doffin dataset.
+#
 # Permission basis follows the Builderr Signalpost source policy:
 #  - official Norwegian registers and APIs are permitted;
 #  - company-owned websites (verified to the exact legal entity) and profiles
@@ -121,7 +124,7 @@ sources:
     auth_required: false
     enabled_by_default: true
     capabilities: [jobs]
-    notes: "Only ATS pages linked from the verified company website are visited."
+    notes: "Primary hiring source together with the careers page. Only ATS pages linked from the verified company website (or on the verified domain / a known job-board host and tied to the exact organisation) are visited; robots.txt is respected."
 
   - id: tavily_search
     name: "Tavily Search API"
@@ -135,7 +138,7 @@ sources:
     cost: "free plan: 1,000 credits/month (basic search = 1 credit); pay-as-you-go ≈ USD 0.008 per credit"
     enabled_by_default: true
     capabilities: [discovery, website, news, jobs]
-    notes: "Candidates only. A result is never claim evidence; the fetched page must pass the identity gate."
+    notes: "Candidates only. A result is never claim evidence; the fetched page must pass the identity gate. For hiring: at most one search per company, only when the company's own careers sources show no current opening; hits are restricted to the verified domain and known job-board hosts, fetched with robots.txt respected, and used only after the employer is tied to the exact organisation and the posting is shown to be current."
 
   - id: norid
     name: "Norid RDAP"
@@ -178,24 +181,49 @@ sources:
     category: business_database
     authority: secondary
     source_class: licensed_business_database
-    access: api
+    access: not_used
     auth_required: true
-    env: PROFF_API_KEY
     enabled_by_default: false
-    capabilities: [financials, leadership, ownership]
-    notes: "Requires a licensed API key. Secondary to Regnskapsregisteret for financial values."
+    capabilities: []
+    notes: "Not used (paid licence). Its company-data capabilities are covered by Enhetsregisteret, Foretaksregisteret fields, the roles and sub-unit APIs and Regnskapsregisteret; shareholders and credit ratings have no free equivalent and stay unavailable. Map: app/connectors/capabilities.py."
 
   - id: doffin
     name: "Doffin public procurement API"
     category: procurement
     authority: primary
     source_class: official_procurement
-    access: api
+    access: not_used
     auth_required: true
-    env: DOFFIN_API_KEY
     enabled_by_default: false
+    capabilities: []
+    notes: "Not used (subscription key). Free alternatives: ted_search and doffin_open_data."
+
+  - id: ted_search
+    name: "TED Search API (Tenders Electronic Daily)"
+    category: procurement
+    authority: primary
+    source_class: official_procurement_notice
+    access: official_api
+    endpoint: "https://api.ted.europa.eu/v3/notices/search"
+    licence: "EU open data (reuse permitted)"
+    auth_required: false
+    rate_limit: "anonymous fair use per IP; COGNIS spaces calls ≥0.5 s"
+    enabled_by_default: true
     capabilities: [procurement, public_activity]
-    notes: "Requires a subscription key; endpoint shape requires review before competition use."
+    notes: "EU-published notices only (Norwegian above-threshold procurements); not complete Norwegian coverage. A notice is used only when the role's identifier states the exact organisation number."
+
+  - id: doffin_open_data
+    name: "Doffin open data (DFØ — kunngjøringer av offentlige anskaffelser)"
+    category: procurement
+    authority: primary
+    source_class: official_procurement_notice
+    access: official_bulk_download
+    endpoint: "https://data.norge.no/datasets/a77b0408-85f9-3e12-8a66-8d500b492e9d"
+    licence: "open licence (data.norge.no)"
+    auth_required: false
+    enabled_by_default: true
+    capabilities: [procurement, public_activity]
+    notes: "Yearly CSV files imported offline (scripts/import_doffin_open_data.py); facts carry the dataset period. Rows link to a company only through an organisation-number column."
 
   - id: patentstyret
     name: "Patentstyret open API"
@@ -210,16 +238,30 @@ sources:
     notes: "Requires a subscription key; endpoint shape requires review before competition use."
 
   - id: nav_jobs
-    name: "NAV Arbeidsplassen stillingsfeed"
+    name: "NAV Arbeidsplassen stillingsfeed (pam-stilling-feed)"
     category: jobs
     authority: primary
     source_class: official_job_feed
-    access: api
+    access: official_api
+    endpoint: "https://pam-stilling-feed.nav.no/api/v1/feed"
+    licence: "free; arbeidsplassen.nav.no/vilkar-api"
     auth_required: true
     env: NAV_FEED_TOKEN
+    rate_limit: "COGNIS spaces calls ≥0.2 s; feed pages are synced incrementally"
+    enabled_by_default: true
+    capabilities: [jobs]
+    notes: "Supplementary: a NAV timeout or refusal is reported as 'NAV unavailable' and never as 'no openings'; the NAV step is capped (NAV_STEP_TIMEOUT_SECONDS) and stops after repeated unreachable responses. Bearer token: NAV_FEED_TOKEN (free private token) or NAV's public token. Feed summaries are indexed locally; a full ad is re-read and published only when its employer resolves to the exact organisation (organisation number, registered establishment, register parent, or exact name + verified website/registered address). Inactive or deleted ads are removed; contact persons are never stored."
+
+  - id: fakt
+    name: "Fakt.no"
+    category: jobs
+    authority: secondary
+    access: none
+    auth_required: true
+    cost: "API access needs a paid Business or Enterprise plan"
     enabled_by_default: false
     capabilities: [jobs]
-    notes: "Feed summaries carry employer names, not organisation numbers — name-only matching is not exact enough to publish."
+    notes: "Not used and no API key is read: the paid plan is not worth it here. Hiring data comes from company careers pages, linked job boards, search-assisted discovery (verified) and NAV Arbeidsplassen."
 
   - id: linkedin
     name: "LinkedIn"

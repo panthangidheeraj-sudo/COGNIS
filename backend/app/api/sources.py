@@ -20,12 +20,18 @@ STATIC_SOURCES: dict[str, dict[str, Any]] = {
                        "tier": "primary", "official": True, "url": "https://www.brreg.no/", "domain": "brreg.no"},
     "geonorge": {"id": "geonorge", "name": "Kartverket — Geonorge", "originalTitle": "Adresser / kommuneinfo", "kind": "registry", "tier": "primary", "official": True,
                  "url": "https://www.geonorge.no/", "domain": "geonorge.no"},
+    "nav": {"id": "nav", "name": "NAV Arbeidsplassen", "originalTitle": "Stillingsannonser (NAV)", "kind": "jobs", "tier": "primary", "official": True,
+            "url": "https://arbeidsplassen.nav.no/", "domain": "arbeidsplassen.nav.no"},
+    "ted": {"id": "ted", "name": "TED — Tenders Electronic Daily (EU)", "originalTitle": "TED public procurement notices", "kind": "regulatory", "tier": "primary",
+            "official": True, "url": "https://ted.europa.eu/", "domain": "ted.europa.eu"},
+    "doffin_open": {"id": "doffin_open", "name": "Doffin open data (DFØ)", "originalTitle": "Kunngjøringer av offentlige anskaffelser", "kind": "regulatory",
+                    "tier": "primary", "official": True, "url": "https://data.norge.no/datasets/a77b0408-85f9-3e12-8a66-8d500b492e9d", "domain": "data.norge.no"},
     "websearch": {"id": "websearch", "name": "Web search", "kind": "web", "tier": "discovery", "official": False},
     "llm": {"id": "llm", "name": "Language model (evidence-grounded)", "kind": "web", "tier": "discovery", "official": False},
 }
 
 MODULE_SOURCE = {"registry_live": "brreg", "registry": "brreg", "roles": "roles", "locations": "subunits", "group": "group", "financials": "accounts",
-                 "financial_history": "account_copies", "geo": "geonorge"}
+                 "financial_history": "account_copies", "geo": "geonorge", "nav_jobs": "nav", "procurement_ted": "ted", "procurement_doffin": "doffin_open"}
 
 
 def website_source(org: str, domain: str, *, verified: bool = True) -> dict[str, Any]:
@@ -79,7 +85,8 @@ def document_title(ev: dict[str, Any], legal_name: str | None) -> str | None:
     return {
         "registry_live": f"Enhetsregisteret — {name}", "registry": f"Enhetsregisteret (bulk snapshot) — {name}", "roles": f"Roller — {name}",
         "locations": f"Underenheter — {name}", "group": f"Konsernstruktur — {name}", "financials": f"Årsregnskap — {name}",
-        "financial_history": f"Årsregnskap (kopi) — {name}",
+        "financial_history": f"Årsregnskap (kopi) — {name}", "nav_jobs": "NAV Arbeidsplassen — stillingsannonse",
+        "procurement_ted": "TED — procurement notice", "procurement_doffin": "Doffin open data — kunngjøring",
     }.get(module or "", None)
 
 

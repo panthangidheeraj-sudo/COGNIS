@@ -370,7 +370,7 @@ function Workspace({ run, setRun, onNew }: { run: ResearchRun; setRun: (r: Resea
         </aside>
 
         <section className="rs-col rs-center" aria-labelledby="rs-syn">
-          <div className="rs-panel rs-synth">
+          <div className="rs-panel rs-synth paper">
             <h2 id="rs-syn" className="rs-panel-title">
               Synthesis
             </h2>

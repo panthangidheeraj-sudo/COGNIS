@@ -152,7 +152,7 @@ export function FinancialsSection({ profile, compactCharts, onExplain }: { profi
       )}
 
       {active === 'trend' && (
-        <section className="card" aria-labelledby="fin-trend" data-search-block="financial-chart">
+        <section className="card paper fin-paper" aria-labelledby="fin-trend" data-search-block="financial-chart">
           <div className="card-head" style={{ flexWrap: 'wrap' }}>
             <h2 id="fin-trend">Trend</h2>
             <span className="spacer" />
@@ -181,7 +181,7 @@ export function FinancialsSection({ profile, compactCharts, onExplain }: { profi
       {active === 'annual' && <AnnualValues profile={profile} periods={periods} />}
 
       {active === 'ratios' && (
-        <section className="card" aria-labelledby="fin-ratios" data-search-block="financial-ratios">
+        <section className="card paper fin-paper" aria-labelledby="fin-ratios" data-search-block="financial-ratios">
           <div className="card-head">
             <h2 id="fin-ratios">Ratios</h2>
             <span className="t-xs t-muted">Computed deterministically from filed figures — no estimates</span>
@@ -204,7 +204,7 @@ export function FinancialsSection({ profile, compactCharts, onExplain }: { profi
       )}
 
       {active === 'cash' && (
-        <section className="card" aria-labelledby="fin-cash" data-search-block="financial-cash">
+        <section className="card paper fin-paper" aria-labelledby="fin-cash" data-search-block="financial-cash">
           <div className="card-head">
             <h2 id="fin-cash">Cash / debt</h2>
             <span className="t-xs t-muted">Cash, total debt and equity as filed at each year end</span>
@@ -299,7 +299,7 @@ function AnnualValues({ profile, periods }: { profile: CompanyProfile; periods: 
   const first = shown[0];
   const last = shown.at(-1);
   return (
-    <section className="card" aria-labelledby="fin-annual" data-search-block="financial-table">
+    <section className="card paper fin-paper" aria-labelledby="fin-annual" data-search-block="financial-table">
       <div className="card-head" style={{ flexWrap: 'wrap' }}>
         <h2 id="fin-annual">Annual values</h2>
         <span className="t-xs t-muted">Values as filed; no adjustments. Click a value for evidence.</span>
@@ -468,7 +468,7 @@ function financialSources(profile: CompanyProfile): FinSource[] {
 function FinancialSources({ profile, sources }: { profile: CompanyProfile; sources: FinSource[] }) {
   const open = useOpenEvidence(profile.sourceIndex, profile.company.legalName);
   return (
-    <section className="card" aria-labelledby="fin-sources" data-search-block="financial-sources">
+    <section className="card paper fin-paper" aria-labelledby="fin-sources" data-search-block="financial-sources">
       <div className="card-head">
         <h2 id="fin-sources">Sources</h2>
         <span className="t-xs t-muted">Filings and documents behind the figures above</span>

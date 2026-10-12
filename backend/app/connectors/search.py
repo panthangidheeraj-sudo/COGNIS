@@ -68,15 +68,19 @@ def hit_matches_company(hit: SearchHit, legal_name: str | None) -> bool:
     return any(len(t) >= 4 and ascii_fold(t) in label for t in tokens)
 
 
-def _request_body(query: str, count: int, *, minimal: bool) -> dict[str, Any]:
+def _request_body(query: str, count: int, *, minimal: bool, include_domains: list[str] | None = None) -> dict[str, Any]:
     body: dict[str, Any] = {"query": query[:380], "search_depth": "basic", "max_results": count,
                             "include_answer": False, "include_raw_content": False, "include_images": False}
     if not minimal:  # optional hints; dropped if the API rejects them (400/422)
-        body.update({"country": "norway", "exclude_domains": sorted(NON_COMPANY_DOMAINS)[:150], "include_usage": True})
+        body.update({"country": "norway", "include_usage": True})
+        if include_domains:
+            body["include_domains"] = include_domains[:100]
+        else:
+            body["exclude_domains"] = sorted(NON_COMPANY_DOMAINS)[:150]
     return body
 
 
-async def web_search(ctx: ConnectorContext, query: str, *, count: int = 10) -> tuple[ModuleResult, list[SearchHit]]:
+async def web_search(ctx: ConnectorContext, query: str, *, count: int = 10, include_domains: list[str] | None = None) -> tuple[ModuleResult, list[SearchHit]]:
     s = ctx.settings
     if not s.search_enabled:
         return not_run("search", **SEARCH_SOURCE, state="not_applicable",
@@ -90,7 +94,7 @@ async def web_search(ctx: ConnectorContext, query: str, *, count: int = 10) -> t
             TAVILY_ENDPOINT,
             connector="tavily_search",
             method="POST",
-            json_body=_request_body(query, count, minimal=minimal),
+            json_body=_request_body(query, count, minimal=minimal, include_domains=include_domains),
             headers={"Authorization": f"Bearer {s.tavily_api_key or ''}", "Content-Type": "application/json"},
             accept="application/json",
             expect="json",

@@ -228,20 +228,21 @@ function CompareBody({ cmp }: { cmp: Comparison }) {
                 <span className="t-xs t-muted">Values as filed, each with its own evidence</span>
               </th>
               {cs.map((c, i) => (
-                <th key={c.orgNumber} scope="col" className="cmp-head" style={{ ['--co' as string]: colors[i] }}>
+                <th key={c.orgNumber} scope="col" className="cmp-head paper" style={{ ['--co' as string]: colors[i] }}>
                   <CompanyHead c={c} />
                 </th>
               ))}
             </tr>
           </thead>
           {groups.map((g, gi) => (
+            // the head cards and the at-a-glance rows form one ivory summary band; detail sections stay in the workspace
             <tbody key={g.id} id={`cmp-sec-${g.id}`} className={`cmp-group cmp-group--${g.id} cmp-anchor-target`}>
               <tr className="cmp-sec">
                 <th scope="rowgroup" className="cmp-label">
                   {g.label}
                 </th>
                 {cs.map((c, i) => (
-                  <td key={c.orgNumber} className="cmp-sec-co" aria-hidden>
+                  <td key={c.orgNumber} className={gi === 0 ? 'cmp-sec-co paper' : 'cmp-sec-co'} aria-hidden>
                     {gi > 0 && (
                       <>
                         <i style={{ background: colors[i] }} />
@@ -258,7 +259,7 @@ function CompareBody({ cmp }: { cmp: Comparison }) {
                     {r.unit && !isCurrencyUnit(r.unit) && <span className="cmp-unit"> {r.unit}</span>}
                   </th>
                   {r.values.map((v, i) => (
-                    <td key={cs[i].orgNumber} className="cmp-cell">
+                    <td key={cs[i].orgNumber} className={gi === 0 ? 'cmp-cell paper' : 'cmp-cell'}>
                       {v ? <FactValue fact={v} sourceIndex={sourceIndex} context={cs[i].legalName} /> : <span className="fact--missing">Not available</span>}
                       {v?.reportingPeriod && <span className="freshness">{v.reportingPeriod}</span>}
                     </td>
@@ -337,7 +338,10 @@ function CompanyHead({ c }: { c: CompanySummary }) {
       </div>
       <div className="cmp-head-foot">
         <CoverageMeter coverage={c.coverage} size="sm" />
-        <span className={`pill pill--sm ${toneClass(COMPANY_STATUS_TONE[c.status])}`}>{c.statusLabel ?? c.status}</span>
+        <span className={`pill pill--sm pill--bare ${toneClass(COMPANY_STATUS_TONE[c.status])}`}>
+          <span className="pill-dot" aria-hidden />
+          {c.statusLabel ?? c.status}
+        </span>
       </div>
     </div>
   );

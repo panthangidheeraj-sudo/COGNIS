@@ -13,9 +13,8 @@
   height: 40px;
   padding: 0 8px 0 6px;
   border-radius: var(--r-md);
-  border: var(--bw) solid color-mix(in oklab, var(--accent-soft) 60%, transparent);
-  background: var(--accent-wash);
-  box-shadow: var(--glow-edge);
+  border: var(--bw) solid var(--line-strong);
+  background: var(--surface-2);
   font-size: var(--fs-sm);
   font-weight: 500;
 }
@@ -80,10 +79,20 @@
   margin: -8px 0 -6px;
   width: fit-content;
   max-width: 100%;
-  border-radius: var(--r-pill);
-  border: var(--bw) solid var(--line-strong);
+  border-radius: var(--r-md);
+  border: var(--bw) solid var(--line);
   background: var(--chrome-bg); /* sticky anchor bar: solid */
   box-shadow: var(--shadow-1);
+}
+.cmp-anchors .chip {
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-3);
+  border-radius: var(--r-sm);
+}
+.cmp-anchors .chip:hover {
+  color: var(--text-1);
+  background: var(--accent-wash);
 }
 .cmp-anchor-target {
   scroll-margin-top: calc(var(--topbar-h) + 64px);
@@ -161,38 +170,43 @@
   max-width: 18ch;
 }
 
-/* company columns: one continuous solid band */
+/* company columns — two layers:
+   1. the summary band (head card + at-a-glance rows) is ivory: DARK = INVESTIGATE, IVORY = UNDERSTAND
+   2. each detail section is its own solid block per column, separated by an open section heading,
+      so the board never reads as one continuous table */
 .cmp-head,
 .cmp-cell,
 .cmp-sec-co {
+  text-align: left;
+}
+.cmp-cell {
   background: var(--surface-1);
   box-shadow:
     inset 1px 0 0 var(--line),
     inset -1px 0 0 var(--line);
-  text-align: left;
 }
 .cmp-head {
-  padding: 18px 18px 16px;
+  padding: 20px 20px 16px;
   vertical-align: top;
   font-weight: 400;
-  border-radius: 14px 14px 0 0;
-  box-shadow:
-    inset 0 3px 0 var(--co),
-    inset 1px 0 0 var(--line),
-    inset -1px 0 0 var(--line);
-  background: var(--frost-sheen), var(--surface-1);
+}
+.cmp-head.paper {
+  border-radius: 16px 16px 0 0;
+  background: var(--surface-ivory);
+  /* the company's colour, deepened so it also reads on ivory (the second series is ivory itself) */
+  box-shadow: inset 0 3px 0 color-mix(in oklab, var(--co) 55%, #0f1b2a);
 }
 .cmp-head-in {
   display: grid;
-  gap: 14px;
+  gap: 16px;
 }
 .cmp-head-name {
-  font-size: 16.5px;
+  font-size: 18px;
   font-weight: 500;
-  letter-spacing: -0.015em;
-  line-height: 1.25;
+  letter-spacing: -0.02em;
+  line-height: 1.22;
   color: var(--text-1);
-  overflow-wrap: break-word;
+  overflow-wrap: anywhere; /* long single-word names wrap inside the column instead of widening it */
   hyphens: auto;
 }
 .cmp-head-in .t-mono {
@@ -239,43 +253,71 @@
 .cmp-cell .fact--missing {
   font-size: var(--fs-sm);
 }
+
+/* ---- the ivory summary band ---- */
+.cmp-group--glance .cmp-cell.paper,
+.cmp-group--glance .cmp-sec-co.paper {
+  border-radius: 0;
+  background: var(--surface-ivory);
+  box-shadow: none;
+}
 .cmp-group--glance .cmp-cell {
-  font-size: 17px;
+  padding: 13px 20px;
+  border-top-color: var(--paper-rule-soft);
+  font-size: 18px;
   font-weight: 500;
-  letter-spacing: -0.015em;
+  letter-spacing: -0.02em;
+}
+.cmp-group--glance .cmp-cell .freshness {
+  letter-spacing: 0.02em;
 }
 .cmp-group--glance .cmp-cell .fact--missing {
   font-weight: 400;
   letter-spacing: 0;
 }
-.cmp-group:last-of-type .cmp-row:last-child .cmp-cell {
-  border-radius: 0 0 14px 14px;
-  box-shadow:
-    inset 1px 0 0 var(--line),
-    inset -1px 0 0 var(--line),
-    inset 0 -1px 0 var(--line);
-  padding-bottom: 16px;
+.cmp-group--glance .cmp-row:last-child .cmp-cell.paper {
+  border-radius: 0 0 16px 16px;
+  padding-bottom: 18px;
+  box-shadow: 0 36px 60px -44px rgba(0, 0, 0, 0.85);
+}
+.cmp-group--glance .cmp-sec > * {
+  height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  border-top: 0;
+  line-height: 1.3;
+}
+.cmp-group--glance .cmp-sec .cmp-label {
+  padding-top: 2px;
+  vertical-align: bottom;
+}
+.cmp-group--glance .cmp-row:hover .cmp-cell {
+  background: var(--c-ivory-2);
 }
 
-/* section divisions: a small label + a thin rule, with each column's name repeated quietly */
-.cmp-sec > * {
-  padding-top: 22px;
-  padding-bottom: 8px;
-  border-top: var(--bw) solid var(--line-strong);
-}
-.cmp-group:first-of-type .cmp-sec > * {
-  padding-top: 14px;
+/* ---- detail sections: an open heading, then a separate solid block per column ---- */
+.cmp-group:not(.cmp-group--glance) .cmp-sec > * {
+  padding-top: 40px;
+  padding-bottom: 10px;
+  vertical-align: bottom;
 }
 .cmp-sec .cmp-label {
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--text-1);
+}
+.cmp-group--glance .cmp-sec .cmp-label {
   font-family: var(--font-mono);
   font-size: var(--fs-micro);
+  font-weight: 400;
   letter-spacing: var(--tracking-micro);
   text-transform: uppercase;
-  color: var(--accent-ice);
+  color: var(--text-3);
 }
 .cmp-sec-co {
-  font-size: 11px;
-  color: var(--text-4);
+  font-size: 11.5px;
+  color: var(--text-3);
   vertical-align: bottom;
   padding-left: 18px;
   padding-right: 18px;
@@ -293,6 +335,27 @@
   border-radius: 2px;
   vertical-align: 1px;
 }
+.cmp-group:not(.cmp-group--glance) .cmp-sec + .cmp-row .cmp-cell {
+  border-top-color: transparent;
+  border-radius: 12px 12px 0 0;
+  box-shadow:
+    inset 0 1px 0 var(--line-strong),
+    inset 1px 0 0 var(--line),
+    inset -1px 0 0 var(--line);
+  background: var(--frost-sheen), var(--surface-1);
+}
+.cmp-group:not(.cmp-group--glance) .cmp-row:last-child .cmp-cell {
+  border-radius: 0 0 12px 12px;
+  padding-bottom: 15px;
+  box-shadow:
+    inset 0 -1px 0 var(--line),
+    inset 1px 0 0 var(--line),
+    inset -1px 0 0 var(--line);
+}
+.cmp-group:not(.cmp-group--glance) .cmp-sec + .cmp-row:last-child .cmp-cell {
+  border-radius: 12px;
+  box-shadow: inset 0 0 0 1px var(--line);
+}
 
 /* scan a row across all companies */
 .cmp-row:hover .cmp-cell {
@@ -300,6 +363,32 @@
 }
 .cmp-row:hover .cmp-label {
   color: var(--text-1);
+}
+
+/* light theme: the summary band is white card stock on the ivory canvas */
+:root[data-theme='light'] .cmp-head.paper,
+:root[data-theme='light'] .cmp-group--glance .cmp-cell.paper,
+:root[data-theme='light'] .cmp-group--glance .cmp-sec-co.paper {
+  background: #ffffff;
+}
+:root[data-theme='light'] .cmp-head.paper {
+  box-shadow:
+    inset 0 3px 0 var(--co),
+    inset 1px 0 0 var(--line-strong),
+    inset -1px 0 0 var(--line-strong);
+}
+:root[data-theme='light'] .cmp-group--glance .cmp-cell.paper,
+:root[data-theme='light'] .cmp-group--glance .cmp-sec-co.paper {
+  box-shadow:
+    inset 1px 0 0 var(--line-strong),
+    inset -1px 0 0 var(--line-strong);
+}
+:root[data-theme='light'] .cmp-group--glance .cmp-row:last-child .cmp-cell.paper {
+  box-shadow:
+    inset 1px 0 0 var(--line-strong),
+    inset -1px 0 0 var(--line-strong),
+    inset 0 -1px 0 var(--line-strong),
+    0 24px 40px -32px rgba(16, 42, 67, 0.35);
 }
 
 @media (max-width: 640px) {
@@ -311,12 +400,28 @@
   .cmp-head {
     padding: 14px 12px 12px;
   }
+  .cmp-head-name {
+    font-size: 15.5px;
+  }
+  /* a smaller mark leaves the narrow column room for the name and org. number */
+  .cmp-head .brand-mark,
+  .cmp-head .brand-mark svg {
+    width: 30px !important;
+    height: 30px !important;
+  }
   .cmp-cell {
     padding: 10px 12px;
     font-size: 14px;
   }
   .cmp-group--glance .cmp-cell {
+    padding: 11px 12px;
     font-size: 15.5px;
+  }
+  .cmp-group:not(.cmp-group--glance) .cmp-sec > * {
+    padding-top: 28px;
+  }
+  .cmp-sec .cmp-label {
+    font-size: 14px;
   }
   .cmp-sec-co {
     padding-left: 12px;

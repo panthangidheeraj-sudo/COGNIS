@@ -24,11 +24,16 @@
   --c-graphite: #0e131a;
   --c-silver: #c6d3e4;
   --c-frost: #eef2f8;
-  --c-blue-black: #040b17;
-  --c-navy-900: #071326;
-  --c-navy-850: #0a1830;
-  --c-navy-800: #0e1f3a;
-  --c-navy-750: #132845;
+  /* Luxury navy: deep, low-saturation ink-navy steps (blue is an accent, not the material) */
+  --c-blue-black: #060a12;
+  --c-navy-900: #090f1a;
+  --c-navy-850: #0f1725;
+  --c-navy-800: #141d2d;
+  --c-navy-750: #1a2436;
+  /* Ivory steps for the knowledge layer */
+  --c-ivory-paper: #fbf8f1;
+  --c-ivory-2: #f3eee3;
+  --c-ivory-3: #ebe4d6;
 
   /* ---- Typography ---- */
   --font-sans: 'Geist Variable', 'Geist', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
@@ -110,8 +115,11 @@
 }
 
 /* ==========================================================================
-   DARK (primary) — midnight-navy workspace, solid surfaces, blue as a quiet accent
-   Large surfaces (canvas, cards, panels, tables, chrome) are SOLID navy tones with a faint top light.
+   DARK (primary) — luxury-navy workspace, solid surfaces, ivory for knowledge
+   DARK = INVESTIGATE, IVORY = UNDERSTAND. Large surfaces (canvas, cards, panels, tables, chrome) are
+   SOLID low-saturation navy with a faint top light; reading surfaces (briefs, evidence, research
+   synthesis, financial tables, comparison summaries) are ivory `.paper`. Blue is for links, live states
+   and interaction only; white is the primary action and the completed state.
    Glass (--glass-*) is reserved for small floating layers: palette, search dropdowns, menus,
    popovers, tooltips, toasts, drawers/modals, the compare tray and floating controls.
    ========================================================================== */
@@ -120,10 +128,10 @@
   color-scheme: dark;
 
   --bg-canvas: var(--c-blue-black);
-  --bg-canvas-2: #06142b; /* midnight towards the bottom */
-  --bg-glow: rgba(58, 104, 186, 0.16); /* blue haze, top right */
-  --bg-glow-2: rgba(22, 52, 112, 0.22); /* deep blue, bottom */
-  --bg-glow-3: rgba(40, 86, 170, 0.14); /* blue depth, mid left */
+  --bg-canvas-2: #08101c; /* midnight towards the bottom */
+  --bg-glow: rgba(96, 120, 160, 0.09); /* faint cool haze, top right */
+  --bg-glow-2: rgba(22, 36, 64, 0.32); /* navy depth, bottom */
+  --bg-glow-3: rgba(70, 92, 130, 0.07); /* depth, mid left */
 
   /* Solid surfaces (deep navy steps) */
   --surface-1: var(--c-navy-850); /* cards, panels */
@@ -133,30 +141,31 @@
   --solid-2: var(--c-navy-800);
   --solid-3: var(--c-navy-750);
   --solid-card: var(--c-navy-850);
-  --solid-card-head: #0d1c35;
+  --solid-card-head: #121b2a;
   --chrome-bg: var(--c-navy-900); /* rail, top bar, mobile nav */
   --surface-inverse: var(--c-ivory);
   --surface-paper: var(--c-ivory); /* artifact body / report pages */
+  --surface-ivory: var(--c-ivory-paper); /* ivory reading panels inside the dark workspace */
 
   /* A faint top light on solid surfaces (not glass). --frost-* names kept for compatibility. */
-  --frost-sheen: linear-gradient(180deg, rgba(190, 215, 255, 0.035), rgba(190, 215, 255, 0) 42%);
+  --frost-sheen: linear-gradient(180deg, rgba(220, 228, 242, 0.03), rgba(220, 228, 242, 0) 42%);
   --frost-blur: 0px;
-  --frost-edge: inset 0 1px 0 rgba(200, 222, 255, 0.055);
+  --frost-edge: inset 0 1px 0 rgba(226, 232, 244, 0.05);
   /* Glass: small floating layers only */
-  --glass-bg: rgba(12, 27, 52, 0.68);
-  --glass-bg-strong: rgba(8, 19, 39, 0.92);
-  --glass-border: rgba(160, 192, 240, 0.16);
+  --glass-bg: rgba(15, 22, 35, 0.74);
+  --glass-bg-strong: rgba(10, 15, 25, 0.94);
+  --glass-border: rgba(196, 208, 228, 0.15);
   --glass-blur: 22px;
-  --glass-sheen: linear-gradient(180deg, rgba(200, 222, 255, 0.07), rgba(200, 222, 255, 0.012) 48%, rgba(200, 222, 255, 0.025));
+  --glass-sheen: linear-gradient(180deg, rgba(226, 232, 244, 0.06), rgba(226, 232, 244, 0.01) 48%, rgba(226, 232, 244, 0.02));
 
-  --line: rgba(150, 182, 232, 0.105);
-  --line-strong: rgba(160, 192, 240, 0.19);
+  --line: rgba(190, 202, 222, 0.1);
+  --line-strong: rgba(198, 210, 228, 0.18);
   --line-focus: rgba(232, 240, 252, 0.75);
 
   --text-1: #f4f7fb;
-  --text-2: #c4cfdd;
-  --text-3: #8d9cb1;
-  --text-4: #7d8da6; /* ≥ 4.5:1 on the card navy */
+  --text-2: #c7cfdb;
+  --text-3: #919cae;
+  --text-4: #7f8ba0; /* ≥ 4.5:1 on the card navy */
   --text-on-accent: #ffffff;
   --text-on-paper: #111827;
   --text-on-paper-2: #475569;
@@ -172,11 +181,11 @@
   --accent-strong: #3f72d8;
   --accent-soft: #c6d3e4; /* silver highlight: icons, meters, active borders */
   --accent-ice: #eef2f8; /* near white highlight */
-  --accent-wash: rgba(160, 192, 240, 0.075);
-  --accent-wash-2: rgba(160, 192, 240, 0.13);
+  --accent-wash: rgba(200, 212, 232, 0.06);
+  --accent-wash-2: rgba(200, 212, 232, 0.11);
   --link: #a7c3ef;
   --live: #7aa7f2; /* running research, active step */
-  --pressed-bg: rgba(170, 200, 245, 0.15); /* selected segment, pressed toggle */
+  --pressed-bg: rgba(214, 224, 240, 0.14); /* selected segment, pressed toggle */
   --dot-glow: rgba(226, 235, 248, 0.55); /* halo on small live dots */
 
   --ok: #3cbfa8;
@@ -187,20 +196,20 @@
   --err-wash: rgba(224, 133, 124, 0.13);
   --info: #a7c3ef;
   --info-wash: rgba(167, 195, 239, 0.1);
-  --neutral-wash: rgba(160, 192, 240, 0.065);
+  --neutral-wash: rgba(200, 212, 232, 0.06);
 
-  --shadow-1: inset 0 1px 0 rgba(200, 222, 255, 0.045), 0 14px 34px -22px rgba(0, 3, 12, 0.9);
-  --shadow-2: inset 0 1px 0 rgba(200, 222, 255, 0.055), 0 30px 64px -30px rgba(0, 3, 12, 0.95);
-  --shadow-3: 0 40px 120px -30px rgba(0, 2, 10, 0.92);
-  --glow-edge: 0 0 0 1px rgba(214, 228, 250, 0.32), 0 0 30px -10px rgba(150, 190, 250, 0.4);
-  --glow-soft: 0 0 40px -12px rgba(150, 190, 250, 0.32);
+  --shadow-1: inset 0 1px 0 rgba(226, 232, 244, 0.04), 0 14px 34px -22px rgba(0, 2, 8, 0.9);
+  --shadow-2: inset 0 1px 0 rgba(226, 232, 244, 0.05), 0 30px 64px -30px rgba(0, 2, 8, 0.95);
+  --shadow-3: 0 40px 120px -30px rgba(0, 2, 8, 0.92);
+  --glow-edge: 0 0 0 1px rgba(226, 232, 244, 0.3), 0 0 26px -12px rgba(200, 214, 240, 0.32);
+  --glow-soft: 0 0 40px -12px rgba(170, 196, 240, 0.26);
 
   --chart-1: #9dbbea;
   --chart-2: var(--c-ivory);
   --chart-3: #6f82a0;
   --chart-4: #dfe6f0;
   --chart-5: #46597a;
-  --chart-grid: rgba(150, 182, 232, 0.08);
+  --chart-grid: rgba(190, 202, 222, 0.08);
   --chart-axis: #7d8ca3;
 
   --grain-opacity: 0.03;
@@ -229,6 +238,7 @@
   --chrome-bg: #fbf9f4;
   --surface-inverse: var(--c-deep-navy);
   --surface-paper: #fffdf8;
+  --surface-ivory: #fffdf8;
 
   --frost-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0) 45%);
   --frost-edge: inset 0 1px 0 rgba(255, 255, 255, 0.9);

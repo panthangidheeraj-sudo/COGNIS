@@ -12,7 +12,7 @@ from typing import Any
 
 from ..core.util import currency_unit, format_int, format_money, normalize_currency, now_iso, stated_currencies, title_case_no
 from ..identity.model import COUNTIES, LEGAL_FORMS
-from .sources import SourceIndex, to_frontend_evidence
+from .sources import STATIC_SOURCES, SourceIndex, to_frontend_evidence
 
 PENDING = "Not researched yet. Run research to gather this area from public sources."
 STATUS_MAP = {"active": "active", "bankruptcy": "bankruptcy", "under_liquidation": "under_liquidation", "forced_dissolution": "under_liquidation",
@@ -43,8 +43,10 @@ def _year(period: str | None) -> int | None:
 
 class Builder:
     def __init__(self, record: dict[str, Any], *, changes: list[dict[str, Any]] | None = None, previous_at: str | None = None, artifact_id: str | None = None,
-                 tags: list[str] | None = None):
+                 tags: list[str] | None = None, inactive_job_ids: set[str] | None = None):
         self.r = record
+        # NAV ads that became inactive or were deleted since this record was made: NAV's terms require removing them
+        self.inactive_job_ids = inactive_job_ids or set()
         self.org = record["organisation_number"]
         self.identity = record.get("identity") or {}
         self.legal_name = self.identity.get("legal_name") or self.org
@@ -436,35 +438,72 @@ class Builder:
 
     def hiring(self) -> dict[str, Any]:
         jobs_rec = self.r.get("jobs") or {}
+        assessed = jobs_rec.get("outcome") or None  # what the research established (agent/hiring.py); absent in records made before it existed
         mod = self.modules.get("jobs") or {}
         if not self.researched and not jobs_rec.get("items"):
-            return {"status": "pending", "message": PENDING, "totalCurrent": None, "locations": [], "categories": [], "jobs": [], "history": []}
+            return {"status": "pending", "message": PENDING, "outcome": "pending", "totalCurrent": None, "locations": [], "categories": [], "jobs": [], "history": []}
         job_claims = {(c.get("key_suffix") or ""): c for c in self.by_field.get("job_posting") or []}
         jobs = []
         for item in jobs_rec.get("items") or []:
+            details = item.get("details") or {}
+            if item.get("source") == "nav" and details.get("nav_uuid") in self.inactive_job_ids:
+                continue
             claim = job_claims.get(item["id"])
             evidence = self.evidence_for(claim) if claim else []
+            also = []
+            for dup in details.get("merged") or []:  # the same opening listed elsewhere: its evidence and URL stay attached
+                if dup.get("nav_uuid") in self.inactive_job_ids:
+                    continue
+                dup_claim = job_claims.get(dup.get("id"))
+                if dup_claim:
+                    evidence += [e for e in self.evidence_for(dup_claim) if all(e["id"] != x["id"] for x in evidence)]
+                also.append({k: dup.get(k) for k in ("source", "url", "state", "posted_at", "updated_at") if dup.get(k)})
             src = evidence[0]["sourceId"] if evidence else (f"web-{self.org}" if self.domain else "jobs")
             job = {"id": f"{self.org}-job-{item['id']}", "title": item["title"], "sourceId": src, "url": item.get("url"), "state": item.get("state") or "current",
                    "evidence": evidence}
-            for k_src, k_dst in (("department", "department"), ("location", "location"), ("posted_at", "postedAt")):
+            for k_src, k_dst in (("department", "department"), ("location", "location"), ("posted_at", "postedAt"), ("valid_through", "validThrough")):
                 if item.get(k_src):
                     job[k_dst] = item[k_src]
+            if details.get("updated_at"):
+                job["updatedAt"] = str(details["updated_at"])[:10]
+            if item.get("retrieved_at"):
+                job["checkedAt"] = item["retrieved_at"]
+            if also:
+                job["alsoListed"] = also
             jobs.append(job)
         count_claim = self.first("open_positions_count")
         current = [j for j in jobs if j["state"] == "current"]
+        checks = (assessed or {}).get("checks") or []
+        searched_ok = {"careers": f"web-{self.org}", "job_board": f"web-{self.org}", "nav": "nav"}
+        searched = sorted({searched_ok[c["id"]] for c in checks if c["state"] == "checked" and c["id"] in searched_ok and (c["id"] != "nav" or self._nav_searched())}
+                          if assessed else ({f"web-{self.org}"} if self.domain else set()) | self._nav_searched())
+        meta = {"checks": checks} if checks else {}
         if count_claim is not None:
             total = int(count_claim["value"])
             loc_counts = Counter(j.get("location") or "Unspecified" for j in current)
             cat_counts = Counter(j.get("department") or "Other" for j in current)
+            note = (assessed or {}).get("message") if (total == 0 or (assessed or {}).get("caveat")) else None
             return {"status": "available", "totalCurrent": total, "locations": [{"name": n, "count": c} for n, c in loc_counts.most_common()],
                     "categories": [{"name": n, "count": c} for n, c in cat_counts.most_common()], "jobs": jobs, "history": [],
-                    "verifiedAt": self.researched_at, "searchedSourceIds": sorted({j["sourceId"] for j in jobs}) or [f"web-{self.org}"],
-                    **({"message": "No current verified job openings were found in the searched sources."} if total == 0 else {})}
+                    "verifiedAt": self.researched_at, "searchedSourceIds": sorted({j["sourceId"] for j in jobs} | set(searched)) or [f"web-{self.org}"],
+                    "outcome": "verified" if total else "none_found", **meta,
+                    **({"message": note or "No current verified job openings were found in the searched sources."} if total == 0 else ({"message": note} if note else {}))}
+        if assessed:
+            outcome = assessed["outcome"] if assessed["outcome"] != "verified" else "incomplete"  # openings without a published count: do not claim a result
+            status = {"none_found": "not_available"}.get(outcome, "partial")
+            return {"status": status, "outcome": outcome, "message": assessed["message"], "totalCurrent": None, "locations": [], "categories": [], "jobs": jobs, "history": [],
+                    "searchedSourceIds": searched, **meta}
         state = mod.get("state")
         status = {"blocked": "blocked", "ambiguous": "ambiguous"}.get(state or "", "not_available")
-        return {"status": status, "message": jobs_rec.get("note") or mod.get("note") or "No current verified job openings were found in the searched sources.",
-                "totalCurrent": None, "locations": [], "categories": [], "jobs": jobs, "history": [], "searchedSourceIds": [f"web-{self.org}"] if self.domain else []}
+        return {"status": status, "message": jobs_rec.get("note") or mod.get("note") or "No verified openings were found in the sources checked; this does not mean the company is not hiring.",
+                "totalCurrent": None, "locations": [], "categories": [], "jobs": jobs, "history": [], "searchedSourceIds": sorted(searched)}
+
+    def _nav_searched(self) -> set[str]:
+        nav = self.modules.get("nav_jobs") or {}
+        if nav.get("state") == "available" and not (nav.get("value") or {}).get("unreadable"):
+            self.sources.add(STATIC_SOURCES["nav"])
+            return {"nav"}
+        return set()
 
     def activity(self) -> dict[str, Any]:
         events = []
@@ -492,6 +531,15 @@ class Builder:
             elif re.search(r"ny daglig leder|new ceo|ansetter .* som|appoint", low):
                 typ, major = "leadership", True
             add(c.get("as_of"), typ, title, c, major)
+        for c in self.by_field.get("procurement_award") or []:
+            a = c.get("attributes") or {}
+            buyer = f" — buyer: {a['buyer_name']}" if a.get("buyer_name") else ""
+            add(c.get("as_of"), "contract", f"Public contract awarded: {c['value']}{buyer}", c, True,
+                description=" · ".join(x for x in (a.get("notice_type_label"), f"notice {a.get('notice_id')}" if a.get("notice_id") else None, a.get("coverage")) if x))
+        for c in self.by_field.get("procurement_notice_as_buyer") or []:
+            a = c.get("attributes") or {}
+            add(c.get("as_of"), "contract", f"Procurement published as buyer: {c['value']}", c, False,
+                description=" · ".join(x for x in (a.get("notice_type_label"), f"notice {a.get('notice_id')}" if a.get("notice_id") else None, a.get("coverage")) if x))
         reg = self.first("registration_date")
         if reg:
             add(reg["value"], "registration", "Registered in Enhetsregisteret", reg, True)
@@ -610,7 +658,9 @@ class Builder:
             has_h = hiring["totalCurrent"] is not None
             has_a = bool(activity["events"])
             areas.append(area("hiring_activity", "complete" if has_h and has_a else "partial" if has_h or has_a else
-                              ("blocked" if hiring["status"] == "blocked" else "unavailable"), None if has_h else "Hiring data unavailable"))
+                              ("blocked" if hiring["status"] == "blocked" else "unavailable"),
+                              None if has_h else {"none_found": "No verified openings found", "source_unavailable": "Hiring source unavailable",
+                                                  "incomplete": "Hiring research incomplete"}.get(hiring.get("outcome") or "", "Hiring data unavailable")))
         sections = {"company_record": ("identity", "overview"), "financials": ("financials",), "people_locations": ("people", "locations"), "website": ("website",),
                     "hiring_activity": ("hiring", "activity")}
         for a in areas:
@@ -673,12 +723,16 @@ class Builder:
                       "status": "conflict" if last["fact"].get("conflict") else "verified", "factId": last["fact"]["id"]})
         else:
             k.append({"id": "k-rev", "label": "Revenue", "text": financials.get("message") or "No filed annual accounts found.", "status": "unknown"})
-        if hiring["totalCurrent"] is not None:
-            k.append({"id": "k-hiring", "label": "Current hiring", "text": f"{hiring['totalCurrent']} verified opening{'' if hiring['totalCurrent'] == 1 else 's'} on company-owned pages.",
+        if hiring["totalCurrent"] == 0:
+            k.append({"id": "k-hiring", "label": "Current hiring", "text": hiring.get("message") or "The company's careers page states that it has no open positions.", "status": "unknown"})
+        elif hiring["totalCurrent"] is not None:
+            where = "on company-owned pages and NAV Arbeidsplassen" if any(j["sourceId"] == "nav" for j in hiring["jobs"]) and any(j["sourceId"] != "nav" for j in hiring["jobs"]) \
+                else "on NAV Arbeidsplassen" if any(j["sourceId"] == "nav" for j in hiring["jobs"]) else "on company-owned pages"
+            k.append({"id": "k-hiring", "label": "Current hiring", "text": f"{hiring['totalCurrent']} verified opening{'' if hiring['totalCurrent'] == 1 else 's'} {where}.",
                       "status": "verified"})
         else:
             k.append({"id": "k-hiring", "label": "Current hiring", "text": "Not researched yet." if hiring["status"] == "pending" else
-                      "No current verified openings found in searched sources.", "status": "unknown"})
+                      hiring.get("message") or "No verified openings found in the sources checked.", "status": "unknown"})
         if website["status"] == "available":
             k.append({"id": "k-web", "label": "Official website", "text": f"{website.get('domain')}, ownership verified.", "status": "verified"})
         elif website["status"] == "blocked":

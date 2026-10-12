@@ -136,10 +136,10 @@ def brief_from_profile(p: dict[str, Any]) -> dict[str, Any]:
     if h.get("totalCurrent"):
         cats = ", ".join(f"{x['name']} {x['count']}" for x in h["categories"][:3])
         where = ", ".join(x["name"] for x in h["locations"][:3])
-        hiring.append(_item("hire", f"{h['totalCurrent']} current opening{'' if h['totalCurrent'] == 1 else 's'} on company-owned pages ({cats}) in {where}.",
+        hiring.append(_item("hire", f"{h['totalCurrent']} verified current opening{'' if h['totalCurrent'] == 1 else 's'} ({cats}) in {where}." + (f" {h['message']}" if h.get("message") else ""),
                             [e for j in h["jobs"] if j["state"] == "current" for e in j["evidence"]][:4], label="Open positions", value=str(h["totalCurrent"])))
     sections.append({"id": "hiring", "title": "Hiring", "items": hiring, "emptyText": "Not researched yet." if h["status"] == "pending" else
-                     (h.get("message") or "No current verified job openings were found in the searched sources.")})
+                     (h.get("message") or "No verified openings found in the sources checked. This does not mean the company is not hiring.")})
 
     ch_items = []
     for x in sorted([x for x in p["changes"]["changes"] if x["material"]], key=lambda x: CHANGE_PRIORITY.index(x["category"]) if x["category"] in CHANGE_PRIORITY else 99)[:5]:
@@ -326,10 +326,10 @@ async def answer(p: dict[str, Any], question: str, runner: llm_tasks.LLMRunner |
         elif re.search(r"hir|job|opening|recruit|stilling", q):
             h = p["hiring"]
             if h["totalCurrent"] is None:
-                gaps.append(h.get("message") or "No current verified job openings were found in the searched sources.")
+                gaps.append(h.get("message") or "No verified openings found in the sources checked. This does not mean the company is not hiring.")
             else:
                 f = next((k for k in p["keyMetrics"] if k["field"] == "overview.openPositions"), None)
-                block(f"{h['totalCurrent']} current openings were found on company-owned pages." + (" " + "; ".join(j["title"] for j in h["jobs"][:5]) if h["jobs"] else ""),
+                block(f"{h['totalCurrent']} verified current opening{'' if h['totalCurrent'] == 1 else 's'} found." + (f" {h['message']}" if h.get("message") else "") + (" " + "; ".join(j["title"] for j in h["jobs"][:5]) if h["jobs"] else ""),
                       [f] if f else [])
         elif re.search(r"change|new since|differ|endring", q):
             for c in p["changes"]["changes"][:5]:

@@ -6,6 +6,8 @@ Python — not the LLM — decides what is published:
   claim span and an extraction method;
 * search results and discovery-tier observations are never evidence;
 * website-derived observations need a verified exact-entity identity score;
+* third-party records about the company (NAV job ads, procurement notices) need an exact identity resolution
+  (organisation number, registered establishment, or exact name confirmed by an independent signal);
 * numbers must be real numbers from the source (missing is never zero) and
   financial numbers must carry their reporting period and the currency their
   own evidence states (a currency is never assumed);
@@ -42,17 +44,22 @@ SOURCE_RANK: dict[str, int] = {
     "company_owned_discovered": 3,
     "company_linked_social_profile": 3,
     "company_linked_job_board": 3,
+    "official_job_feed": 2,
+    "official_procurement_notice": 2,
     "licensed_secondary": 4,
 }
 OFFICIAL_CLASSES = {k for k, v in SOURCE_RANK.items() if v <= 1}
 WEBSITE_CLASSES = {"company_owned", "company_owned_email_domain", "company_owned_discovered", "company_linked_social_profile", "company_linked_job_board"}
 NEVER_EVIDENCE = {"search_result", "search_snippet", "web_search", "llm_generated"}
+# Records published by third parties that name the company (NAV job ads, procurement notices): only exact resolutions.
+EXACT_IDENTITY_CLASSES = {"official_job_feed", "official_procurement_notice"}
+MIN_EXACT_IDENTITY = 0.95
 
 CONFIDENCE: dict[str, float] = {
     "official_registry_live": 0.99, "official_registry_bulk": 0.98, "official_annual_accounts": 0.98, "official_roles": 0.97,
     "official_subunits": 0.97, "official_group_structure": 0.97, "official_annual_account_copies": 0.97, "official_classification": 0.95,
     "company_owned": 0.9, "company_owned_email_domain": 0.88, "company_owned_discovered": 0.85, "company_linked_social_profile": 0.88,
-    "company_linked_job_board": 0.85, "licensed_secondary": 0.8,
+    "company_linked_job_board": 0.85, "official_job_feed": 0.9, "official_procurement_notice": 0.93, "licensed_secondary": 0.8,
 }
 MIN_WEBSITE_IDENTITY = 0.6
 
@@ -156,6 +163,10 @@ def check(obs: Observation) -> str | None:
         return "empty value"
     if obs.source_class in WEBSITE_CLASSES and obs.identity_score < MIN_WEBSITE_IDENTITY:
         return f"website identity not established (score {obs.identity_score:.2f})"
+    if obs.source_class in EXACT_IDENTITY_CLASSES and (obs.identity_score < MIN_EXACT_IDENTITY or not (obs.attributes or {}).get("identity_basis")):
+        return "third-party record not resolved to this exact organisation"
+    if (obs.attributes or {}).get("discovered") and not (obs.attributes or {}).get("identity_basis"):
+        return "page suggested by web search was not verified as belonging to this exact organisation"
     if obs.field in FINANCIAL_FIELDS or obs.field.startswith("consolidated_") or obs.numeric or obs.field in NUMERIC_FIELDS:
         if isinstance(value, bool) or not isinstance(value, (int, float)) or (isinstance(value, float) and not math.isfinite(value)):
             return "numeric field without a real number"
@@ -298,7 +309,7 @@ FIELD_ORDER = {name: i for i, name in enumerate([
     "registered_establishment_count", "registered_establishment", "latest_filed_accounts_year", "annual_accounts_filed",
     *sorted(FINANCIAL_FIELDS), "official_website", "website_title", "website_description", "business_description", "contact_email", "contact_phone",
     "social_profile_linkedin", "social_profile_facebook", "social_profile_instagram", "social_profile_x", "social_profile_youtube",
-    "open_positions_count", "job_posting", "news_item", "summary",
+    "open_positions_count", "job_posting", "procurement_award", "procurement_notice_as_buyer", "news_item", "summary",
 ])}
 
 _STATE_PRIORITY = {"blocked": 0, "failed": 1, "ambiguous": 2, "not_applicable": 3, "not_available": 4}

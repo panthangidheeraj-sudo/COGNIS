@@ -527,7 +527,8 @@ export function buildProfile(spec: CompanySpec): CompanyProfile {
   if (spec.jobs === null) {
     hiring = {
       status: 'not_available',
-      message: 'No current verified job openings were found in the searched sources.',
+      outcome: 'none_found',
+      message: 'No verified openings found in the sources checked. This does not mean the company is not hiring.',
       totalCurrent: null,
       locations: [],
       categories: [],
@@ -559,6 +560,7 @@ export function buildProfile(spec: CompanySpec): CompanyProfile {
     const current = jobs.filter((j) => j.state === 'current');
     hiring = {
       status: 'available',
+      outcome: current.length ? 'verified' : 'none_found',
       totalCurrent: current.length,
       locations: countBy(current, (j) => j.location ?? 'Unspecified'),
       categories: countBy(current, (j) => j.department ?? 'Other'),
@@ -566,7 +568,7 @@ export function buildProfile(spec: CompanySpec): CompanyProfile {
       history: spec.hiringHistory ?? [],
       verifiedAt: spec.researchedAt ?? NOW,
       searchedSourceIds: ['nav', ...(spec.domain ? [`web-${spec.org}`] : [])],
-      message: current.length === 0 ? 'No current verified job openings were found in the searched sources.' : undefined,
+      message: current.length === 0 ? 'No verified openings found in the sources checked. This does not mean the company is not hiring.' : undefined,
     };
   }
 
@@ -748,7 +750,7 @@ export function buildProfile(spec: CompanySpec): CompanyProfile {
       : { id: 'k-founder', label: 'Founder', text: 'Not verified in searched permitted sources.', status: 'unknown' },
     hiring.totalCurrent != null
       ? { id: 'k-hiring', label: 'Current hiring', text: `${hiring.totalCurrent} verified opening${hiring.totalCurrent === 1 ? '' : 's'}.`, status: 'verified' }
-      : { id: 'k-hiring', label: 'Current hiring', text: 'No current verified openings found in searched sources.', status: 'unknown' },
+      : { id: 'k-hiring', label: 'Current hiring', text: 'No verified openings found in the sources checked.', status: 'unknown' },
     spec.websiteBlocked
       ? { id: 'k-web', label: 'Website content', text: 'Source access blocked.', status: 'blocked' }
       : spec.domain

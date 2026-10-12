@@ -280,6 +280,63 @@ MIGRATIONS: list[tuple[int, str, str]] = [
         );
         """,
     ),
+    (
+        3,
+        "free source indexes (NAV job feed, Doffin open data)",
+        """
+        CREATE TABLE IF NOT EXISTS nav_ads (
+            uuid TEXT PRIMARY KEY,
+            status TEXT NOT NULL,
+            title TEXT,
+            business_name TEXT,
+            name_norm TEXT,
+            municipal TEXT,
+            entry_url TEXT,
+            modified_at TEXT,
+            seen_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS ix_nav_ads_name ON nav_ads(name_norm);
+        CREATE INDEX IF NOT EXISTS ix_nav_ads_modified ON nav_ads(modified_at);
+
+        CREATE TABLE IF NOT EXISTS nav_feed_state (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            page_url TEXT,
+            etag TEXT,
+            last_modified TEXT,
+            window_start TEXT,
+            started_at TEXT,
+            synced_at TEXT,
+            newest_modified TEXT,
+            caught_up INTEGER NOT NULL DEFAULT 0,
+            pages_total INTEGER NOT NULL DEFAULT 0,
+            last_error TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS procurement_notices (
+            notice_key TEXT PRIMARY KEY,
+            source TEXT NOT NULL,
+            notice_id TEXT NOT NULL,
+            title TEXT,
+            notice_type TEXT,
+            published_at TEXT,
+            buyer_name TEXT,
+            url TEXT,
+            dataset TEXT,
+            dataset_period TEXT,
+            row_sha256 TEXT,
+            imported_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS procurement_parties (
+            notice_key TEXT NOT NULL,
+            org_number TEXT NOT NULL,
+            role TEXT NOT NULL,
+            name TEXT,
+            PRIMARY KEY (notice_key, org_number, role)
+        );
+        CREATE INDEX IF NOT EXISTS ix_procurement_parties_org ON procurement_parties(org_number)
+        """,
+    ),
 ]
 
 

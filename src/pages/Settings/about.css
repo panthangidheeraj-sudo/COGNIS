@@ -169,6 +169,23 @@
 .story-index .t-mono {
   font-size: 10.5px;
 }
+.story-index ol {
+  transition:
+    background var(--motion-slow),
+    border-color var(--motion-slow);
+}
+.story-index--paper {
+  --text-1: #0f1b2a;
+  --text-2: #3d4b5e;
+  --text-4: #6b7a8e;
+  --accent-wash: rgba(16, 42, 67, 0.05);
+  --accent-wash-2: rgba(16, 42, 67, 0.09);
+}
+.story-index--paper ol {
+  border-color: rgba(16, 42, 67, 0.12);
+  background: rgba(255, 253, 248, 0.82);
+  box-shadow: 0 14px 30px -18px rgba(16, 42, 67, 0.35);
+}
 .story-index-label {
   max-width: 0;
   overflow: hidden;
@@ -201,15 +218,20 @@
   gap: 10px;
   perspective: 1400px;
 }
-.dossier-layer {
+/* the dossier's layers are documents: ivory sheets assembling in the dark workspace */
+.dossier-layer.paper {
   display: grid;
   grid-template-columns: 40px minmax(0, 1fr) auto;
   align-items: center;
   gap: 14px;
   padding: 14px 18px;
   border-radius: var(--r-lg);
-  border: var(--bw) solid var(--line);
-  background: var(--frost-sheen), var(--surface-1);
+  border: var(--bw) solid transparent;
+  background: var(--surface-ivory);
+  box-shadow: 0 22px 40px -30px rgba(0, 0, 0, 0.85);
+}
+:root[data-theme='light'] .dossier-layer.paper {
+  border-color: var(--line);
   box-shadow: var(--shadow-1);
 }
 .dossier-icon,
@@ -353,6 +375,31 @@
   color: var(--warn);
 }
 
+/* 05 is the ivory chapter: a full-width reading moment (`.paper` re-scopes the tokens) */
+.act.act--evidence.paper {
+  border-radius: 0;
+  background: var(--surface-ivory);
+}
+.act--evidence .tier {
+  background: #fffdf8;
+  border-color: var(--paper-rule-soft);
+  box-shadow: 0 1px 2px rgba(16, 42, 67, 0.05), 0 18px 34px -28px rgba(16, 42, 67, 0.35);
+}
+.act--evidence .tier--discovery {
+  background: transparent;
+  border-color: var(--paper-rule);
+  box-shadow: none;
+}
+:root[data-theme='light'] .act.act--evidence.paper {
+  background: #fffdf8;
+  box-shadow:
+    inset 0 1px 0 var(--line),
+    inset 0 -1px 0 var(--line);
+}
+:root[data-theme='light'] .act--evidence .tier {
+  background: var(--c-ivory);
+}
+
 /* ==================== 06 · workflow ==================== */
 .flow {
   --fill: 0;
@@ -445,23 +492,34 @@
   gap: 10px;
   margin-top: 6px;
 }
-.final-notes {
+/* the closing notes are read, not scanned: one ivory sheet, three columns divided by hairlines */
+.final-notes.paper {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
-  margin-top: 36px;
+  margin-top: 40px;
+  padding: 8px 0;
   text-align: left;
+  border-radius: 16px;
+  background: var(--surface-ivory);
+  box-shadow: 0 36px 70px -44px rgba(0, 0, 0, 0.85);
 }
 .final-notes section {
-  padding: 18px 20px;
-  border-radius: var(--r-lg);
-  border: var(--bw) solid var(--line);
-  background: var(--frost-sheen), var(--surface-1);
+  padding: 22px 26px 24px;
+}
+.final-notes section + section {
+  border-left: 1px solid var(--paper-rule-soft);
 }
 .final-notes h3 {
-  font-size: var(--fs-body);
-  font-weight: 500;
-  margin-bottom: 8px;
+  font-family: var(--paper-serif);
+  font-size: 22px;
+  font-weight: 400;
+  line-height: 1.15;
+  color: var(--paper-ink);
+  margin-bottom: 10px;
+}
+:root[data-theme='light'] .final-notes.paper {
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-1);
 }
 .final-notes p {
   font-size: var(--fs-sm);
@@ -682,7 +740,7 @@
     gap: 6px;
     width: 100%;
   }
-  .dossier-layer,
+  .dossier-layer.paper,
   .tier {
     padding: 8px 12px;
     grid-template-columns: 32px minmax(0, 1fr);
@@ -724,8 +782,16 @@
   .flow::after {
     left: 19px;
   }
-  .final-notes {
+  .final-notes.paper {
     grid-template-columns: minmax(0, 1fr);
+    padding: 0;
+  }
+  .final-notes section {
+    padding: 20px 22px;
+  }
+  .final-notes section + section {
+    border-left: 0;
+    border-top: 1px solid var(--paper-rule-soft);
   }
   .story--static .act-visual {
     max-height: none;
@@ -749,7 +815,7 @@
     font-size: 14.5px;
     line-height: 1.55;
   }
-  .dossier-layer,
+  .dossier-layer.paper,
   .tier {
     padding: 5px 10px;
     border-radius: var(--r-md);
@@ -760,7 +826,7 @@
     width: 28px;
     height: 28px;
   }
-  .dossier-layer,
+  .dossier-layer.paper,
   .tier,
   .flow-step {
     grid-template-columns: 28px minmax(0, 1fr);

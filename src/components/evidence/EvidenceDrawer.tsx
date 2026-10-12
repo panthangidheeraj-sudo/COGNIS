@@ -237,7 +237,7 @@ function EvidenceItem({ e, source, fact }: { e: Evidence; source?: Source; fact?
           <div className="row-wrap" style={{ gap: 6 }}>
             <strong className="ev-src-name">{source?.name ?? e.sourceId}</strong>
             {source && <span className={cn('pill pill--sm', source.tier === 'primary' && 'pill--ok')}>{SOURCE_TIER_LABEL[source.tier]}</span>}
-            {source?.official && <span className="pill pill--sm">Official</span>}
+            {source?.official && <span className="tag">Official</span>}
           </div>
           <span className="t-xs t-muted">
             {e.documentTitle ?? source?.originalTitle ?? ''}
@@ -312,7 +312,7 @@ function ConflictBlock({ fact, sourceIndex, evidence }: { fact: Fact; sourceInde
                 {ev ? ` · retrieved ${formatDate(ev.retrievedAt)}` : ''}
               </span>
               <span className="row-wrap" style={{ gap: 8 }}>
-                {displayed && <span className="pill pill--sm">Shown as headline</span>}
+                {displayed && <span className="tag">Shown as headline</span>}
                 {ev && (
                   <button className="link-btn" onClick={() => show(ev.id)}>
                     Inspect evidence

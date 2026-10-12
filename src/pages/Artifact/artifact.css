@@ -6,10 +6,10 @@
   border-radius: var(--r-xl);
   color: #f8fafc;
   background:
-    radial-gradient(90% 120% at 80% 20%, rgba(120, 165, 240, 0.16), transparent 60%),
-    radial-gradient(60% 80% at 100% 100%, rgba(91, 141, 239, 0.14), transparent 70%),
-    linear-gradient(160deg, #10284c 0%, #061329 70%);
-  border: 1px solid rgba(160, 192, 240, 0.16);
+    radial-gradient(90% 120% at 80% 20%, rgba(176, 194, 226, 0.1), transparent 60%),
+    radial-gradient(60% 80% at 100% 100%, rgba(120, 146, 192, 0.1), transparent 70%),
+    linear-gradient(160deg, #18243a 0%, #0a111d 70%);
+  border: 1px solid rgba(196, 208, 228, 0.15);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), var(--shadow-2);
   --text-1: #f6f8fb;
   --text-2: #c8d0da;
@@ -21,13 +21,25 @@
   --accent-soft: #c6d3e4;
   --accent-wash: rgba(255, 255, 255, 0.06);
   --accent-wash-2: rgba(255, 255, 255, 0.11);
-  --glass-bg: rgba(12, 27, 52, 0.68);
-  --glass-border: rgba(160, 192, 240, 0.16);
+  --glass-bg: rgba(15, 22, 35, 0.74);
+  --glass-border: rgba(196, 208, 228, 0.15);
   --primary-bg: #f2f4f7;
   --primary-bg-hover: #ffffff;
   --primary-fg: #071326;
   --primary-border: rgba(255, 255, 255, 0.85);
   --link: #a7c3ef;
+}
+.dos-saved {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: var(--fs-xs);
+  color: var(--text-2);
+}
+.dos-saved svg {
+  width: 13px;
+  height: 13px;
+  color: var(--text-3);
 }
 .dos-cover-globe {
   position: absolute;
@@ -235,8 +247,8 @@
 }
 .paper .exec {
   background:
-    radial-gradient(140% 120% at 100% 0%, rgba(140, 180, 245, 0.14), transparent 55%),
-    linear-gradient(160deg, #10284c, #071530);
+    radial-gradient(140% 120% at 100% 0%, rgba(180, 198, 228, 0.1), transparent 55%),
+    linear-gradient(160deg, #18243a, #0a111d);
   color: #f8fafc;
 }
 .paper .exec .eyebrow {
@@ -245,10 +257,8 @@
 .paper .exec .link-btn {
   color: #a7c3ef;
 }
-.paper .exec .pill {
-  color: #c8d0da;
-  border-color: rgba(255, 255, 255, 0.18);
-  background: rgba(255, 255, 255, 0.06);
+.paper .exec .tag {
+  color: #a6b0bd;
 }
 .paper .exec-foot {
   color: #8f9aa8;
@@ -478,10 +488,10 @@ mark {
   border-radius: var(--r-xl);
   color: #f8fafc;
   background:
-    radial-gradient(80% 90% at 75% 40%, rgba(130, 172, 245, 0.16), transparent 60%),
-    radial-gradient(60% 70% at 10% 100%, rgba(91, 141, 239, 0.14), transparent 70%),
-    linear-gradient(165deg, #10284c, #040b17);
-  border: 1px solid rgba(160, 192, 240, 0.16);
+    radial-gradient(80% 90% at 75% 40%, rgba(176, 194, 226, 0.1), transparent 60%),
+    radial-gradient(60% 70% at 10% 100%, rgba(120, 146, 192, 0.1), transparent 70%),
+    linear-gradient(165deg, #18243a, #060a12);
+  border: 1px solid rgba(196, 208, 228, 0.15);
   margin-bottom: 22px;
 }
 .report-cover-art {

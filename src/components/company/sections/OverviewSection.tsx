@@ -25,7 +25,7 @@ export function ExecutiveSummary({ profile, paper }: { profile: CompanyProfile; 
           Executive summary
         </span>
         <span className="spacer" />
-        <span className="pill pill--sm">AI synthesis · source-anchored</span>
+        <span className="tag exec-tag">AI synthesis · source-anchored</span>
       </div>
       <p className="exec-text">{s.text}</p>
       <div className="exec-foot">
@@ -253,7 +253,7 @@ export function OverviewSection({ profile, onTab, hideSnapshotMetrics }: { profi
                 </ul>
               </>
             ) : (
-              <p className="t-sm t-muted">{profile.hiring.message ?? 'No current verified job openings were found in the searched sources.'}</p>
+              <p className="t-sm t-muted">{profile.hiring.message ?? 'No verified openings found in the sources checked. This does not mean the company is not hiring.'}</p>
             )}
           </section>
           <section className="card" aria-labelledby="ov-activity" data-search-block="activity-snippet">

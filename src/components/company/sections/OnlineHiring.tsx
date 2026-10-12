@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { CircleCheck, CircleDashed, Globe } from 'lucide-react';
-import type { CompanyProfile } from '@/types';
+import { CircleCheck, CircleDashed, Globe, Info, TriangleAlert } from 'lucide-react';
+import type { CompanyProfile, HiringCheck, HiringSection as HiringData } from '@/types';
 import { FactValue } from '@/components/evidence/FactValue';
 import { useOpenEvidence } from '@/components/evidence/useEvidence';
 import { ExternalLink } from '@/components/common/ExternalLink';
@@ -111,6 +111,56 @@ export function WebsiteSection({ profile }: { profile: CompanyProfile }) {
   );
 }
 
+const OUTCOME_TITLE: Record<string, string> = {
+  none_found: 'No verified openings found',
+  source_unavailable: 'Hiring source unavailable',
+  incomplete: 'Hiring research incomplete',
+  verified: 'Some sources could not be fully checked',
+};
+const CHECK_LABEL: Record<HiringCheck['state'], string> = { checked: 'checked', unavailable: 'unavailable', incomplete: 'incomplete' };
+const JOB_STATE: Record<string, { label: string; cls: string }> = {
+  current: { label: 'Current', cls: 'pill--ok' },
+  stale: { label: 'Stale', cls: 'pill--warn' },
+  closed: { label: 'Closed', cls: 'pill--warn' },
+};
+
+/**
+ * What the hiring research established: verified openings, none found in the sources checked, a source that could not be
+ * reached (never read as "no openings"), or research that was not completed.
+ */
+export function HiringNotice({ h }: { h: HiringData }) {
+  if (!h.outcome || h.outcome === 'pending') return null;
+  const needsAttention = h.outcome === 'source_unavailable' || h.outcome === 'incomplete' || (h.outcome === 'verified' && !!h.message);
+  if (h.outcome === 'verified' && !h.message) return null;
+  const Icon = needsAttention ? TriangleAlert : Info;
+  return (
+    <div className={`state-banner ${needsAttention ? 'state-banner--partial' : ''}`} role="status" data-testid="hiring-outcome" data-outcome={h.outcome}>
+      <Icon aria-hidden />
+      <div className="stack" style={{ gap: 2, flex: 1 }}>
+        <strong style={{ fontWeight: 500 }}>{OUTCOME_TITLE[h.outcome]}</strong>
+        <span>{h.message}</span>
+        {h.checks && h.checks.length > 0 && (
+          <ul className="t-xs t-muted hire-checks" aria-label="Hiring sources">
+            {h.checks.map((c) => (
+              <li key={c.id}>
+                {c.name}: {CHECK_LABEL[c.state]}
+                {c.state !== 'checked' && c.note ? ` — ${c.note}` : ''}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function jobDates(j: HiringData['jobs'][number]) {
+  const lines: string[] = [];
+  if (j.updatedAt) lines.push(`Updated ${formatDate(j.updatedAt)}`);
+  if (j.validThrough) lines.push(`${j.state === 'current' ? 'Until' : 'Ended'} ${formatDate(j.validThrough)}`);
+  return lines;
+}
+
 export function HiringSection({ profile }: { profile: CompanyProfile }) {
   const h = profile.hiring;
   const [state, setState] = useState<'current' | 'all'>('current');
@@ -119,8 +169,10 @@ export function HiringSection({ profile }: { profile: CompanyProfile }) {
   if (h.totalCurrent == null)
     return (
       <div className="stack" style={{ gap: 16 }}>
-        <SectionState meta={h} sourceIndex={profile.sourceIndex} />
-        {h.status !== 'pending' && <EmptyState title="No current verified job openings were found in the searched sources." text="This does not mean the company is not hiring — only that no verified postings were found." />}
+        {h.outcome && h.outcome !== 'pending' ? <HiringNotice h={h} /> : <SectionState meta={h} sourceIndex={profile.sourceIndex} />}
+        {h.status !== 'pending' && !h.outcome && (
+          <EmptyState title="No verified openings found in the sources checked." text="This does not mean the company is not hiring — only that no verified postings were found." />
+        )}
       </div>
     );
   return (
@@ -142,7 +194,7 @@ export function HiringSection({ profile }: { profile: CompanyProfile }) {
           <span className="freshness truncate">{h.categories.map((c) => c.name).join(', ') || '—'}</span>
         </div>
       </div>
-      {h.totalCurrent === 0 && <div className="state-banner">No current verified job openings were found in the searched sources.</div>}
+      {h.outcome ? <HiringNotice h={h} /> : h.totalCurrent === 0 && <div className="state-banner">No verified openings found in the sources checked.</div>}
       {h.history.length >= 2 && (
         <section className="card" data-search-block="hiring-history">
           <div className="card-head">
@@ -176,7 +228,7 @@ export function HiringSection({ profile }: { profile: CompanyProfile }) {
                 </th>
                 <th scope="col">Department</th>
                 <th scope="col">Location</th>
-                <th scope="col">Posted</th>
+                <th scope="col">Dates</th>
                 <th scope="col">Source</th>
                 <th scope="col">State</th>
                 <th scope="col">
@@ -194,14 +246,28 @@ export function HiringSection({ profile }: { profile: CompanyProfile }) {
                   </td>
                   <td>{j.department}</td>
                   <td>{j.location}</td>
-                  <td className="t-num">{j.postedAt ? formatDate(j.postedAt) : '—'}</td>
-                  <td>{profile.sourceIndex[j.sourceId]?.name ?? j.sourceId}</td>
+                  <td className="t-num">
+                    {j.postedAt ? `Posted ${formatDate(j.postedAt)}` : '—'}
+                    {jobDates(j).map((line) => (
+                      <span key={line} className="t-xs t-muted" style={{ display: 'block' }}>
+                        {line}
+                      </span>
+                    ))}
+                  </td>
                   <td>
-                    <span className={`pill pill--sm ${j.state === 'current' ? 'pill--ok' : 'pill--warn'}`}>{j.state === 'current' ? 'Current' : 'Stale'}</span>
+                    {profile.sourceIndex[j.sourceId]?.name ?? j.sourceId}
+                    {j.alsoListed && j.alsoListed.length > 0 && (
+                      <span className="t-xs t-muted" style={{ display: 'block' }}>
+                        Also listed on {j.alsoListed.length} other source{j.alsoListed.length === 1 ? '' : 's'} (counted once)
+                      </span>
+                    )}
+                  </td>
+                  <td>
+                    <span className={`pill pill--sm ${(JOB_STATE[j.state] ?? JOB_STATE.stale).cls}`}>{(JOB_STATE[j.state] ?? JOB_STATE.stale).label}</span>
                   </td>
                   <td>
                     <div className="row" style={{ gap: 4 }}>
-                      <button className="btn btn--ghost btn--sm" onClick={() => openEv({ title: j.title, value: `${j.location} · ${j.department}`, evidence: j.evidence })}>
+                      <button className="btn btn--ghost btn--sm" onClick={() => openEv({ title: j.title, value: [j.location, j.department].filter(Boolean).join(' · ') || j.title, evidence: j.evidence })}>
                         Evidence
                       </button>
                       <ExternalLink href={j.url}>Open job posting</ExternalLink>

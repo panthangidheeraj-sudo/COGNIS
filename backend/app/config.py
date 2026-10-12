@@ -99,10 +99,36 @@ class Settings(BaseSettings):
     tavily_cost_per_request_usd: float = 0.0
 
     # ---- optional credentialed sources -----------------------------------
+    # Proff and Doffin's subscription API are not used (free official sources cover them, see
+    # app/connectors/capabilities.py). The two keys are still read so that a value left in an old .env
+    # is redacted from logs; nothing sends them anywhere.
     proff_api_key: str | None = None
     doffin_api_key: str | None = None
     patentstyret_api_key: str | None = None
-    nav_feed_token: str | None = None
+    nav_feed_token: str | None = None  # optional private NAV token (free; register by e-mail). Without it the public token is used.
+
+    # ---- NAV Arbeidsplassen job feed (free, official) ---------------------
+    nav_feed_base: str = "https://pam-stilling-feed.nav.no"
+    nav_use_public_token: bool = True  # NAV publishes a rotating public token for the feed
+    nav_index_window_days: int = 183  # an ad can be active for at most six months
+    nav_sync_max_pages: int = 200  # per sync call; the index continues where it stopped next time
+    nav_sync_max_seconds: float = 150.0
+    nav_sync_interval_seconds: int = 1800  # background refresh while the API server runs
+    nav_sync_run_share: float = 0.1  # a batch spends at most this share of its request budget on the feed
+    nav_max_candidates_per_company: int = 12  # full ads fetched per company to check the employer's organisation number
+    nav_min_interval_seconds: float = 0.2
+    nav_step_timeout_seconds: float = 25.0  # hard cap on the NAV step per company; a slow or unreachable NAV never holds up research
+    nav_max_consecutive_failures: int = 2  # stop asking NAV for this company after this many unreachable responses in a row
+
+    # ---- job-page discovery (Tavily results are candidates only; every page is fetched, identity-checked and re-verified) ----
+    enable_job_discovery: bool = True
+    job_discovery_max_pages: int = 4  # candidate job pages fetched per company
+    job_max_age_days: int = 180  # a posting with no end date and no update inside this window is "stale", not "current"
+
+    # ---- public procurement (free) ----------------------------------------
+    ted_api_base: str = "https://api.ted.europa.eu/v3"
+    ted_min_interval_seconds: float = 0.5  # TED's fair-use limit is per IP; stay well below it
+    ted_max_notices_per_company: int = 50
 
     # ---- connector switches ----------------------------------------------
     enable_website: bool = True
@@ -113,10 +139,10 @@ class Settings(BaseSettings):
     enable_group_structure: bool = True
     enable_financial_history: bool = True
     enable_linkedin: bool = False  # no permitted automated access; company-linked profiles only
-    enable_proff: bool = False
-    enable_doffin: bool = False
     enable_patentstyret: bool = False
-    enable_nav_jobs: bool = False
+    enable_nav_jobs: bool = True  # free public API; ads are published only after exact employer resolution
+    enable_ted: bool = True  # TED Search API: anonymous, EU-published notices (above-threshold Norwegian notices included)
+    enable_doffin_open_data: bool = True  # DFØ's open Doffin dataset, used only when imported (scripts/import_doffin_open_data.py)
     enable_industry_registries: bool = False
 
     # ---- API server -------------------------------------------------------
@@ -210,8 +236,11 @@ def validate_configuration(settings: Settings) -> list[str]:
         raise ConfigurationError("MAX_REQUESTS and MAX_RUN_SECONDS must be positive.")
     if settings.finalize_reserve_seconds >= settings.max_run_seconds:
         raise ConfigurationError("FINALIZE_RESERVE_SECONDS must be smaller than MAX_RUN_SECONDS.")
-    for name in ("proff", "doffin", "patentstyret"):
-        if getattr(settings, f"enable_{name}") and not getattr(settings, f"{name}_api_key"):
-            warnings.append(f"ENABLE_{name.upper()}=true but {name.upper()}_API_KEY is missing — the connector reports not_configured.")
+    if settings.enable_patentstyret and not settings.patentstyret_api_key:
+        warnings.append("ENABLE_PATENTSTYRET=true but PATENTSTYRET_API_KEY is missing — the connector reports not_configured.")
+    if settings.proff_api_key or settings.doffin_api_key:
+        warnings.append("PROFF_API_KEY / DOFFIN_API_KEY are set but not used — COGNIS uses the free official sources instead (you can remove them from .env).")
+    if settings.enable_nav_jobs and not settings.nav_feed_token and not settings.nav_use_public_token:
+        warnings.append("ENABLE_NAV_JOBS=true but there is no NAV_FEED_TOKEN and NAV_USE_PUBLIC_TOKEN=false — NAV job ads are skipped.")
     return warnings
 

@@ -23,7 +23,7 @@ npm run dev          # http://localhost:5173  (mock backend by default)
 | `npm run preview` | Serves the production build |
 | `npm test` | Runs the unit, component and integration tests (Vitest + Testing Library) |
 | `npm run typecheck` | Runs TypeScript only |
-| `npm run gen:geo` | Regenerates the offline globe dots and the Norway outline from Natural Earth |
+| `npm run gen:geo` | Regenerates the offline globe dots and the Norway outline from Natural Earth (the globe's land mask comes from `python scripts/prepare-land-mask.py`) |
 
 Requires Node 20 or newer.
 
@@ -40,7 +40,7 @@ The backend implements the endpoints listed in [`API_CONTRACT.md`](./API_CONTRAC
 
 | Area | Route | Highlights |
 | --- | --- | --- |
-| Home | `/` | Lazy WebGL dot-matrix Earth with a static fallback, hero search that routes on the backend's intent, action cards, recent research and watchlist updates |
+| Home | `/` | Lazy WebGL monochrome intelligence globe (ivory dots and coastline on a navy sphere) with a static fallback, hero search that routes on the backend's intent, action cards, recent research and watchlist updates |
 | Discover | `/discover` | Natural-language queries with an editable "Interpreted as" panel. Filters come only from the backend's declared capabilities. Card, table and landscape (scatter) views |
 | Research | `/research` | Prompt composer, editable plan for deep runs, a live **semantic source stack** (Registry · Financials · Company Website · People · Hiring · Public Activity), a stage track, an event timeline, streaming synthesis with citations, a **completion summary** from the backend's real values, and states for ambiguity, blocked sources and failures |
 | Company | `/company/:org` | Five-second **snapshot** (revenue, employees, CEO, hiring, coverage, freshness), **What changed?**, **Executive brief**, **Explain this change**, and tabs for Overview · Financials (Trend · Annual values · Ratios · Cash / debt · Sources, each chart with View table) · People · Locations · Website · Hiring · Activity (major / all events) · Changes · Sources. Every fact opens its evidence |

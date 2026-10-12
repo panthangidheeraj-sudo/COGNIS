@@ -35,6 +35,7 @@ def create_app(services: Services | None = None) -> FastAPI:
         for warning in validate_configuration(settings):
             log.warning(warning)
         app.state.services = services or Services(settings)
+        app.state.services.start_background()
         yield
         await app.state.services.aclose()
 

@@ -360,7 +360,7 @@ function LibItem({ a, compact, caps }: { a: ArtifactSummary; compact?: boolean; 
         {a.tags.length > 0 && (
           <div className="row-wrap" style={{ gap: 4 }}>
             {a.tags.map((t) => (
-              <span key={t} className="pill pill--sm">
+              <span key={t} className="tag">
                 {t}
               </span>
             ))}

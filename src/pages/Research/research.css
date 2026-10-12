@@ -203,13 +203,22 @@
   display: flex;
   gap: 8px;
 }
-.rs-synth {
-  background:
-    radial-gradient(120% 100% at 0% 0%, var(--accent-wash), transparent 55%),
-    var(--frost-sheen),
-    var(--surface-1);
-  border-color: color-mix(in oklab, var(--accent-soft) 22%, var(--line));
+/* The synthesis is where the run is read: ivory paper inside the dark investigation workspace */
+.rs-panel.rs-synth {
   min-height: 160px;
+  padding: 22px 24px;
+  background: var(--surface-ivory);
+  border-color: transparent;
+  box-shadow: 0 34px 70px -42px rgba(0, 0, 0, 0.75);
+}
+.rs-synth .rs-panel-title {
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--paper-rule);
+  color: var(--text-3);
+}
+:root[data-theme='light'] .rs-panel.rs-synth {
+  border-color: var(--line);
+  box-shadow: var(--shadow-1);
 }
 .rs-stream {
   font-size: 16.5px;

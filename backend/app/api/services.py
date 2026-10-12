@@ -17,11 +17,12 @@ from ..agent import llm_tasks
 from ..agent.orchestrator import Orchestrator, ResearchOptions, new_run_id
 from ..competition.changes import compat_profile, diff_profile
 from ..config import Settings, get_settings
-from ..connectors import brreg
+from ..connectors import brreg, nav
 from ..connectors.base import ConnectorContext
 from ..core.util import now_iso
 from ..errors import ApiError
 from ..identity.normalization import normalize_org_number, org_checksum_ok
+from ..logging_setup import get_logger, log_event
 from ..net.http import HttpClient
 from ..providers.llm_base import LLMProvider
 from ..providers.registry import build_provider
@@ -32,6 +33,7 @@ from ..storage.db import Database, dumps, get_db, loads
 from .profile_builder import build_profile, summary_from_entity
 
 EventSink = Callable[[str, dict[str, Any]], None]
+log = get_logger("services")
 
 
 class Services:
@@ -42,8 +44,10 @@ class Services:
         self.http = HttpClient(transport=transport, cache=ResponseCache(self.db), recorder=repo.tool_call_recorder(self.db))
         self.provider = provider if use_provider else build_provider(self.http, self.settings)
         self.budget = unlimited_budget()
-        self.orch = Orchestrator(http=self.http, run_budget=self.budget, provider=self.provider, settings=self.settings)
+        self.orch = Orchestrator(http=self.http, run_budget=self.budget, provider=self.provider, settings=self.settings, db=self.db)
         self._locks: dict[str, asyncio.Lock] = {}
+        self._nav_task: asyncio.Task | None = None
+        self.nav_last_sync: dict[str, Any] | None = None
         self.started_at = now_iso()
         from .research_runs import RunManager
         from .sheets import SheetManager
@@ -51,7 +55,27 @@ class Services:
         self.runs = RunManager(self)
         self.sheets = SheetManager(self)
 
+    def start_background(self) -> None:
+        """Keep the NAV job-ad index fresh while the API runs (bounded syncs; never blocks a request)."""
+        if self.settings.enable_nav_jobs and self.settings.app_env != "test" and self._nav_task is None:
+            self._nav_task = asyncio.create_task(self._nav_loop())
+
+    async def _nav_loop(self) -> None:
+        while True:
+            try:
+                self.nav_last_sync = await nav.sync_feed(self.http, self.db, self.settings)
+                log_event(log, "nav feed sync", status=self.nav_last_sync.get("status"), pages=self.nav_last_sync.get("pages"), index=self.nav_last_sync.get("index"))
+                wait = self.settings.nav_sync_interval_seconds if self.nav_last_sync.get("status") in ("up_to_date", "disabled") else 20
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:  # a failing sync must never take the API down
+                log.warning(f"nav feed sync failed: {type(exc).__name__}")
+                wait = 300
+            await asyncio.sleep(wait)
+
     async def aclose(self) -> None:
+        if self._nav_task is not None:
+            self._nav_task.cancel()
         await self.runs.shutdown()
         await self.sheets.shutdown()
         await self.http.aclose()
@@ -119,8 +143,10 @@ class Services:
     def profile_for(self, record: dict[str, Any]) -> dict[str, Any]:
         org = record["organisation_number"]
         art = self.db.one("SELECT id, tags_json FROM artifacts WHERE type = 'company' AND org_number = ?", (org,))
+        nav_ids = [(j.get("details") or {}).get("nav_uuid") for j in (record.get("jobs") or {}).get("items") or [] if j.get("source") == "nav"]
+        inactive = nav.NavIndex(self.db).inactive([u for u in nav_ids if u]) if nav_ids else set()
         return build_profile(record, changes=record.get("changes") or [], previous_at=record.get("previous_completed_at"),
-                             artifact_id=art["id"] if art else None, tags=loads(art["tags_json"], []) if art else [])
+                             artifact_id=art["id"] if art else None, tags=loads(art["tags_json"], []) if art else [], inactive_job_ids=inactive)
 
     async def profile(self, org: str) -> dict[str, Any]:
         record = await self.ensure_record(org)

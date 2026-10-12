@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { api } from '@/api';
 import { Popover } from '@/components/common/Popover';
 import { formatTime } from '@/utils/format';
+import { SOURCE_AVAILABILITY, toneClass } from '@/utils/status';
 
 /** Small global status indicator: backend + research availability. */
 export function StatusCenter() {
@@ -41,8 +42,8 @@ export function StatusCenter() {
                 {data.sources.map((s) => (
                   <div key={s.name} className="row t-sm" style={{ justifyContent: 'space-between', gap: 8 }}>
                     <span className="truncate">{s.name}</span>
-                    <span className={`pill pill--sm ${s.status === 'available' ? 'pill--ok' : s.status === 'degraded' ? 'pill--warn' : 'pill--err'}`} title={s.note}>
-                      {s.status === 'available' ? 'Available' : s.status === 'degraded' ? 'Degraded' : 'Unavailable'}
+                    <span className={`pill pill--sm ${toneClass((SOURCE_AVAILABILITY[s.status] ?? SOURCE_AVAILABILITY.unavailable).tone)}`} title={s.note}>
+                      {(SOURCE_AVAILABILITY[s.status] ?? SOURCE_AVAILABILITY.unavailable).label}
                     </span>
                   </div>
                 ))}

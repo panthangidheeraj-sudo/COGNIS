@@ -204,13 +204,40 @@ export interface Job {
   department?: string;
   location?: string;
   postedAt?: ISODate;
+  /** Last update stated by the source, when it states one. */
+  updatedAt?: ISODate;
+  /** End of the posting's validity (application deadline / expiry), when stated. */
+  validThrough?: ISODate;
+  /** When COGNIS last read the listing. */
+  checkedAt?: ISODateTime;
   sourceId: string;
   url?: string;
+  /** Anything but 'current' is never counted as an opening. */
   state: 'current' | 'stale' | 'closed';
+  /** The same opening found on other sources (merged and counted once). */
+  alsoListed?: { source: 'company' | 'discovered' | 'nav'; url: string; state?: string; posted_at?: string; updated_at?: string }[];
   evidence: Evidence[];
 }
 
+/**
+ * What the hiring research established. Missing data is never "not hiring":
+ * verified → at least one verified current opening · none_found → sources were checked and returned none ·
+ * source_unavailable → a source could not be reached or read (e.g. a NAV timeout) · incomplete → not every source was checked.
+ */
+export type HiringOutcome = 'verified' | 'none_found' | 'source_unavailable' | 'incomplete' | 'pending';
+
+export interface HiringCheck {
+  id: string;
+  name: string;
+  state: 'checked' | 'unavailable' | 'incomplete';
+  note: string;
+  required: boolean;
+}
+
 export interface HiringSection extends SectionMeta {
+  outcome?: HiringOutcome;
+  /** One entry per hiring source: what it returned in this research. */
+  checks?: HiringCheck[];
   totalCurrent: number | null;
   locations: { name: string; count: number }[];
   categories: { name: string; count: number }[];

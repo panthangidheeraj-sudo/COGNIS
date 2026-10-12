@@ -25,11 +25,17 @@ Step-by-step for a Windows machine (PowerShell). macOS/Linux differences are in 
    * Optional LLM: `LLM_PROVIDER=groq`, `GROQ_API_KEY=<your key>`, `GROQ_MODEL=<a model your key may use>`.
      On a free plan also set `LLM_MIN_INTERVAL_SECONDS=2`.
    * Optional web discovery: `TAVILY_API_KEY=<your key>` (free plan: 1,000 searches/month; key starts with `tvly-`).
+   * No paid keys are needed. NAV job ads and TED procurement are free and on by default; NAV uses its public
+     token unless you set `NAV_FEED_TOKEN` (a free private token NAV issues by e-mail to
+     nav.team.arbeidsplassen@nav.no — recommended for regular use). `PROFF_API_KEY` / `DOFFIN_API_KEY` lines can be
+     deleted from `.env`; they are ignored.
+   * Optional: build the NAV job-ad index once (`python scripts/sync_nav_feed.py --until-done`; the API server keeps it
+     fresh afterwards) and import DFØ's open Doffin files (`python scripts/import_doffin_open_data.py <files>`).
 4. Check everything works offline:
    ```powershell
    python -m pytest -q
    ```
-   Expected: `75 passed`.
+   Expected: `122 passed`.
 
 ## B. Live smoke test (the 100-company check)
 
@@ -89,6 +95,10 @@ Open http://localhost:5173. The top bar shows **Connected** when the frontend ta
 | `model_not_found` / `The model ... does not exist or you do not have access to it` | your Groq key cannot use that model. Run `scripts/live_check.py`: it lists the models your key can use. gpt-oss models need no extra setup (the backend sets a low reasoning effort). After one such refusal the backend stops calling the LLM for the rest of the run |
 | LLM errors in envelopes (`llm:*`), `provider call failed (not_found 404)` | wrong model name or base URL. `python scripts/live_check.py` prints Groq's own error message, the models your key can use, and a ready-to-paste `GROQ_MODEL=` line. Rate limits (429): set `LLM_MIN_INTERVAL_SECONDS=2`. Research continues with deterministic fallbacks either way |
 | Frontend shows mock data | you ran `npm run dev`; use `npm run dev:live` |
+| Status shows NAV "Degraded" | the job-ad index is still being built or the feed could not be reached; run `python scripts/sync_nav_feed.py` and check the printed error. A 401 means NAV rotated its public token (it is re-fetched automatically) or your `NAV_FEED_TOKEN` expired |
+| A profile says "NAV Arbeidsplassen could not be checked" or "Hiring source unavailable" | NAV (or a careers page / job board) timed out or refused access during that run. This is deliberately not shown as "no openings". Re-run the company later; `NAV_STEP_TIMEOUT_SECONDS` (default 25) and `NAV_MAX_CONSECUTIVE_FAILURES` (default 2) bound how long NAV can hold up a company |
+| Job pages found by search are never used | `ENABLE_JOB_DISCOVERY=false`, no `TAVILY_API_KEY`, or the company's own careers pages already show a current opening (search is then skipped). Candidates and the reason each was rejected are in the record under `jobs.discovery_candidates` |
+| Import says "no organisation-number column with a known role" | the Doffin file names its columns differently; run with `--dry-run` to see the headers and map them, e.g. `--map winner_org="Leverandør org.nr"` |
 | `UnicodeEncodeError` in the console | use Windows Terminal / PowerShell 7, or `set PYTHONUTF8=1` |
 
 ## F. Operational guarantees

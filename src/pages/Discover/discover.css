@@ -105,14 +105,15 @@
 .co-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 14px;
+  gap: 18px;
 }
 .co-card {
   position: relative;
   display: grid;
-  gap: 14px;
-  padding: 18px;
-  border-radius: var(--r-lg);
+  align-content: start;
+  gap: 18px;
+  padding: 22px 22px 18px;
+  border-radius: 14px;
   border: var(--bw) solid var(--line);
   background: var(--frost-sheen), var(--surface-1);
   box-shadow: var(--shadow-1);
@@ -120,7 +121,13 @@
     transform var(--motion-base) var(--ease-out),
     border-color var(--motion-base) var(--ease-out),
     box-shadow var(--motion-base) var(--ease-out);
-  animation: cg-fade-up var(--motion-slow) var(--ease-out) both;
+}
+/* registry-only companies (not researched yet) sit a step quieter than researched ones */
+.co-card--registry {
+  background: var(--c-navy-900);
+}
+:root[data-theme='light'] .co-card--registry {
+  background: var(--surface-3);
 }
 .co-card:hover {
   transform: translateY(-3px);
@@ -147,42 +154,125 @@
 .co-card a:not(.co-card-link) {
   pointer-events: auto;
 }
+.co-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+.co-card-id {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
+}
+/* hierarchy by type, not boxes: quiet kicker → name → industry → domain */
+.co-card-kicker {
+  font-size: 11px;
+  letter-spacing: 0.01em;
+  color: var(--text-4);
+}
+.co-card-kicker .t-mono {
+  font-size: 10.5px;
+}
 .co-card-name {
-  font-size: 16px;
+  margin-top: 1px;
+  font-size: 19px;
   font-weight: 500;
-  letter-spacing: -0.015em;
+  line-height: 1.22;
+  letter-spacing: -0.022em;
+  color: var(--text-1);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.co-card-industry {
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+}
+.co-card-web {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 5px;
+  font-size: 12.5px;
+  color: var(--text-2);
+  max-width: 100%;
+}
+.co-card-web svg {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+  color: var(--text-3);
 }
 .co-card-metrics {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
+  grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr) minmax(0, 1fr);
   margin: 0;
-  padding: 12px 0;
+  padding: 14px 0 0;
   border-top: var(--bw) solid var(--line);
-  border-bottom: var(--bw) solid var(--line);
+}
+.co-card-metrics > div {
+  min-width: 0;
+  padding: 0 12px;
+  border-left: var(--bw) solid var(--line);
+}
+.co-card-metrics > div:first-child {
+  padding-left: 0;
+  border-left: 0;
 }
 .co-card-metrics dt {
-  font-size: 11px;
-  color: var(--text-3);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-4);
 }
+/* figures are never truncated: they wrap before they would be cut */
 .co-card-metrics dd {
-  margin: 2px 0 0;
-  white-space: nowrap;
-  font-size: 15px;
+  margin: 5px 0 0;
+  overflow-wrap: anywhere;
+  font-size: 19px;
   font-weight: 500;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  color: var(--text-1);
+}
+.co-card-metrics .freshness {
+  display: block;
+  margin-top: 3px;
+  color: var(--text-4);
 }
 .co-card-na {
   font-size: 12.5px;
   font-weight: 400;
-  color: var(--text-3);
-}
-.co-card-web {
-  font-size: 11px;
+  letter-spacing: 0;
+  color: var(--text-4);
 }
 .co-card-foot {
   display: flex;
   align-items: flex-end;
   gap: 10px;
+  padding-top: 14px;
+  border-top: var(--bw) solid var(--line);
+}
+.co-card-foot .t-xs {
+  color: var(--text-3);
+}
+@media (max-width: 640px) {
+  .co-card {
+    padding: 18px 16px 16px;
+    gap: 16px;
+  }
+  .co-card-name {
+    font-size: 17.5px;
+  }
+  .co-card-metrics dd {
+    font-size: 17px;
+  }
+  .co-card-metrics > div {
+    padding: 0 8px;
+  }
 }
 .btn.is-selected {
   border-color: color-mix(in oklab, var(--accent-soft) 70%, transparent);

@@ -18,6 +18,7 @@ import httpx
 
 from ..agent.orchestrator import Orchestrator, ResearchOptions, new_run_id
 from ..config import Settings, get_settings
+from ..connectors import nav
 from ..core.util import now_iso
 from ..logging_setup import get_logger, log_event
 from ..net.http import HttpClient
@@ -98,7 +99,19 @@ async def run_batch(cfg: BatchConfig, settings: Settings | None = None) -> dict[
     runtimes: list[int] = []
     async with HttpClient(transport=cfg.transport, cache=cache, recorder=repo.tool_call_recorder(db)) as http:
         provider = cfg.provider if cfg.use_provider_override else build_provider(http, s)
-        orch = Orchestrator(http=http, run_budget=budget, provider=provider, settings=s)
+        orch = Orchestrator(http=http, run_budget=budget, provider=provider, settings=s, db=db)
+        nav_meta: dict[str, Any] | None = None
+        if s.enable_nav_jobs:
+            # One bounded refresh of the local NAV job-ad index serves every company in the batch. It spends at most
+            # NAV_SYNC_RUN_SHARE of the run's request and time budget; an index that is not fully caught up is reported, never hidden.
+            share = s.nav_sync_run_share
+            pages = min(s.nav_sync_max_pages, max(1, int((limits.max_requests or s.nav_sync_max_pages / share) * share)))
+            seconds = min(s.nav_sync_max_seconds, max(10.0, (limits.max_runtime_seconds or s.nav_sync_max_seconds / share) * share))
+            try:
+                nav_meta = await nav.sync_feed(http, db, s, budget=budget, max_pages=pages, max_seconds=seconds)
+            except Exception as exc:  # the batch never fails because an optional index could not be refreshed
+                nav_meta = {"status": "failed", "error": type(exc).__name__}
+            log_event(log, "nav index", run_id=run_id, **{k: v for k, v in (nav_meta or {}).items() if k in ("status", "pages", "error")})
         sem = asyncio.Semaphore(workers)
         done = 0
 
@@ -147,6 +160,7 @@ async def run_batch(cfg: BatchConfig, settings: Settings | None = None) -> dict[
         write_jsonl(cfg.profiles_output, profiles)
     report = _report(run_id, started_at, completed_at, time.monotonic() - t0, orgs, envelopes, records, budget, bulk_meta, validation, resumed, change_total,
                      previous, runtimes, s)
+    report["free_source_indexes"] = {"nav_job_ads": nav_meta}
     if cfg.report:
         Path(cfg.report).parent.mkdir(parents=True, exist_ok=True)
         Path(cfg.report).write_text(_json(report), encoding="utf-8")

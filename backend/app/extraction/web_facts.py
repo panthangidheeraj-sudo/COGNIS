@@ -193,16 +193,21 @@ def job_observations(crawl: SiteCrawl, jobs: list[JobItem], status_note: str, ch
         return []
     obs: list[Observation] = []
     for job in jobs:
+        on_site = job.method in ("json_ld", "careers_page_link") and job.source_host.endswith(crawl.domain)
         base = {
-            "module": "jobs", "source_id": "jobs", "source_name": f"Company careers ({job.source_host})",
-            "source_class": "company_owned" if job.method in ("json_ld", "careers_page_link") and job.source_host.endswith(crawl.domain) else "company_linked_job_board",
+            "module": "jobs", "source_id": "jobs",
+            "source_name": f"Job page found by search ({job.source_host})" if job.source == "discovered" else f"Company careers ({job.source_host})",
+            "source_class": "company_owned" if on_site else "company_linked_job_board",
             "source_url": job.url if job.method == "json_ld" and job.url.startswith("http") else job.source_url, "retrieved_at": job.retrieved_at,
             "content_sha256": job.content_sha256, "tier": "B", "identity_score": crawl.audit.score if crawl.audit else 0.0,
         }
+        attrs = {"location": job.location, "department": job.department, "employment_type": job.employment_type, "state": job.state, "url": job.url, "posted_at": job.posted_at,
+                 "valid_through": job.valid_through, "updated_at": job.details.get("updated_at"), "source": job.source, "checked_at": job.retrieved_at}
+        if job.source == "discovered":  # found by search: published only with the way it was tied to this organisation
+            attrs.update({"discovered": True, "identity_basis": job.details.get("identity_basis")})
         obs.append(Observation(field="job_posting", value=job.title, key_suffix=job.id, claim_span=job.evidence_span or job.title, extraction_method=job.method,
                                label="Job posting", current=job.state == "current", as_of=job.posted_at, effective_from=job.posted_at, effective_to=job.valid_through,
-                               attributes={"location": job.location, "department": job.department, "employment_type": job.employment_type, "state": job.state,
-                                           "url": job.url, "posted_at": job.posted_at, "valid_through": job.valid_through}, **base))
+                               attributes=attrs, **base))
     current = [j for j in jobs if j.state == "current"]
     if checked:
         src = next((o for o in obs if o.current), None)

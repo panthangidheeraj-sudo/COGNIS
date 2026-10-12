@@ -129,6 +129,8 @@ class HttpClient:
         self.limiter.set_min_interval("brreg-account-copies", s.brreg_account_copies_min_interval_seconds)
         if s.llm_min_interval_seconds > 0:
             self.limiter.set_min_interval("llm", s.llm_min_interval_seconds)
+        self.limiter.set_min_interval("ted", s.ted_min_interval_seconds)  # TED's anonymous API is rate-limited per IP
+        self.limiter.set_min_interval("nav", s.nav_min_interval_seconds)
         self.recorder = recorder
         self.robots = RobotsCache(self)
         self._sleep = sleep or asyncio.sleep

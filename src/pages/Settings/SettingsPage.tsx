@@ -5,6 +5,7 @@ import { usePreferences } from '@/stores/preferences';
 import { Segmented } from '@/components/common/Tabs';
 import { Skeleton } from '@/components/common/Skeleton';
 import { formatDateTime } from '@/utils/format';
+import { SOURCE_AVAILABILITY, toneClass } from '@/utils/status';
 import './settings.css';
 
 export default function SettingsPage() {
@@ -147,7 +148,9 @@ export default function SettingsPage() {
                     <span className="t-sm">{s.name}</span>
                     {s.note && <span className="t-xs t-muted">{s.note}</span>}
                   </span>
-                  <span className={`pill pill--sm ${s.status === 'available' ? 'pill--ok' : s.status === 'degraded' ? 'pill--warn' : 'pill--err'}`}>{s.status === 'available' ? 'Available' : s.status === 'degraded' ? 'Degraded' : 'Unavailable'}</span>
+                  <span className={`pill pill--sm ${toneClass((SOURCE_AVAILABILITY[s.status] ?? SOURCE_AVAILABILITY.unavailable).tone)}`}>
+                    {(SOURCE_AVAILABILITY[s.status] ?? SOURCE_AVAILABILITY.unavailable).label}
+                  </span>
                 </li>
               ))}
             </ul>

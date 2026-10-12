@@ -177,19 +177,25 @@ button.snap-tile:focus-visible {
 .snap-period {
   font-family: var(--font-mono);
   font-size: 10.5px;
+  font-weight: 400;
   letter-spacing: 0.04em;
-  color: var(--text-3);
-  padding: 1px 6px;
-  border-radius: 999px;
-  border: var(--bw) solid var(--line-strong);
+  color: var(--text-4);
 }
+/* a changed value is flagged in words with a small mark, not a badge */
 .snap-flag {
-  font-size: 10.5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
   font-weight: 500;
-  padding: 1px 7px;
-  border-radius: 999px;
   color: var(--warn);
-  background: color-mix(in oklab, var(--warn) 14%, transparent);
+}
+.snap-flag::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
 }
 .snap-value {
   font-size: clamp(20px, 1.6vw, 24px);
@@ -318,29 +324,45 @@ button.snap-tile:focus-visible {
   font-size: var(--fs-xs);
   color: var(--text-3);
 }
+/* material changes read as a ledger line: words + direction, separated by hairlines (no capsules) */
 .wc-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  align-items: center;
+  gap: 4px 0;
   flex: 1;
   min-width: 0;
+}
+.wc-chips > li {
+  display: inline-flex;
+  align-items: center;
+}
+.wc-chips > li + li::before {
+  content: '';
+  width: 1px;
+  height: 14px;
+  margin: 0 4px;
+  background: var(--line-strong);
 }
 .wc-chip {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   height: 28px;
-  padding: 0 11px 0 9px;
-  border-radius: var(--r-pill);
-  border: var(--bw) solid var(--line-strong);
-  background: var(--accent-wash);
+  padding: 0 8px;
+  border-radius: var(--r-sm);
+  border: 0;
+  background: transparent;
   color: var(--text-1);
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 500;
   cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 4px;
   transition:
     background var(--motion-fast) var(--ease-out),
-    border-color var(--motion-fast) var(--ease-out);
+    text-decoration-color var(--motion-fast) var(--ease-out);
 }
 .wc-chip svg {
   width: 13px;
@@ -355,8 +377,12 @@ button.snap-tile:focus-visible {
 }
 .wc-chip:hover,
 .wc-chip[aria-expanded='true'] {
-  background: var(--accent-wash-2);
-  border-color: color-mix(in oklab, var(--accent-soft) 55%, transparent);
+  background: var(--accent-wash);
+  text-decoration-color: var(--line-strong);
+}
+.wc-chip:focus-visible {
+  outline: 2px solid var(--line-focus);
+  outline-offset: 1px;
 }
 .wc-empty {
   flex: 1;

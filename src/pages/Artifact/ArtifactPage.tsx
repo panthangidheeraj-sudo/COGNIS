@@ -109,7 +109,7 @@ function Dossier({ artifact, viewing }: { artifact: CompanyArtifact; viewing: Co
           </div>
           <div className="dos-cover-row">
             <CoverageMeter coverage={c.coverage} />
-            <span className="pill pill--glass">
+            <span className="dos-saved">
               <History aria-hidden /> {isOld ? 'Previous version' : 'Saved research'} · {formatDate(currentVersion.createdAt)}
             </span>
           </div>

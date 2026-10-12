@@ -303,7 +303,7 @@ function SheetView({ sheet, dispatch, flashed }: { sheet: NonNullable<ReturnType
               <span className="row" style={{ gap: 8 }}>
                 {c.kind === 'ai' && <Sparkle width={14} height={14} className="t-accent" aria-hidden />}
                 {c.title}
-                {c.frozen && <span className="pill pill--sm">Frozen</span>}
+                {c.frozen && <span className="tag">Frozen</span>}
               </span>
               {c.kind !== 'identity' && (
                 <button className="btn btn--ghost btn--sm" aria-pressed={!hidden.has(c.id)} onClick={() => setHidden((h) => {

@@ -11,12 +11,22 @@ _BEARER = re.compile(r"(?i)\b(bearer|basic)\s+[A-Za-z0-9._~+/=-]{8,}")
 _GROQ_KEY = re.compile(r"\bgsk_[A-Za-z0-9]{12,}\b")
 _TAVILY_KEY = re.compile(r"\btvly-[A-Za-z0-9_-]{10,}")
 _GENERIC_KEY = re.compile(r"\b(sk|pk|rk)-[A-Za-z0-9]{16,}\b")
+_JWT = re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}")  # e.g. NAV's feed token
 _SENSITIVE_HEADERS = {"authorization", "x-subscription-token", "ocp-apim-subscription-key", "cookie", "set-cookie", "x-api-key", "api-key"}
+
+
+_RUNTIME_SECRETS: set[str] = set()
+
+
+def register_secret(value: str | None) -> None:
+    """Redact a secret obtained at runtime (e.g. NAV's rotating public feed token) wherever text leaves the process."""
+    if value and len(value) >= 6:
+        _RUNTIME_SECRETS.add(value)
 
 
 def _known_secrets() -> list[str]:
     s = get_settings()
-    values = [s.groq_api_key, s.llm_api_key, s.tavily_api_key, s.proff_api_key, s.doffin_api_key, s.patentstyret_api_key, s.nav_feed_token]
+    values = [s.groq_api_key, s.llm_api_key, s.tavily_api_key, s.proff_api_key, s.doffin_api_key, s.patentstyret_api_key, s.nav_feed_token, *_RUNTIME_SECRETS]
     return [v for v in values if v and len(v) >= 6]
 
 
@@ -29,6 +39,7 @@ def redact(text: Any) -> str:
     value = _GROQ_KEY.sub("[REDACTED]", value)
     value = _TAVILY_KEY.sub("[REDACTED]", value)
     value = _GENERIC_KEY.sub("[REDACTED]", value)
+    value = _JWT.sub("[REDACTED]", value)
     return value
 
 
@@ -40,4 +51,4 @@ def contains_secret(text: str) -> bool:
     """True when ``text`` contains a configured secret or a key-shaped token (used by leak tests)."""
     if any(secret in text for secret in _known_secrets()):
         return True
-    return bool(_GROQ_KEY.search(text) or _TAVILY_KEY.search(text) or _GENERIC_KEY.search(text) or _BEARER.search(text))
+    return bool(_GROQ_KEY.search(text) or _TAVILY_KEY.search(text) or _GENERIC_KEY.search(text) or _BEARER.search(text) or _JWT.search(text))

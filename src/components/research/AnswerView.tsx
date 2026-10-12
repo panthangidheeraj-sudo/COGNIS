@@ -26,7 +26,7 @@ export function AnswerView({ answer, sourceIndex, context }: { answer: ResearchA
         <div key={b.id} className="answer-block">
           <p>{b.text}</p>
           <div className="row-wrap" style={{ gap: 6 }}>
-            {b.reportingPeriod && <span className="pill pill--sm">{b.reportingPeriod}</span>}
+            {b.reportingPeriod && <span className="tag">{b.reportingPeriod}</span>}
             {b.citations.length > 0 ? (
               <button className="cite" onClick={() => open({ title: 'Supporting evidence', value: b.text, evidence: b.citations.map((c) => c.evidence) })}>
                 {b.citations.length} source{b.citations.length === 1 ? '' : 's'}: {b.citations.map((c) => c.sourceName).join(', ')}
