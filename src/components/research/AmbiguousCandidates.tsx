@@ -5,14 +5,18 @@ import { BrandMark } from '@/components/common/BrandMark';
 import { formatOrgNumber, formatMoneyCompact } from '@/utils/format';
 
 /** Shown when identity cannot be established. Never silently picks a match. */
-export function AmbiguousCandidates({ match, onPick }: { match: AmbiguousMatch; onPick?: (org: string) => void }) {
+export function AmbiguousCandidates({ match, onPick }: { match: AmbiguousMatch; onPick?: (org: string, legalName: string) => void }) {
   return (
     <section className="ambig" aria-labelledby="ambig-h">
       <div className="notice notice--warn">
         <CircleAlert aria-hidden />
         <div className="stack" style={{ gap: 4 }}>
           <strong id="ambig-h">{match.message || 'We found possible matches, but could not establish exact-company identity.'}</strong>
-          <span>“{match.query}” matches {match.candidates.length} registered companies. Choose the right one to continue — nothing has been researched yet.</span>
+          <span>
+            {match.candidates.length === 1
+              ? <>“{match.query}” matches one registered company. Confirm it is the one you mean to continue — nothing has been researched yet.</>
+              : <>“{match.query}” matches {match.candidates.length} registered companies. Choose the right one to continue — nothing has been researched yet.</>}
+          </span>
         </div>
       </div>
       <ul className="ambig-list">
@@ -29,8 +33,8 @@ export function AmbiguousCandidates({ match, onPick }: { match: AmbiguousMatch; 
               </span>
             </div>
             {onPick ? (
-              <button className="btn btn--sm" onClick={() => onPick(c.orgNumber)}>
-                Research this one
+              <button className="btn btn--sm" onClick={() => onPick(c.orgNumber, c.legalName)}>
+                {match.candidates.length === 1 ? 'Confirm and research' : 'Research this one'}
               </button>
             ) : (
               <Link className="btn btn--sm" to={`/company/${c.orgNumber}`}>

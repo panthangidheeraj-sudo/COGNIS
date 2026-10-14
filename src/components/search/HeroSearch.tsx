@@ -61,7 +61,7 @@ export function HeroSearch({ autoFocus }: { autoFocus?: boolean }) {
     if (!data || dq.length < 2) return [];
     const out: Option[] = [];
     if (data.intent.kind === 'discover' || data.companies.length !== 1)
-      out.push({ id: 'discover', group: 'Discover', icon: <Compass />, label: `Find companies: “${dq}”`, sub: 'Natural-language discovery with editable filters', to: `/discover?q=${encodeURIComponent(dq)}` });
+      out.push({ id: 'discover', group: 'Discover', icon: <Compass />, label: `Find companies: “${dq}”`, sub: 'Natural-language discovery with suggested filters', to: `/discover?q=${encodeURIComponent(dq)}` });
     for (const c of data.companies.slice(0, 5))
       out.push({ id: c.orgNumber, group: 'Companies', icon: <Building2 />, label: c.legalName, sub: `${c.municipality ?? ''} · Org ${formatOrgNumber(c.orgNumber)} · ${c.coverage.complete}/5 areas`, to: `/company/${c.orgNumber}` });
     for (const a of data.artifacts.slice(0, 3)) out.push({ id: a.id, group: 'Research', icon: <History />, label: a.title, sub: 'Saved research', to: a.type === 'comparison' ? `/compare?orgs=${a.targetId}` : `/library/${a.id}` });

@@ -135,3 +135,40 @@ def test_competition_endpoint_returns_contract_envelope(client: TestClient) -> N
     env = client.post("/api/research/company", json={"organisation_number": AUTO}).json()
     assert env["organisation_number"] == AUTO and env["run"]["terminal_status"] == "completed"
     assert any(c["field"] == "official_website" and c["availability"] == "available" for c in env["claims"])
+
+
+DESCRIPTION = "Build a sheet of Norwegian technology companies in Oslo with over 100 employees and current hiring."
+
+
+def test_interpreted_filters_are_suggestions_and_never_applied(client: TestClient) -> None:
+    body = {"text": DESCRIPTION, "interpret": True, "page": 1, "pageSize": 10, "sort": "relevance"}
+    res = client.post("/api/companies/discover", json=body).json()
+    suggested = {f["key"] for f in res["interpretation"]["filters"]}
+    assert {"hiring", "municipality", "employeesMin"} <= suggested  # the interpretation is still offered ...
+    assert res["appliedFilters"] == {}  # ... but nothing it found restricts the result
+    assert res["total"] >= 1  # in particular the research-only hiring filter did not empty the list
+    chosen = client.post("/api/companies/discover", json={**body, "filters": {"municipality": "Oslo"}}).json()
+    assert chosen["appliedFilters"] == {"municipality": "Oslo"}  # only what the user selected applies
+
+
+def test_sheet_from_a_description_is_not_emptied_by_unselected_filters(client: TestClient) -> None:
+    sheet = client.post("/api/sheets", json={"title": "Tech in Oslo", "criteria": [], "text": DESCRIPTION}).json()
+    assert sheet["criteria"] == []
+    assert sheet["rowCount"] >= 1  # no criteria were selected, so none (and not the sentence as a company name) narrowed it to zero
+    picked = client.post("/api/sheets", json={"title": "Autos", "criteria": [{"key": "municipality", "label": "Municipality", "value": "Oslo", "display": "Oslo"}], "text": DESCRIPTION}).json()
+    assert [c["key"] for c in picked["criteria"]] == ["municipality"]
+
+
+def test_hiring_is_a_data_column_of_every_sheet_not_a_filter(client: TestClient) -> None:
+    sheet = client.post("/api/sheets", json={"title": "Autos", "criteria": [], "text": "AUTOBJ"}).json()
+    assert sheet["criteria"] == [] and sheet["rowCount"] >= 1
+    data = client.get(f"/api/sheets/{sheet['id']}").json()
+    assert any(c["id"] == "hiring" and c["kind"] == "standard" for c in data["columns"])
+    assert data["rows"][0]["cells"]["hiring"]["status"] == "pending"  # a column to fill by research, not something that removed companies
+    client.post(f"/api/sheets/{sheet['id']}/research", json={"columnIds": ["hiring"]})
+    with client.stream("GET", f"/api/sheets/{sheet['id']}/events") as stream:
+        for line in stream.iter_lines():
+            if line.startswith("data: ") and json.loads(line[6:])["type"] == "batch.completed":
+                break
+    cell = client.get(f"/api/sheets/{sheet['id']}").json()["rows"][0]["cells"]["hiring"]
+    assert cell["status"] == "verified" and cell["value"] == 2 and cell["evidence"]

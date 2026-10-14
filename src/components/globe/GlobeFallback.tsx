@@ -7,7 +7,7 @@ import { SPHERE_RADIUS } from './globeMath';
 /**
  * Static orthographic globe drawn once on a 2D canvas, in the same palette as the WebGL globe it stands in for.
  * Used when WebGL is unavailable, while the 3D chunk loads (the stage cross-fades), or if it fails.
- *  - `intel`: deep navy sphere, bright ivory dots, thin silver rim: the workspace globe (the coastline appears with WebGL).
+ *  - `intel`: bright ivory-white sphere, navy-ink dots, soft steel rim: the workspace globe (the coastline appears with WebGL).
  *  - `earth`: the natural Earth (blue ocean, green/brown land, white ice, thin atmosphere), for the About story.
  */
 export function GlobeFallback({ lat = 25, lon = 14, theme, variant = 'intel' }: { lat?: number; lon?: number; theme: 'dark' | 'light'; variant?: 'intel' | 'earth' }) {
@@ -43,7 +43,7 @@ function drawIntel(ctx: CanvasRenderingContext2D, size: number, dpr: number, lat
   const mid = hexRgb(pal.mid);
   const rim = hexRgb(pal.rim);
 
-  // sphere: matte fall-off from the lit face into the shade, plus the silver rim
+  // sphere: matte fall-off from the lit face into the shade, plus the soft rim
   const img = ctx.createImageData(px, px);
   const lo = Math.max(0, Math.floor(c - R - 2));
   const hi = Math.min(px - 1, Math.ceil(c + R + 2));

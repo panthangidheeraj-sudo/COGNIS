@@ -1,10 +1,10 @@
-import { Ban, CircleCheck, CircleDashed, CircleX, LoaderCircle, Plus, X } from 'lucide-react';
+import { Ban, CircleCheck, CircleDashed, CircleMinus, CircleSlash, CircleX, LoaderCircle, Plus, X } from 'lucide-react';
 import type { ResearchPlan as Plan, ResearchStep } from '@/types';
 import { SourceIcon } from '@/components/source/SourceIcon';
 import { STEP_STATUS } from '@/utils/status';
 import { cn } from '@/utils/cn';
 
-const ICON = { pending: CircleDashed, running: LoaderCircle, done: CircleCheck, failed: CircleX, blocked: Ban, skipped: CircleDashed };
+const ICON = { pending: CircleDashed, running: LoaderCircle, done: CircleCheck, failed: CircleX, blocked: Ban, skipped: CircleMinus, cancelled: CircleSlash };
 
 export function StepRow({ step }: { step: ResearchStep }) {
   const Icon = ICON[step.status];
@@ -16,13 +16,14 @@ export function StepRow({ step }: { step: ResearchStep }) {
           <span className="step-label">{step.label}</span>
           {step.optional && step.status === 'pending' && <span className="t-xs t-muted">optional</span>}
         </span>
-        {step.sourceName && <span className="t-xs t-muted truncate">{step.sourceName}</span>}
+        {step.sourceName && <span className="t-xs t-muted step-source">{step.sourceName}</span>}
         {step.status === 'done' && (
           <span className="t-xs t-muted t-num">
             {step.factCount ?? 0} facts · {step.evidenceCount ?? 0} evidence{step.durationMs ? ` · ${(step.durationMs / 1000).toFixed(1)}s` : ''}
           </span>
         )}
-        {step.message && <span className={cn('t-xs', step.status === 'failed' || step.status === 'blocked' ? 't-err' : 't-muted')}>{step.message}</span>}
+        {step.status === 'running' && step.detail && <span className="t-xs t-muted">{step.detail}</span>}
+        {step.message && step.status !== 'running' && <span className={cn('t-xs', step.status === 'failed' || step.status === 'blocked' ? 't-err' : 't-muted')}>{step.message}</span>}
       </div>
       <span className="sr-only">{STEP_STATUS[step.status].label}</span>
     </li>

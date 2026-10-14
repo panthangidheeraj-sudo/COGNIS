@@ -11,6 +11,7 @@ import type { ResearchEvent, ResearchRun, ResearchStreamState } from '@/types';
 type Action =
   | { type: 'reset'; run: ResearchRun | null }
   | { type: 'run'; run: ResearchRun }
+  | { type: 'status'; status: ResearchRun['status'] }
   | { type: 'event'; event: ResearchEvent }
   | { type: 'connection'; connection: ResearchStreamState['connection']; error?: string };
 
@@ -20,6 +21,9 @@ function reducer(state: ResearchStreamState, a: Action): ResearchStreamState {
       return { ...initialStreamState, run: a.run };
     case 'run':
       return { ...state, run: a.run };
+    case 'status':
+      // Only a run that is still running can be moved by a response; events that already arrived (and their step states) are never overwritten.
+      return state.run && state.run.status === 'running' ? { ...state, run: { ...state.run, status: a.status } } : state;
     case 'event':
       return reduceResearchEvent(state, a.event);
     case 'connection':
@@ -68,5 +72,6 @@ export function useResearchStream(run: ResearchRun | null) {
   }, [runId, run?.status === 'running']);
 
   const setRun = useCallback((r: ResearchRun) => dispatch({ type: 'run', run: r }), []);
-  return { state, setRun, reconnect: connect };
+  const setStatus = useCallback((status: ResearchRun['status']) => dispatch({ type: 'status', status }), []);
+  return { state, setRun, setStatus, reconnect: connect };
 }

@@ -15,6 +15,7 @@ from ..connectors.website import SiteCrawl
 from ..core.util import clean_ws, date_only, parse_iso, truncate
 from ..evidence.models import Observation
 from ..identity.normalization import email_domain, normalize_phone
+from .boilerplate import is_boilerplate
 from .html import PageDoc, find_span, jsonld_of_type
 
 WEBSITE_SOURCE_NAME = "Official company website"
@@ -58,7 +59,7 @@ def website_observations(crawl: SiteCrawl) -> list[Observation]:
         obs.append(Observation(field="website_title", value=home.title, claim_span=f"<title>{truncate(home.title, 280)}</title>", extraction_method="html_meta",
                                label="Website title", document_title=home.title, excerpt_language=_lang(home), **_page_base(crawl, home)))
     description = home.description or home.og.get("description")
-    if description and len(description) >= 25:
+    if description and len(description) >= 25 and not is_boilerplate(description):
         obs.append(Observation(field="website_description", value=description, claim_span=f'<meta name="description" content="{truncate(description, 260)}">',
                                extraction_method="html_meta", label="Website description", document_title=home.title or None, excerpt_language=_lang(home),
                                **_page_base(crawl, home)))
@@ -135,14 +136,14 @@ def description_observation(crawl: SiteCrawl) -> Observation | None:
         return None
     for doc in crawl.docs("about") + crawl.docs("products"):
         for para in doc.paragraphs[:12]:
-            if 80 <= len(para) <= 700 and not re.search(r"(cookie|personvern|privacy|javascript|©)", para, re.I):
+            if 80 <= len(para) <= 700 and not re.search(r"(cookie|personvern|privacy|javascript|©)", para, re.I) and not is_boilerplate(para):
                 return Observation(field="business_description", value=para, claim_span=para, extraction_method="page_paragraph",
                                    label="What the company does (company-stated)", document_title=doc.title or None, excerpt_language=_lang(doc),
                                    **_page_base(crawl, doc))
     home = crawl.homepage
     if home is not None:
         desc = home.description or home.og.get("description")
-        if desc and len(desc) >= 60:
+        if desc and len(desc) >= 60 and not is_boilerplate(desc):
             return Observation(field="business_description", value=desc, claim_span=desc, extraction_method="html_meta",
                                label="What the company does (company-stated)", document_title=home.title or None, excerpt_language=_lang(home),
                                **_page_base(crawl, home))

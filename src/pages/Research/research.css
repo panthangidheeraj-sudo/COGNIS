@@ -175,17 +175,26 @@
 }
 .rs-grid {
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr) 340px;
+  /* Every track can shrink (min of 0 in the middle) and every child may be narrower than its content, so a long value can never push one panel over the next. */
+  grid-template-columns: minmax(240px, 280px) minmax(0, 1fr) minmax(280px, 340px);
   gap: 16px;
   margin-top: 22px;
   align-items: start;
 }
+.rs-grid > * {
+  min-width: 0;
+}
 .rs-col {
   display: grid;
+  /* An implicit `auto` track grows to the widest unbreakable word; pin the single column to the width of the column itself. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
   min-width: 0;
 }
 .rs-panel {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
   padding: 18px;
   border-radius: var(--r-lg);
   border: var(--bw) solid var(--line);
@@ -239,7 +248,7 @@
 }
 .rs-facts li {
   display: grid;
-  grid-template-columns: 150px 1fr;
+  grid-template-columns: 150px minmax(0, 1fr);
   gap: 12px;
   align-items: baseline;
   padding: 9px 0;
@@ -279,6 +288,9 @@
   height: 22px;
   color: var(--ok);
   flex-shrink: 0;
+}
+.rs-complete-ico--partial {
+  color: var(--warn);
 }
 .rs-complete-stats {
   display: grid;
@@ -397,6 +409,12 @@
 .step-label {
   font-size: var(--fs-sm);
   font-weight: 500;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.step-source {
+  min-width: 0;
+  overflow-wrap: anywhere; /* a source name is evidence: wrap it, never cut it off */
 }
 .step--pending .step-label {
   color: var(--text-3);
@@ -712,7 +730,7 @@
 
 @media (max-width: 1240px) {
   .rs-grid {
-    grid-template-columns: 260px minmax(0, 1fr);
+    grid-template-columns: minmax(220px, 260px) minmax(0, 1fr);
   }
   .rs-grid > .rs-col:last-child {
     grid-column: 1 / -1;
@@ -740,10 +758,207 @@
     padding: 16px;
   }
   .rs-facts li {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     gap: 2px;
   }
   .composer-foot .btn--lg {
     width: 100%;
   }
+}
+
+/* Per-source activity: every row mirrors one planned step; state, time and notes come from backend events */
+.sact {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: var(--bw) solid var(--line);
+}
+.sact-line {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  margin: 0;
+  font-size: var(--fs-xs);
+  color: var(--text-2);
+}
+.sact-line svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.sact-line--warn {
+  color: var(--warn);
+}
+.sact-line--err {
+  color: var(--err);
+}
+.sact-line--ok {
+  color: var(--ok);
+}
+.sact-counts {
+  margin: 0;
+}
+.sact-list {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.sact-row {
+  display: flex;
+  gap: 9px;
+  padding: 7px 6px;
+  border-radius: var(--r-sm);
+}
+.sact-row--running {
+  background: var(--accent-wash);
+}
+.sact-icon {
+  width: 15px;
+  height: 15px;
+  margin-top: 2px;
+  flex-shrink: 0;
+  color: var(--text-4);
+}
+.sact-icon.is-spinning {
+  animation: cg-spin 1s linear infinite;
+}
+.sact-row--running .sact-icon {
+  color: var(--live);
+}
+.sact-row--done .sact-icon {
+  color: var(--ok);
+}
+.sact-row--failed .sact-icon,
+.sact-row--blocked .sact-icon {
+  color: var(--err);
+}
+.sact-row--pending .sact-name,
+.sact-row--skipped .sact-name,
+.sact-row--cancelled .sact-name {
+  color: var(--text-3);
+}
+.sact-body {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+.sact-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.sact-top svg {
+  flex-shrink: 0;
+  color: var(--text-3);
+}
+.sact-name {
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.sact-state {
+  margin-left: auto;
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+.sact-state--running {
+  color: var(--live);
+}
+.sact-state--done {
+  color: var(--ok);
+}
+.sact-state--failed,
+.sact-state--blocked {
+  color: var(--err);
+}
+.sact-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+.sact-meta:empty {
+  display: none;
+}
+
+/* What a run did beyond the core registers (completion summary and run history) */
+.effort {
+  margin-top: 12px;
+  border-top: var(--bw) solid var(--line);
+  padding-top: 10px;
+}
+.effort > summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  align-items: baseline;
+  cursor: pointer;
+  font-size: var(--fs-sm);
+}
+.effort-list {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.effort-row {
+  display: flex;
+  gap: 8px;
+}
+.effort-row svg {
+  width: 15px;
+  height: 15px;
+  margin-top: 2px;
+  flex-shrink: 0;
+  color: var(--text-4);
+}
+.effort-row--ran svg {
+  color: var(--ok);
+}
+.effort-row--failed svg {
+  color: var(--err);
+}
+.effort-label {
+  font-size: var(--fs-sm);
+  font-weight: 500;
+}
+.effort-state {
+  margin-left: 6px;
+  font-size: 10.5px;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.effort-cc {
+  margin-top: 12px;
+  display: grid;
+  gap: 4px;
+}
+.effort-cc p {
+  margin: 0;
+}
+.effort-conflicts {
+  margin: 4px 0 0;
+  padding-left: 0;
+  list-style: none;
+  display: grid;
+  gap: 4px;
+  color: var(--warn);
+}
+.effort-note {
+  margin: 12px 0 0;
+}
+.rs-report {
+  margin: 10px 0 0;
 }

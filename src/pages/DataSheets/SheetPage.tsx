@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, Columns3, Download, Eye, EyeOff, Filter, Info, Pencil, Pin, PinOff, Play, Plus, Rows3, Search, Sparkle, Trash2, X } from 'lucide-react';
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, CircleAlert, Columns3, Download, Eye, EyeOff, Filter, Info, Pencil, Pin, PinOff, Play, Plus, Rows3, Search, Sparkle, Trash2, X } from 'lucide-react';
 import { api } from '@/api';
 import type { ColumnPreview, ColumnValueType, DataSheetColumn, ValueStatus } from '@/types';
 import { useUi } from '@/stores/ui';
@@ -31,6 +31,11 @@ const AI_EXAMPLES = [
 
 export default function SheetPage() {
   const { sheetId = '' } = useParams();
+  // One mounted loader per sheet: opening sheet B from sheet A (or from a card) can never show A's rows, columns or toolbar state.
+  return <SheetLoader key={sheetId} sheetId={sheetId} />;
+}
+
+function SheetLoader({ sheetId }: { sheetId: string }) {
   const q = useQuery({ queryKey: ['sheet', sheetId], queryFn: () => api.sheets.get(sheetId), staleTime: 0 });
   const [sheet, dispatch] = useReducer(sheetReducer, null);
   const [flashed, setFlashed] = useState<Set<string>>(new Set());
@@ -81,6 +86,9 @@ export default function SheetPage() {
   if (q.isError || !sheet)
     return (
       <div className="page">
+        <Link to="/sheets" className="link-btn" style={{ marginBottom: 12 }}>
+          <ArrowLeft aria-hidden /> Data Sheets
+        </Link>
         <ErrorState error={q.error} onRetry={() => q.refetch()} />
       </div>
     );
@@ -196,6 +204,22 @@ function SheetView({ sheet, dispatch, flashed }: { sheet: NonNullable<ReturnType
           <Check width={13} height={13} aria-hidden /> Saved · updated {formatRelative(sheet.updatedAt)}
         </span>
       </div>
+
+      {sheet.discovery && (
+        // Built while the register search was down: say so on the sheet itself, with the real cause and when it was seen.
+        <div className="notice notice--warn" role="status" data-testid="sheet-discovery-note">
+          <CircleAlert aria-hidden />
+          <div className="stack" style={{ gap: 4 }}>
+            <strong>Built from companies COGNIS had already verified</strong>
+            <span>{sheet.discovery.note}</span>
+            {sheet.discovery.cause && (
+              <span className="t-xs t-muted">
+                Cause: {sheet.discovery.cause} Seen {formatDate(sheet.discovery.at)}.
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="sheet-toolbar" role="toolbar" aria-label="Sheet tools">
         <Link to="/sheets?new=1" className="btn btn--sm">

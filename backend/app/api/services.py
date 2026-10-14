@@ -8,6 +8,8 @@ race on the same record.
 from __future__ import annotations
 
 import asyncio
+import logging
+import time
 from collections.abc import Callable
 from typing import Any
 
@@ -27,6 +29,7 @@ from ..net.http import HttpClient
 from ..providers.llm_base import LLMProvider
 from ..providers.registry import build_provider
 from ..runtime.budgets import unlimited_budget
+from ..security.redaction import redact
 from ..storage import repository as repo
 from ..storage.cache import ResponseCache
 from ..storage.db import Database, dumps, get_db, loads
@@ -47,6 +50,7 @@ class Services:
         self.orch = Orchestrator(http=self.http, run_budget=self.budget, provider=self.provider, settings=self.settings, db=self.db)
         self._locks: dict[str, asyncio.Lock] = {}
         self._nav_task: asyncio.Task | None = None
+        self._registry_failure: tuple[float, str, ApiError] | None = None
         self.nav_last_sync: dict[str, Any] | None = None
         self.started_at = now_iso()
         from .research_runs import RunManager
@@ -98,12 +102,13 @@ class Services:
 
     # ------------------------------------------------------------ research --
     async def research(self, org: str, *, mode: str = "deep", step_keys: list[str] | None = None, fresh: bool = False, on_event: EventSink | None = None,
-                       run_id: str | None = None) -> dict[str, Any]:
+                       run_id: str | None = None, focus: str | None = None) -> dict[str, Any]:
         lock = self._locks.setdefault(org, asyncio.Lock())
         async with lock:
             previous = repo.latest_record(self.db, org)
+            previous_version = repo.latest_version_id(self.db, org)
             record = await self.orch.research(org, run_id=run_id or new_run_id("api"), on_event=on_event,
-                                              options=ResearchOptions(mode=mode, fresh=fresh, include_website=mode != "registry", step_keys=step_keys))
+                                              options=ResearchOptions(mode=mode, fresh=fresh, include_website=mode != "registry", step_keys=step_keys, focus=focus))
             if record.get("identity") is None:
                 return record
             changes: list[dict[str, Any]] = []
@@ -117,8 +122,13 @@ class Services:
                 return previous  # never replace a full research with a registry-only lookup
             record["changes"] = changes
             label = "Registry lookup" if mode == "registry" else ("Update" if previous is not None and previous.get("mode") != "registry" else "Initial research")
+            is_new_version = not repo.version_exists(self.db, repo.version_id_for(record))
             version_id = repo.save_record(self.db, record, changes=changes, label=label)
             record["version_id"] = version_id
+            # Run bookkeeping for the caller (set after saving, so it is not part of the stored record).
+            record["previous_version_id"] = previous_version
+            record["new_version"] = is_new_version
+            record["facts_changed"] = previous is None or previous.get("mode") == "registry" or repo.facts_digest(previous) != repo.facts_digest(record)
             if mode != "registry":
                 from .library import ensure_company_artifact, record_signals
 
@@ -159,11 +169,31 @@ class Services:
         return self.profile_for(record)["company"] if record else None
 
     # -------------------------------------------------------------- search --
-    async def search_entities(self, params: dict[str, Any]) -> tuple[list[dict[str, Any]], int]:
-        rows, total, error = await brreg.search_entities(self.ctx(), params)
-        if error and not rows:
-            raise ApiError("unavailable", "Company search in Enhetsregisteret is unavailable right now.", status=503, details={"reason": error})
-        return rows, total
+    async def search_entities(self, params: dict[str, Any], *, retries: int | None = None) -> tuple[list[dict[str, Any]], int]:
+        """Search Enhetsregisteret. A failure is raised as an ``unavailable`` ApiError that carries its real cause (see ``brreg.RegistryFailure``),
+        never as an empty result and never as a generic message."""
+        outcome = await brreg.search_entities(self.ctx(), params, retries=retries)
+        if outcome.failure is not None:
+            raise self.registry_error(outcome.failure, params)
+        self._registry_failure = None
+        return outcome.rows, outcome.total
+
+    def registry_error(self, failure: brreg.RegistryFailure, params: dict[str, Any]) -> ApiError:
+        # The search parameters are registry filters (names, municipality numbers, industry codes), never credentials; redact() still runs over them.
+        shown = {k: redact(str(v))[:120] for k, v in params.items() if v not in (None, "")}
+        log_event(log, "enhetsregisteret search failed", logging.WARNING, reason=failure.kind, http_status=failure.http_status, attempts=failure.attempts,
+                  elapsed_ms=failure.elapsed_ms, detail=failure.detail, params=shown)
+        error = ApiError("unavailable", f"Company search in Enhetsregisteret failed. {failure.cause}", status=503, details=failure.as_details())
+        self._registry_failure = (time.monotonic(), now_iso(), error)
+        return error
+
+    def recent_registry_failure(self, within_seconds: float = 300.0) -> tuple[str, ApiError] | None:
+        """The last registry-search failure this server itself observed, if it is recent: ``(when, error)``. The fallback to already-verified
+        companies is only ever offered on the strength of a failure the server saw, never on the client's word."""
+        if self._registry_failure is None:
+            return None
+        at, when, error = self._registry_failure
+        return (when, error) if time.monotonic() - at <= within_seconds else None
 
     def summaries_for_rows(self, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         out = []
@@ -173,8 +203,12 @@ class Services:
             out.append(stored or summary_from_entity(row))
         return out
 
-    async def resolve_query(self, query: str) -> tuple[str | None, list[dict[str, Any]]]:
-        """Return (org, candidates). Never guesses: several plausible matches → no org + candidates."""
+    async def resolve_query(self, query: str, *, auto_pick: bool = True) -> tuple[str | None, list[dict[str, Any]]]:
+        """Return (org, candidates). Never guesses: several plausible matches → no org + candidates.
+
+        A typed *name* is only ever a search term. With ``auto_pick=False`` (starting research) even a single match is returned as a candidate
+        to be confirmed, because "exactly one registry name equals the text" is not the same as "this is the company the user means".
+        A typed organisation number is an identifier, so it resolves directly (after the format and check-digit tests)."""
         digits = normalize_org_number(query)
         if len(digits) == 9 and len(query.strip().replace(" ", "")) <= 11:
             return self.clean_org(digits), []
@@ -189,9 +223,9 @@ class Services:
             return None, []
         norm = _norm(text)
         exact = [r for r in rows if _norm(r.get("navn")) == norm or _norm(_strip_form(r.get("navn"))) == norm]
-        if len(exact) == 1:
+        if auto_pick and len(exact) == 1:
             return str(exact[0]["organisasjonsnummer"]), []
-        if len(rows) == 1:
+        if auto_pick and len(rows) == 1:
             return str(rows[0]["organisasjonsnummer"]), []
         return None, self.summaries_for_rows((exact or rows)[:8])
 
@@ -205,6 +239,12 @@ class Services:
         self.db.execute("""INSERT INTO artifacts(id, type, title, created_at, updated_at, data_json, archived) VALUES (?,?,?,?,?,?,1)
                            ON CONFLICT(id) DO UPDATE SET data_json = excluded.data_json, updated_at = excluded.updated_at""",
                         (f"kv:{key}", "kv", key, now, now, dumps(value)))
+
+
+def same_company_name(a: str | None, b: str | None) -> bool:
+    """True when two spellings of a legal name are the same company name (case, punctuation and the legal form are ignored)."""
+    na, nb = _norm(a), _norm(b)
+    return bool(na) and (na == nb or _norm(_strip_form(a)) == _norm(_strip_form(b)))
 
 
 def _strip_form(name: str | None) -> str:

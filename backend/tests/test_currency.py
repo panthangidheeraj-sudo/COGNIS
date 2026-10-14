@@ -205,8 +205,8 @@ def test_equinor_brief_ask_explain_never_say_nok(client: TestClient) -> None:
     fin = next(s for s in brief["sections"] if s["id"] == "financials")
     assert any("Revenue USD 67.96B in FY2025, down" in i["text"] and "from USD 72.54B in FY2024" in i["text"] for i in fin["items"])
     assert "NOK" not in text
-    ans = run(answer(p, "Tell me about the financials and revenue", None))
-    assert any("reported revenue of USD 67.96B for FY2025, compared with USD 72.54B in FY2024" in b["text"] for b in ans["blocks"])
+    ans = run(answer(p, "Tell me about the financials and revenue compared with the previous year", None))
+    assert any("Revenue: USD 67.96B for FY2025" in b["text"] and "Previous year: USD 72.54B for FY2024" in b["text"] for b in ans["blocks"])
     assert "NOK" not in json.dumps(ans, ensure_ascii=False)
     ex = client.post(f"/api/companies/{EQUINOR}/explain", json={"subject": {"kind": "metric", "metric": "revenue", "fromPeriod": "FY2024", "toPeriod": "FY2025"}}).json()
     assert "USD 72.54B in FY2024 and USD 67.96B in FY2025" in json.dumps(ex, ensure_ascii=False) and "NOK" not in json.dumps(ex, ensure_ascii=False)

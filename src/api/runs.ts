@@ -50,7 +50,10 @@ function applyToRun(run: ResearchRun, event: ResearchEvent): ResearchRun {
     case 'stage.changed':
       return { ...run, stage: event.stage };
     case 'step.started':
-      return patchStep(event.stepId, { status: 'running', sourceName: event.sourceName, startedAt: event.at });
+      return patchStep(event.stepId, { status: 'running', sourceName: event.sourceName, startedAt: event.at, detail: undefined, message: undefined });
+    case 'step.progress':
+      // Only a step that is really running has a "doing now" line; a late progress event never revives a finished step.
+      return steps.find((s) => s.id === event.stepId)?.status === 'running' ? patchStep(event.stepId, { detail: event.message }) : run;
     case 'step.completed':
       return patchStep(event.stepId, {
         status: 'done',
@@ -61,17 +64,33 @@ function applyToRun(run: ResearchRun, event: ResearchEvent): ResearchRun {
         evidenceCount: event.evidenceCount,
         outcome: event.outcome,
         message: event.message,
+        detail: undefined,
       });
     case 'step.failed':
-      return patchStep(event.stepId, { status: 'failed', message: event.message, retryable: event.retryable, finishedAt: event.at });
+      return patchStep(event.stepId, { status: 'failed', message: event.message, retryable: event.retryable, finishedAt: event.at, detail: undefined });
     case 'step.blocked':
-      return patchStep(event.stepId, { status: 'blocked', message: event.message, finishedAt: event.at });
+      return patchStep(event.stepId, { status: 'blocked', message: event.message, finishedAt: event.at, detail: undefined });
+    case 'step.skipped':
+      return patchStep(event.stepId, { status: 'skipped', message: event.message, finishedAt: event.at, detail: undefined });
+    case 'step.cancelled':
+      return patchStep(event.stepId, { status: 'cancelled', message: event.message, finishedAt: event.at, detail: undefined });
     case 'run.paused':
       return { ...run, status: 'paused' };
     case 'run.completed':
-      return { ...run, status: 'completed', finishedAt: event.at, artifactId: event.artifactId, autoSaved: event.autoSaved, coverage: event.coverage, summary: event.summary, stage: 'save' };
+      return {
+        ...run,
+        status: 'completed',
+        finishedAt: event.at,
+        artifactId: event.artifactId,
+        autoSaved: event.autoSaved,
+        coverage: event.coverage,
+        summary: event.summary,
+        outcome: event.outcome ?? event.summary?.outcome,
+        issues: event.issues ?? event.summary?.issues,
+        stage: 'save',
+      };
     case 'run.failed':
-      return { ...run, status: run.status === 'cancelled' ? 'cancelled' : 'failed', finishedAt: event.at };
+      return { ...run, status: event.cancelled || run.status === 'cancelled' ? 'cancelled' : 'failed', finishedAt: event.at };
     default:
       return run;
   }

@@ -7,6 +7,7 @@
  */
 import type { CompanyProfile, Evidence } from '@/types';
 import { formatDate, formatDateLong, formatFactValue } from '@/utils/format';
+import { SIGNIFICANCE_LABEL, eventTier } from '@/utils/status';
 
 export type SearchKind = 'Section' | 'Metric' | 'Value' | 'Person' | 'Role' | 'Location' | 'Job' | 'Event' | 'Change' | 'Relationship' | 'Evidence' | 'Source' | 'Website';
 
@@ -92,7 +93,7 @@ export function buildIndex(p: CompanyProfile): SearchEntry[] {
   for (const j of p.hiring.jobs) add('hiring', 'Job', `${j.title}${j.location ? ` — ${j.location}` : ''}${j.department ? ` (${j.department})` : ''}`, [j.postedAt && `posted ${formatDate(j.postedAt)}`, src(j.sourceId), j.state].filter(Boolean).join(' · '), { title: j.title, items: j.evidence });
 
   for (const e of p.activity.events)
-    add('activity', 'Event', `${e.title}${e.description ? ` — ${e.description}` : ''}`, [formatDate(e.date), formatDateLong(e.date), e.date, e.significance === 'major' ? 'Major event' : 'Minor update', e.sourceIds.map(src).join(', ')].join(' · '));
+    add('activity', 'Event', `${e.title}${e.description ? ` — ${e.description}` : ''}`, [formatDate(e.date), formatDateLong(e.date), e.date, `${SIGNIFICANCE_LABEL[eventTier(e)]} event`, e.sourceIds.map(src).join(', ')].join(' · '));
 
   for (const c of p.changes.changes) {
     add('changes', 'Change', c.previous ? `${c.label}: ${c.previous} → ${c.current}` : `${c.label}: ${c.current}`, [c.headline, `detected ${formatDate(c.detectedAt)}`, c.material ? 'Material change' : 'Minor update'].filter(Boolean).join(' · '));

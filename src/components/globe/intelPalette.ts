@@ -1,9 +1,9 @@
 /**
- * Monochrome "corporate intelligence" globe: deep navy negative space, bright ivory-white geography, a fine silver rim.
- * White/ivory is the dominant colour: land is drawn in ivory dots, a crisp coastline and a faint inland contour, and the
- * ocean stays near-black so the continents carry the picture. No blue glow, no imagery.
+ * Monochrome "corporate intelligence" globe: a bright ivory-white sphere with fine navy-ink geography (dots, a crisp coastline, one
+ * faint inland contour) and a soft silver rim. The ocean is white, the land is ink, and the shading from lit to shaded side is
+ * what makes it a sphere. On the dark workspace the globe is the bright object; on the ivory (light) theme the sphere is a
+ * slightly deeper paper tone so it still reads against the page. No blue glow, no imagery.
  * One palette for the WebGL surface and the static fallback, so the cross-fade between them is invisible.
- * On the ivory (light) theme the same drawing is inverted: a pale paper sphere with navy ink.
  */
 export interface IntelPalette {
   deep: string; // the shaded side of the sphere
@@ -23,20 +23,20 @@ export interface IntelPalette {
 }
 
 export const INTEL_DARK: IntelPalette = {
-  deep: '#03060c',
-  mid: '#0a1220',
-  ink: '#f8f4e9',
-  rim: '#d6dbe5',
-  rimAmount: 0.3,
-  rimPower: 4.4,
-  dotOpacity: 1,
-  dotFloor: 0.72,
-  dotCore: 0.76,
-  fill: 0.2,
-  coast: 0.9,
-  contour: 0.24,
-  halo: '#d3d9e2',
-  haloStrength: 0.08,
+  deep: '#bdbfc3', // the shaded side: silver, still clearly light
+  mid: '#faf8f1', // the lit side: bright ivory-white
+  ink: '#16243d', // navy ink for the continents
+  rim: '#8a94a8', // a soft steel shade at the limb that rounds the sphere
+  rimAmount: 0.4,
+  rimPower: 3.2,
+  dotOpacity: 0.94,
+  dotFloor: 0.66,
+  dotCore: 0.6,
+  fill: 0.1,
+  coast: 0.66,
+  contour: 0.13,
+  halo: '#d9dee7',
+  haloStrength: 0.09,
 };
 
 export const INTEL_LIGHT: IntelPalette = {

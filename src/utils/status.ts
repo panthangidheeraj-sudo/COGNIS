@@ -2,7 +2,7 @@
  * Single place that maps backend states to UI language.
  * Every state has a text label so status is never communicated by color only.
  */
-import type { ChangeCategory, CompanyStatus, CoverageArea, CoverageAreaStatus, Evidence, EvidenceState, Fact, ResearchStepStatus, SectionStatus, Source, SourceKind, SourceTier, ValueStatus, ArtifactType, SignalKind, SourceAvailability, TimelineEventType } from '@/types';
+import type { Coverage, ChangeCategory, CompanyStatus, CoverageArea, CoverageAreaStatus, Evidence, EvidenceState, Fact, ResearchStepStatus, RunSnapshotStatus, SectionStatus, Source, SourceKind, SourceTier, ValueStatus, ArtifactType, SignalKind, SourceAvailability, TimelineEvent, TimelineEventType, EventSignificance, EventSourceType, ActivityCheckStatus } from '@/types';
 
 export type Tone = 'ok' | 'warn' | 'err' | 'info' | 'neutral';
 
@@ -127,6 +127,29 @@ export const COVERAGE_STATUS: Record<CoverageAreaStatus, { label: string; tone: 
   pending: { label: 'Not researched', tone: 'neutral' },
 };
 
+export interface ResearchOutcome {
+  /** True only when coverage was reported, every area is complete and no source was blocked or failed. */
+  complete: boolean;
+  reported: boolean;
+  verified: number;
+  total: number;
+  gaps: { area: CoverageArea; label: string; status: string; note?: string }[];
+  unreachableSources: number;
+}
+
+/** What a finished run actually verified. "Complete" is only claimed when the reported coverage says so. */
+export function researchOutcome(run: { coverage?: Coverage; summary?: { coverage?: Coverage; blockedSources?: number; failedSources?: number } }): ResearchOutcome {
+  const cov = run.summary?.coverage ?? run.coverage;
+  const unreachableSources = (run.summary?.blockedSources ?? 0) + (run.summary?.failedSources ?? 0);
+  const gaps = (cov?.areas ?? [])
+    .filter((a) => a.status !== 'complete')
+    .map((a) => ({ area: a.area, label: COVERAGE_AREAS.find((x) => x.area === a.area)?.label ?? a.area, status: COVERAGE_STATUS[a.status]?.label ?? a.status, note: a.note }));
+  const verified = cov?.complete ?? 0;
+  const total = cov?.total ?? 0;
+  const complete = !!cov && total > 0 && verified === total && gaps.length === 0 && unreachableSources === 0;
+  return { complete, reported: !!cov, verified, total, gaps, unreachableSources };
+}
+
 export const SECTION_STATUS: Record<SectionStatus, { label: string; tone: Tone }> = {
   available: { label: 'Available', tone: 'ok' },
   partial: { label: 'Partial', tone: 'warn' },
@@ -136,6 +159,13 @@ export const SECTION_STATUS: Record<SectionStatus, { label: string; tone: Tone }
   pending: { label: 'Not researched yet', tone: 'neutral' },
 };
 
+export const RUN_STATUS: Record<RunSnapshotStatus, { label: string; tone: Tone }> = {
+  completed: { label: 'Completed', tone: 'ok' },
+  partial: { label: 'Partial', tone: 'warn' },
+  failed: { label: 'Failed', tone: 'err' },
+  cancelled: { label: 'Cancelled', tone: 'neutral' },
+};
+
 export const STEP_STATUS: Record<ResearchStepStatus, { label: string; tone: Tone }> = {
   pending: { label: 'Waiting', tone: 'neutral' },
   running: { label: 'In progress', tone: 'info' },
@@ -143,6 +173,7 @@ export const STEP_STATUS: Record<ResearchStepStatus, { label: string; tone: Tone
   failed: { label: 'Failed', tone: 'err' },
   blocked: { label: 'Blocked', tone: 'err' },
   skipped: { label: 'Skipped', tone: 'neutral' },
+  cancelled: { label: 'Stopped', tone: 'neutral' },
 };
 
 export const COMPANY_STATUS_TONE: Record<CompanyStatus, Tone> = {
@@ -164,6 +195,7 @@ export const SOURCE_KIND_LABEL: Record<SourceKind, string> = {
   web: 'Web',
   news: 'News',
   regulatory: 'Regulatory',
+  verification: 'Verification',
 };
 
 export const SOURCE_TIER_LABEL: Record<SourceTier, string> = {
@@ -194,12 +226,49 @@ export const EVENT_LABEL: Record<TimelineEventType, string> = {
   filing: 'Filing',
   jobs: 'Job postings',
   leadership: 'Leadership',
-  contract: 'Public contract',
+  contract: 'Contract',
   acquisition: 'Acquisition',
   location: 'Location',
   announcement: 'Announcement',
   registration: 'Registration',
   funding: 'Capital',
+  results: 'Results',
+  partnership: 'Partnership',
+  discovery: 'Discovery',
+  project: 'Project',
+  production: 'Production',
+  regulatory: 'Regulatory',
+  restructuring: 'Restructuring',
+};
+
+/** Legacy saved data used 'minor'; it reads as routine. */
+export function eventTier(e: Pick<TimelineEvent, 'significance'>): EventSignificance {
+  return e.significance === 'minor' ? 'routine' : e.significance;
+}
+
+export const SIGNIFICANCE_LABEL: Record<EventSignificance, string> = { major: 'Major', relevant: 'Relevant', routine: 'Routine' };
+export const SIGNIFICANCE_HINT: Record<EventSignificance, string> = {
+  major: 'Acquisitions, material contracts, results, discoveries, top-level leadership changes and similar developments',
+  relevant: 'Worth knowing, but not by itself a change to the picture of the company',
+  routine: 'Register entries, invitations and other routine notices. Kept for completeness; not counted as developments',
+};
+
+export const EVENT_SOURCE_LABEL: Record<EventSourceType, string> = {
+  investor_relations: 'Investor relations',
+  company_newsroom: 'Company newsroom',
+  public_procurement: 'Public procurement',
+  official_registry: 'Official register',
+  secondary_news: 'Press coverage',
+};
+
+export const ACTIVITY_CHECK_LABEL: Record<ActivityCheckStatus, string> = {
+  read: 'Read',
+  blocked: 'Blocked',
+  not_found: 'Nothing found',
+  failed: 'Could not be read',
+  not_run: 'Not checked',
+  no_dated_items: 'No dated items',
+  not_checked: 'Not checked',
 };
 
 /** "What changed?" priority: leadership, status, financial, ownership, locations, hiring, public activity, website. */

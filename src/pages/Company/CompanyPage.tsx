@@ -27,7 +27,7 @@ import { ActivitySection, ChangesSection, SourcesSection } from '@/components/co
 import { AmbiguousCandidates } from '@/components/research/AmbiguousCandidates';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { formatDate, formatOrgNumber } from '@/utils/format';
-import { COMPANY_STATUS_TONE, toneClass } from '@/utils/status';
+import { COMPANY_STATUS_TONE, eventTier, toneClass } from '@/utils/status';
 import { COMPANY_TABS, TAB_LABEL, type CompanyTab } from './tabs';
 import '@/styles/sections.css';
 import './company.css';
@@ -102,7 +102,7 @@ function CompanyView({ profile, exportOpen, setExportOpen }: { profile: CompanyP
     people: profile.people.people.filter((p) => p.current).length || undefined,
     locations: profile.locations.locations.length || undefined,
     hiring: profile.hiring.totalCurrent ?? undefined,
-    activity: profile.activity.events.filter((e) => e.significance === 'major').length || undefined,
+    activity: profile.activity.events.filter((e) => eventTier(e) === 'major').length || undefined,
     changes: profile.changes.changes.filter((ch) => ch.material).length || undefined,
     sources: profile.sources.length || undefined,
   };

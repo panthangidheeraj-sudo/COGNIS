@@ -19,7 +19,9 @@ export type SourceKind =
   | 'activity'
   | 'web'
   | 'news'
-  | 'regulatory';
+  | 'regulatory'
+  /** Not a source: a check that compares what the sources said (Deep research). */
+  | 'verification';
 
 /** How authoritative a source is for a fact. */
 export type SourceTier = 'primary' | 'secondary' | 'discovery';

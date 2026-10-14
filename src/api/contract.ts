@@ -94,7 +94,11 @@ export interface SheetsApi {
   list(): Promise<DataSheetSummary[]>;
   get(id: string): Promise<DataSheet>;
   interpret(text: string): Promise<QueryInterpretation>;
-  create(input: { title: string; criteria: InterpretedFilter[]; text?: string }): Promise<DataSheetSummary>;
+  /**
+   * `fallback: 'verified'` is the user's explicit choice to continue from companies COGNIS has already verified when (and only when) the
+   * Enhetsregisteret search is unavailable; the returned summary then carries `discovery`.
+   */
+  create(input: { title: string; criteria: InterpretedFilter[]; text?: string; fallback?: 'verified' }): Promise<DataSheetSummary>;
   rename(id: string, title: string): Promise<DataSheetSummary>;
   /** Interpret an AI-column instruction without adding it. */
   previewColumn(id: string, input: AddColumnInput): Promise<ColumnPreview>;

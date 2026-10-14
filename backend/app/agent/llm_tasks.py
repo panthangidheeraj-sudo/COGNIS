@@ -18,6 +18,7 @@ from ..connectors.website import SiteCrawl
 from ..core.util import clean_ws, fold, truncate
 from ..errors import LLMOutputError
 from ..evidence.models import Observation
+from ..extraction.boilerplate import is_boilerplate
 from ..extraction.html import PageDoc, text_contains
 from ..extraction.web_facts import _page_base
 from ..identity.model import CanonicalIdentity
@@ -167,7 +168,7 @@ async def extract_website_facts(runner: LLMRunner, crawl: SiteCrawl, identity: C
         return []
     obs: list[Observation] = []
     desc = out.business_description
-    if desc and len(clean_ws(desc.quote)) >= 25:
+    if desc and len(clean_ws(desc.quote)) >= 25 and not is_boilerplate(clean_ws(desc.quote)):  # a menu or cookie banner quoted verbatim is still not a description
         page = _find_page(desc.quote, desc.page, crawl.docs())
         if page is not None:
             translation = clean_ws(desc.text) if desc.text and fold(desc.text) != fold(desc.quote) and not SPECULATIVE.search(desc.text) else None

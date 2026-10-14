@@ -14,12 +14,15 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from typing import Any
 
+from ..agent.focus import GENERIC as GENERIC_FOCUS
 from ..agent.orchestrator import new_run_id
 from ..agent.record import claim_to_dict
 from ..core.util import now_iso
 from ..errors import ApiError
 from ..evidence.gate import Claim
 from ..logging_setup import get_logger
+from ..storage import run_history
+from .briefs import answer as answer_question
 from .briefs import answer_from_summary
 from .profile_builder import Builder
 
@@ -35,10 +38,21 @@ STEP_DEFS: dict[str, tuple[str, str, bool]] = {
     "filings": ("Filed annual reports", "financial", True),
     "website": ("Company website", "website", True),
     "jobs": ("Careers and hiring", "jobs", True),
+    "news": ("Company news and announcements", "news", True),
     "extract": ("Read verified pages (AI, quote-checked)", "website", True),
+    "followup": ("Follow-up website pages", "website", True),
+    "crosscheck": ("Cross-check facts across sources", "verification", True),
 }
-QUICK_KEYS = ["registry", "accounts", "roles", "subunits", "group", "website", "jobs"]
-DEEP_KEYS = ["registry", "accounts", "roles", "subunits", "group", "filings", "website", "jobs", "extract"]
+QUICK_KEYS = ["registry", "accounts", "roles", "subunits", "group", "website", "jobs", "news"]
+# Deep adds: the multi-year filing history, further website pages (the ones about the research focus first), AI reading of the verified pages
+# (when a model is configured), press coverage inside the news step (when search is configured) and a cross-source check of what was published.
+DEEP_KEYS = ["registry", "accounts", "roles", "subunits", "group", "filings", "website", "followup", "jobs", "news", "extract", "crosscheck"]
+COVERAGE_LABELS = {"company_record": "Company record", "financials": "Financials", "people_locations": "People & locations", "website": "Company website",
+                   "hiring_activity": "Hiring & public activity"}
+# Plan step → the optional workflow in the effort report that explains why it did not run
+EFFORT_FLOW = {"filings": "filings", "website": "site_pages", "followup": "followup", "extract": "extract", "news": "press", "crosscheck": "crosscheck"}
+MODULE_FOR_STEP = {"jobs": "jobs", "website": "website", "filings": "financial_history", "extract": "website", "news": "news"}
+TIME_LIMIT_MESSAGE = "The research time limit was reached before this source finished. What it had read was kept; nothing else was assumed."
 STREAM_FACT_FIELDS = {"legal_name": "identity.legalName", "registration_status": "identity.status", "business_address": "identity.registeredAddress",
                       "registered_employees": "overview.employees", "ceo": "people.ceo", "board_chair": "people.chair", "official_website": "identity.website",
                       "business_description": "overview.description", "open_positions_count": "overview.openPositions", "parent_company": "relationships.parent",
@@ -83,13 +97,17 @@ class Run:
     t0: float = field(default_factory=time.monotonic)
     synthesis_text: str = ""
     counts: dict[str, int] = field(default_factory=lambda: {"blocked": 0, "failed": 0})
+    outcome: str | None = None  # completed | partial — only for runs that finished and saved a report; failed/cancelled runs have none
+    issues: list[str] = field(default_factory=list)
+    saved: bool = False  # the run's evidence was written as a report version
 
     def to_json(self) -> dict[str, Any]:
         active = self.status in ("running", "awaiting_confirmation", "planning")
         out: dict[str, Any] = {"id": self.id, "query": self.query, "mode": self.mode, "status": self.status, "plan": self.plan, "startedAt": self.started_at,
                                "capabilities": CAPS_ACTIVE if active else CAPS_NONE, "autoSaved": self.auto_saved}
         for key, value in (("prompt", self.prompt), ("company", self.company), ("ambiguity", self.ambiguity), ("stage", self.stage), ("finishedAt", self.finished_at),
-                           ("artifactId", self.artifact_id), ("coverage", self.coverage), ("summary", self.summary)):
+                           ("artifactId", self.artifact_id), ("coverage", self.coverage), ("summary", self.summary), ("outcome", self.outcome),
+                           ("issues", self.issues or None)):
             if value is not None:
                 out[key] = value
         return out
@@ -117,23 +135,34 @@ class RunManager:
         step_keys = body.get("stepKeys") or None
         org = None
         if body.get("orgNumber"):
-            org = self.s.clean_org(str(body["orgNumber"]))
+            org = self.s.clean_org(str(body["orgNumber"]))  # 9 digits + check digit; the registry lookup below confirms it exists
         else:
             if not query:
                 raise ApiError("invalid", "Type a company name or a 9-digit organisation number.", status=400)
-            org, candidates = await self.s.resolve_query(query)
+            # A typed name never starts research by itself: the user must pick (or confirm the single match) first.
+            org, candidates = await self.s.resolve_query(query, auto_pick=False)
             if org is None and candidates:
+                one = len(candidates) == 1
+                message = ("One registered company matches this name. Confirm it is the company you mean — COGNIS never guesses."
+                           if one else "Several registered companies match this name. Pick the exact company — COGNIS never guesses.")
                 run = Run(id=new_run_id("run"), query=query, mode=mode, prompt=prompt, status="ambiguous", plan=plan_for(mode, step_keys, llm=self._llm()),
-                          started_at=now_iso(), ambiguity={"query": query, "candidates": candidates,
-                                                           "message": "Several registered companies match this name. Pick the exact company — COGNIS never guesses."})
+                          started_at=now_iso(), ambiguity={"query": query, "candidates": candidates, "message": message})
                 self.runs[run.id] = run
                 return run.to_json()
             if org is None:
                 raise ApiError("not_found", f"No Norwegian company matched “{query}”. Try the full legal name or the 9-digit organisation number.", status=404)
-        record = await self.s.ensure_record(org)
+        record = await self.s.ensure_record(org)  # registry lookup: an unknown number stops here (404)
+        company = self.s.profile_for(record)["company"]
+        expected = str(body.get("expectedName") or "").strip()
+        from .services import same_company_name  # local import: services imports this module
+
+        if expected and not same_company_name(expected, company.get("legalName")):
+            # The caller confirmed a different company than the one registered under this number (stale or edited selection).
+            raise ApiError("ambiguous", f"Organisation number {org} is registered to “{company.get('legalName')}”, not “{expected}”. Select the company again.",
+                           details={"orgNumber": org, "expectedName": expected, "registeredName": company.get("legalName")})
         plan = plan_for(mode, step_keys, llm=self._llm())
         run = Run(id=new_run_id("run"), query=query or org, mode=mode, prompt=prompt, status="awaiting_confirmation" if plan["requiresConfirmation"] else "running",
-                  plan=plan, started_at=now_iso(), org=org, company=self.s.profile_for(record)["company"])
+                  plan=plan, started_at=now_iso(), org=org, company=company)
         self.runs[run.id] = run
         if run.status == "running":
             self._launch(run)
@@ -163,7 +192,9 @@ class RunManager:
         if not run.terminal:
             run.status = "cancelled"
             run.finished_at = now_iso()
-            self._emit(run, "run.failed", message="Research cancelled. Verified data gathered so far is kept in the saved profile only if the run completed.")
+            self._close_open_steps(run, running="step.cancelled", message="Stopped: research was cancelled before this source finished.",
+                                   pending_message="Not started: research was cancelled.")
+            self._emit(run, "run.failed", message="Research cancelled before it started. Nothing was saved.", cancelled=True)
         run.status = "cancelled"
         return run.to_json()
 
@@ -175,6 +206,9 @@ class RunManager:
         sent = last_seq
         idle = 0.0
         while True:
+            # Clear the signal *before* collecting: an event emitted while this generator is suspended at a yield keeps the signal set, so the wait below
+            # returns at once. (Clearing afterwards swallowed such events and delayed them until the 15 s keep-alive — progress arrived in bursts.)
+            run.changed.clear()
             pending = [e for e in run.events if e["seq"] > sent]
             for event in pending:
                 sent = event["seq"]
@@ -183,7 +217,6 @@ class RunManager:
                 return
             if run.status in ("ambiguous",):
                 return
-            run.changed.clear()
             try:
                 await asyncio.wait_for(run.changed.wait(), timeout=15)
                 idle = 0.0
@@ -223,6 +256,8 @@ class RunManager:
             run.stage = e["stage"]
         elif t == "step.started":
             patch(e["stepId"], status="running", sourceName=e.get("sourceName"), startedAt=e["at"])
+        elif t == "step.progress":
+            patch(e["stepId"], detail=e.get("message"))
         elif t == "step.completed":
             patch(e["stepId"], status="done", sourceName=e.get("sourceName"), finishedAt=e["at"], durationMs=e.get("durationMs"), factCount=e.get("factCount"),
                   evidenceCount=e.get("evidenceCount"), outcome=e.get("outcome"), message=e.get("message"))
@@ -232,6 +267,10 @@ class RunManager:
         elif t == "step.blocked":
             patch(e["stepId"], status="blocked", message=e.get("message"), finishedAt=e["at"])
             run.counts["blocked"] += 1
+        elif t == "step.skipped":
+            patch(e["stepId"], status="skipped", message=e.get("message"), finishedAt=e["at"])
+        elif t == "step.cancelled":
+            patch(e["stepId"], status="cancelled", message=e.get("message"), finishedAt=e["at"])
 
     def _launch(self, run: Run) -> None:
         self._emit(run, "run.started")
@@ -247,12 +286,15 @@ class RunManager:
         def sink(kind: str, data: dict[str, Any]) -> None:
             if kind == "stage":
                 self._emit(run, "stage.changed", stage=data["stage"])
-            elif kind in ("step_started", "step_completed", "step_failed", "step_blocked"):
+            elif kind in ("step_started", "step_completed", "step_failed", "step_blocked", "step_progress"):
                 sid = f"s-{data['key']}"
                 if sid not in plan_ids:
                     return
                 if kind == "step_started":
                     self._emit(run, "step.started", stepId=sid, sourceName=data.get("source_name"))
+                elif kind == "step_progress":
+                    if data.get("message"):
+                        self._emit(run, "step.progress", stepId=sid, message=str(data["message"]))
                 elif kind == "step_completed":
                     payload = {"stepId": sid, "sourceName": data.get("source_name"), "factCount": int(data.get("facts") or 0), "evidenceCount": int(data.get("evidence") or 0),
                                "durationMs": int(data.get("duration_ms") or 0), "outcome": data.get("outcome") or "not_available"}
@@ -275,64 +317,154 @@ class RunManager:
                     run.synthesis_text += chunk
                     self._emit(run, "synthesis.delta", text=chunk)
 
+        record: dict[str, Any] | None = None
+        answer: dict[str, Any] | None = None
         try:
-            record = await self.s.research(org, mode=run.mode, step_keys=keys + ["geo"], on_event=sink, run_id=run.id)
-            # Steps the plan listed but the evidence made unnecessary (e.g. careers without a verified site).
-            started = {e.get("stepId") for e in run.events if e["type"] == "step.started"}
-            done = {e.get("stepId") for e in run.events if e["type"] in ("step.completed", "step.failed", "step.blocked")}
-            modules = record.get("modules") or {}
-            for step in run.plan["steps"]:
-                if step["id"] in done:
-                    continue
-                if step["id"] in started:
-                    self._emit(run, "step.completed", stepId=step["id"], sourceName=step.get("sourceName") or step["label"], factCount=0, evidenceCount=0, durationMs=0,
-                               outcome="not_available")
-                    continue
-                note = (modules.get({"jobs": "jobs", "website": "website", "filings": "financial_history", "extract": "website"}.get(step["key"], step["key"])) or {}).get("note")
-                self._emit(run, "step.started", stepId=step["id"], sourceName=step["label"])
-                self._emit(run, "step.completed", stepId=step["id"], sourceName=step["label"], factCount=0, evidenceCount=0, durationMs=0, outcome="not_available",
-                           message=note or "Not applicable for this company given the verified evidence.")
+            focus = None if (run.prompt or "").strip().casefold() in GENERIC_FOCUS else (run.prompt or "").strip()
+            record = await self.s.research(org, mode=run.mode, step_keys=keys + ["geo"], on_event=sink, run_id=run.id, focus=focus)
+            if record.get("identity") is None:
+                raise ApiError("unavailable", _no_identity_message(record))
+            run.saved = True
+            effort = record.get("effort") or {}
+            timed_out = bool(effort.get("timedOut"))
+            self._settle_steps(run, record, effort, timed_out)
             profile = self.s.profile_for(record)
             self._emit(run, "stage.changed", stage="verify")
             self._emit(run, "stage.changed", stage="reconcile")
             self._emit(run, "stage.changed", stage="synthesize")
-            answer = answer_from_summary(profile, run.prompt)
+            if run.prompt and run.prompt.strip().casefold() not in ("company brief", "research this company"):
+                # A focus prompt or custom question is answered from the evidence that is about it, not with the generic company summary.
+                answer = await answer_question(profile, run.prompt, self.s.runner(), origin="fresh_research")
+            else:
+                answer = answer_from_summary(profile, run.prompt)
             if profile.get("summary") and not run.synthesis_text:
                 self._emit(run, "synthesis.delta", text=profile["summary"]["text"])
             self._emit(run, "synthesis.completed", answer=answer)
             self._emit(run, "stage.changed", stage="save")
             coverage = profile["company"]["coverage"]
             facts_verified = sum(1 for f in _verified_facts(profile))
+            outcome, issues = judge_outcome(coverage, blocked=run.counts["blocked"], failed=run.counts["failed"], timed_out=timed_out)
             summary = {
                 "coverage": coverage, "sourcesVerified": len(profile["sources"]), "primarySources": profile["quality"]["primarySources"],
                 "secondarySources": profile["quality"]["secondarySources"], "factsVerified": facts_verified, "conflicts": profile["quality"]["conflicts"],
                 "identityConflicts": sum(1 for a in record.get("site_attempts") or [] if a.get("decision") in ("ambiguous", "rejected") and a.get("conflicts")),
                 "changesDetected": sum(1 for c in profile["changes"]["changes"] if c["material"]), "blockedSources": run.counts["blocked"],
-                "failedSources": run.counts["failed"], "elapsedMs": int((time.monotonic() - run.t0) * 1000),
+                "failedSources": run.counts["failed"], "elapsedMs": int((time.monotonic() - run.t0) * 1000), "outcome": outcome, "issues": issues,
+                "effort": effort or None,
+                # What happened to the report: a run that found the same facts still saves its own version, and earlier versions are always kept.
+                "report": {"newVersion": bool(record.get("new_version")), "factsChanged": record.get("facts_changed"), "versionId": record.get("version_id")},
             }
             run.artifact_id = profile.get("artifactId")
             run.auto_saved = bool(run.artifact_id)
             run.coverage = coverage
             run.summary = summary
             run.company = profile["company"]
+            run.outcome, run.issues = outcome, issues
             run.status = "completed"
             run.finished_at = now_iso()
-            self._emit(run, "run.completed", artifactId=run.artifact_id, autoSaved=run.auto_saved, coverage=coverage, summary=summary)
+            self._snapshot(run, outcome, record=record, answer=answer, issues=issues)
+            self._emit(run, "run.completed", artifactId=run.artifact_id, autoSaved=run.auto_saved, coverage=coverage, summary=summary, outcome=outcome, issues=issues)
         except asyncio.CancelledError:
             run.status = "cancelled"
             run.finished_at = now_iso()
             if not run.terminal:
-                self._emit(run, "run.failed", message="Research cancelled. Nothing from this run was saved.")
+                self._close_open_steps(run, running="step.cancelled", message="Stopped: research was cancelled before this source finished.",
+                                       pending_message="Not started: research was cancelled.")
+                kept = "Research cancelled. The evidence it had gathered was already saved as a report version." if run.saved else "Research cancelled. Nothing from this run was saved."
+                self._snapshot(run, "cancelled", record=record if run.saved else None, answer=answer, issues=[kept])
+                self._emit(run, "run.failed", message=kept, cancelled=True)
             raise
         except ApiError as exc:
-            run.status = "failed"
-            run.finished_at = now_iso()
-            self._emit(run, "run.failed", message=exc.message)
+            self._fail(run, exc.message, record)
         except Exception as exc:  # never leave a stream hanging
             log.exception("research run failed", extra={"run_id": run.id})
-            run.status = "failed"
-            run.finished_at = now_iso()
-            self._emit(run, "run.failed", message=f"Research failed ({type(exc).__name__}). Please try again.")
+            self._fail(run, f"Research failed ({type(exc).__name__}). Please try again.", record)
+
+    # ------------------------------------------------------------ run end ----
+    def _fail(self, run: Run, message: str, record: dict[str, Any] | None) -> None:
+        run.status = "failed"
+        run.finished_at = now_iso()
+        self._close_open_steps(run, running="step.failed", message=f"Stopped: {message}", pending_message="Not started: the research run failed.")
+        self._snapshot(run, "failed", record=record if run.saved else None, issues=[message])
+        self._emit(run, "run.failed", message=message)
+
+    def _close_open_steps(self, run: Run, *, running: str, message: str, pending_message: str) -> None:
+        """A run that ends early must not leave a source looking busy or waiting: running steps are stopped, steps never reached are marked skipped."""
+        for step in list(run.plan["steps"]):
+            if step["status"] == "running":
+                extra = {"retryable": True} if running == "step.failed" else {}
+                self._emit(run, running, stepId=step["id"], sourceName=step.get("sourceName") or step["label"], message=message, **extra)
+            elif step["status"] == "pending":
+                self._emit(run, "step.skipped", stepId=step["id"], sourceName=step["label"], message=pending_message)
+
+    def _settle_steps(self, run: Run, record: dict[str, Any], effort: dict[str, Any], timed_out: bool) -> None:
+        """Planned steps that never reported get their real state: skipped (with the reason) or, if the time limit stopped them, failed."""
+        started = {e.get("stepId") for e in run.events if e["type"] == "step.started"}
+        done = {e.get("stepId") for e in run.events if e["type"] in ("step.completed", "step.failed", "step.blocked", "step.skipped", "step.cancelled")}
+        modules = record.get("modules") or {}
+        flows = {f["key"]: f for f in effort.get("workflows") or []}
+        for step in run.plan["steps"]:
+            if step["id"] in done:
+                continue
+            if step["id"] in started:
+                if timed_out:
+                    self._emit(run, "step.failed", stepId=step["id"], sourceName=step.get("sourceName") or step["label"], message=TIME_LIMIT_MESSAGE, retryable=True)
+                else:
+                    self._emit(run, "step.completed", stepId=step["id"], sourceName=step.get("sourceName") or step["label"], factCount=0, evidenceCount=0, durationMs=0,
+                               outcome="not_available")
+                continue
+            note = (modules.get(MODULE_FOR_STEP.get(step["key"], step["key"])) or {}).get("note")
+            flow = flows.get(EFFORT_FLOW.get(step["key"], ""))
+            reason = "Not reached: the research time limit was reached." if timed_out else (note or (flow or {}).get("detail"))
+            self._emit(run, "step.skipped", stepId=step["id"], sourceName=step["label"], message=reason or "Not needed for this company given the verified evidence.")
+
+    def _snapshot(self, run: Run, status: str, *, record: dict[str, Any] | None = None, answer: dict[str, Any] | None = None, issues: list[str] | None = None) -> None:
+        """Write this run to the company's run history. A failure here is logged and never changes the research result."""
+        if not run.org:
+            return
+        try:
+            from .library import company_artifact_id
+
+            steps = [{k: s.get(k) for k in ("key", "label", "status", "sourceName", "message", "durationMs", "factCount", "evidenceCount", "outcome") if s.get(k) is not None}
+                     for s in run.plan["steps"]]
+            run_history.save_run(self.s.db, {
+                "id": run.id, "org_number": run.org, "artifact_id": company_artifact_id(run.org) if record else None, "mode": run.mode, "prompt": run.prompt,
+                "status": status, "started_at": run.started_at, "finished_at": run.finished_at or now_iso(),
+                "profile_version_id": (record or {}).get("version_id"), "previous_version_id": (record or {}).get("previous_version_id"),
+                "evidence_changed": (record or {}).get("facts_changed") if record else None, "summary": run.summary, "effort": (record or {}).get("effort"),
+                "steps": steps, "answer": answer, "issues": issues or [],
+            })
+        except Exception:
+            log.exception("could not save the run history entry", extra={"run_id": run.id})
+
+
+def judge_outcome(coverage: dict[str, Any] | None, *, blocked: int, failed: int, timed_out: bool) -> tuple[str, list[str]]:
+    """A run is "completed" only when every area was verified and no source was unreachable; anything less is "partial", with the reasons."""
+    issues: list[str] = []
+    if timed_out:
+        issues.append("The research time limit was reached; sources that had not finished were not used.")
+    if failed:
+        issues.append(f"{failed} source{'s' if failed != 1 else ''} could not be reached.")
+    if blocked:
+        issues.append(f"{blocked} source{'s' if blocked != 1 else ''} blocked access.")
+    areas = (coverage or {}).get("areas") or []
+    total = int((coverage or {}).get("total") or 0)
+    gaps = [a for a in areas if a.get("status") != "complete"]
+    if not coverage or not total:
+        issues.append("Coverage was not reported, so completeness cannot be confirmed.")
+    elif gaps or int(coverage.get("complete") or 0) < total:
+        names = ", ".join(COVERAGE_LABELS.get(a.get("area"), str(a.get("area")).replace("_", " ")) for a in gaps)
+        issues.append(f"{coverage.get('complete', 0)} of {total} areas verified" + (f" — not verified: {names}." if names else "."))
+    return ("partial" if issues else "completed"), issues
+
+
+def _no_identity_message(record: dict[str, Any]) -> str:
+    state = record.get("entity_state")
+    if state in ("blocked_policy", "blocked_robots", "budget_exhausted"):
+        return "The company register could not be reached right now, so nothing was researched or saved."
+    if state in ("source_error", "submission_error"):
+        return "The company register did not respond, so nothing was researched or saved. Please try again."
+    return "The company could not be found in the register, so nothing was researched or saved."
 
 
 def _verified_facts(profile: dict[str, Any]) -> list[dict[str, Any]]:

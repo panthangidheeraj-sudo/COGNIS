@@ -12,10 +12,12 @@ import asyncio
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import date
 from typing import Any
+from urllib.parse import urlsplit
 
 from ..config import Settings, get_settings
-from ..connectors import brreg, geonorge, job_discovery, nav, norid, optional, procurement, search
+from ..connectors import brreg, geonorge, job_discovery, nav, news_discovery, newsroom, norid, optional, procurement, search
 from ..connectors import jobs as jobs_conn
 from ..connectors.base import ConnectorContext, not_run
 from ..connectors.website import ENRICHMENT_KINDS, SiteCrawl, crawl_site, fetch_page, site_links
@@ -33,7 +35,8 @@ from ..providers.llm_base import LLMProvider
 from ..runtime.budgets import CompanyBudget, RunBudget
 from ..security.urls import canonical_url, host_of, normalize_website, registrable_domain
 from ..storage.db import Database
-from . import hiring, llm_tasks
+from . import crosscheck, hiring, llm_tasks
+from .focus import focus_kinds
 from .record import build_record
 
 log = get_logger("agent")
@@ -53,6 +56,8 @@ STEP_META: dict[str, tuple[str, str, str]] = {
     "news": ("Company news", "news", "Company newsroom"),
     "geo": ("Map location", "registry", "Kartverket — Geonorge"),
     "extract": ("Read verified pages", "website", "Language model (quote-verified)"),
+    "followup": ("Follow-up pages", "website", "Verified company website — follow-up pages"),
+    "crosscheck": ("Cross-check facts", "verification", "COGNIS evidence gate — cross-source check"),
     "synthesis": ("Executive summary", "web", "Language model (evidence-grounded)"),
 }
 
@@ -64,6 +69,7 @@ class ResearchOptions:
     include_website: bool = True
     include_geo: bool = True
     step_keys: list[str] | None = None  # user-edited plan (frontend)
+    focus: str | None = None  # the research focus / custom question: Deep research reads the website pages that are about it first
 
 
 @dataclass
@@ -91,6 +97,7 @@ class ResearchState:
     hiring_wanted: bool = False
     nav_summary: dict[str, Any] | None = None  # NAV lookup outcome incl. unverified candidates (internal, never published)
     procurement_candidates: list[dict[str, Any]] = field(default_factory=list)  # name-only notices (internal, never published)
+    news: dict[str, Any] | None = None  # what the newsroom / press-coverage discovery read, per page (record["news"]); drives the "sources checked" list
     roles: list[dict[str, Any]] = field(default_factory=list)
     locations: list[dict[str, Any]] = field(default_factory=list)
     financial_records: list[dict[str, Any]] = field(default_factory=list)
@@ -101,6 +108,10 @@ class ResearchState:
     terminal_status: str = "completed"
     published_keys: set[str] = field(default_factory=set)
     timed_out: bool = False
+    ran: set[str] = field(default_factory=set)  # optional workflows that were actually executed (reported in the effort summary)
+    extract_count: int | None = None  # quote-verified statements the language model read from the site; None = not run
+    crosscheck: dict[str, Any] | None = None
+    effort: dict[str, Any] | None = None
 
 
 class Orchestrator:
@@ -154,6 +165,10 @@ class Orchestrator:
         operations["runtime_ms"] = int((time.monotonic() - started) * 1000)
         operations["llm"] = {"calls": runner.calls, "tokens": runner.tokens, "model": runner.model, "provider": getattr(self.provider, "name", None)}
         state.errors.extend(runner.errors)
+        try:
+            state.effort = _effort_report(state, runner, operations, s)
+        except Exception:  # the report describes the run; it must never break it
+            log.exception("effort report failed", extra={"org_number": org})
         record = build_record(state, operations=operations, completed_at=now_iso())
         emit("finished", {"record": record})
         return record
@@ -238,6 +253,7 @@ class Orchestrator:
         if "group" in wanted:
             tasks.append(run_step("group", brreg.fetch_group(ctx, identity)))
         if "filings" in wanted and not quick:
+            st.ran.add("filings")
             tasks.append(run_step("filings", brreg.fetch_financial_history(ctx, identity)))
         if st.options.include_geo and st.options.mode != "competition" and "geo" in wanted:
             tasks.append(run_step("geo", geonorge.geocode(ctx, identity)))
@@ -276,15 +292,24 @@ class Orchestrator:
         # ---- 4. LLM: plan further actions, read verified pages --------------
         if st.crawl is not None and st.crawl.verified:
             emit("stage", {"stage": "verify"})
-            await self._research_loop(st, ctx, budget, runner, emit)
+            announce_follow = st.options.step_keys is not None and "followup" in wanted
+            t_follow = _step_start(emit, "followup", announce=announce_follow)
+            pages_before = len(st.crawl.pages)
+            await self._research_loop(st, ctx, budget, runner, emit, focus=focus_kinds(st.options.focus) if st.options.mode == "deep" else [])
+            if announce_follow:
+                read = [p.kind for p in st.crawl.pages[pages_before:] if p.doc]
+                emit("step_completed", {"key": "followup", "facts": 0, "evidence": 0, "duration_ms": _ms(t_follow), "outcome": "verified" if read else "not_available",
+                                        "source_name": STEP_META["followup"][2],
+                                        "message": (f"Read {len(read)} further page(s): {', '.join(dict.fromkeys(read))}." if read
+                                                    else "No further relevant pages were linked from the verified site.")})
             if s.enable_jobs and "jobs" in wanted:
                 t_jobs = await self._jobs(st, ctx, emit)
             st.observations += wf.website_observations(st.crawl)
-            st.observations += wf.news_observations(st.crawl)
             llm_obs: list[Observation] = []
             if runner.enabled and st.options.mode not in ("quick", "registry"):
                 t = _step_start(emit, "extract")
                 llm_obs = await llm_tasks.extract_website_facts(runner, st.crawl, identity)
+                st.extract_count = len(llm_obs)
                 emit("step_completed", {"key": "extract", "facts": len(llm_obs), "evidence": len(llm_obs), "duration_ms": _ms(t),
                                         "outcome": "verified" if llm_obs else "not_available", "source_name": STEP_META["extract"][2],
                                         "message": None if llm_obs else "No quote-verified statements were extracted."})
@@ -305,6 +330,9 @@ class Orchestrator:
                 self._jobs_done(st, emit, t_jobs)
         self._publish_progress(st, emit)
 
+        # ---- 4b. company announcements: own newsroom / investor relations / feeds, then reputable press found by search -------
+        await self._news(st, ctx, emit, wanted)
+
         # ---- 5. public procurement (free: TED + Doffin open data; exact org-number matches only) -
         if st.options.mode != "registry":
             for res in (await procurement.ted_notices(ctx, identity), procurement.doffin_open_data(self.db, identity, enabled=s.enable_doffin_open_data)):
@@ -319,6 +347,14 @@ class Orchestrator:
         # ---- 7. synthesis ---------------------------------------------------
         emit("stage", {"stage": "reconcile"})
         st.claims, st.rejections = publish(st.observations, st.org_number)
+        wants_crosscheck = ("crosscheck" in st.options.step_keys) if st.options.step_keys is not None else st.options.mode == "deep"
+        if wants_crosscheck:
+            t = _step_start(emit, "crosscheck")
+            st.crosscheck = crosscheck.analyse(st.claims)
+            emit("step_completed", {"key": "crosscheck", "facts": st.crosscheck["corroborated"], "evidence": st.crosscheck["checked"], "duration_ms": _ms(t),
+                                    "outcome": "verified" if st.crosscheck["checked"] else "not_available", "source_name": STEP_META["crosscheck"][2],
+                                    "message": crosscheck.describe(st.crosscheck)})
+            st.ran.add("crosscheck")
         emit("stage", {"stage": "synthesize"})
         t = _step_start(emit, "synthesis", announce=runner.enabled)
         st.summary = await _summarise(st, runner)
@@ -352,6 +388,81 @@ class Orchestrator:
             add(normalize_website(loc.get("website")), "registry_subunit")
         return out
 
+    async def _news(self, st: ResearchState, ctx: ConnectorContext, emit: EventSink, wanted: set[str]) -> None:
+        """What the company itself announced (newsroom, investor relations, RSS/Atom), then what reputable press reported about it.
+
+        The company's own pages come first and need an identity-verified website. Press coverage is found by search and only used after each article
+        is fetched (robots.txt respected), dated, and tied to this exact organisation. A source that cannot be read is recorded as a limitation;
+        it is never taken to mean that nothing happened."""
+        s = self.settings
+        assert st.identity is not None
+        mode = st.options.mode
+        crawl = st.crawl
+        if mode == "registry":
+            why = "Not part of this research."
+            st.modules["news"] = not_run("news", source_id=newsroom.SOURCE_ID, source_name=newsroom.SOURCE_NAME, source_class="company_owned", state="not_applicable", note=why)
+            st.news = {"newsroom": {"state": "not_applicable", "note": why, "sources": []}, "search": {"state": "not_applicable", "note": why}}
+            return
+        if not s.enable_news_discovery:  # switched off: only the items the site crawl itself shows, as before
+            if crawl is not None and crawl.verified:
+                st.observations += wf.news_observations(crawl)
+            note = "Newsroom discovery is switched off by configuration; only news items on pages the site crawl already read are used."
+            st.modules["news"] = not_run("news", source_id=newsroom.SOURCE_ID, source_name=newsroom.SOURCE_NAME, source_class="company_owned", state="not_applicable", note=note)
+            st.news = {"newsroom": {"state": "not_applicable", "note": note, "sources": []}, "search": {"state": "not_applicable", "note": note}}
+            return
+        planned = "news" in wanted  # a plan without the news step still reads newsroom pages the site crawl already fetched (no extra requests)
+        t = _step_start(emit, "news", announce=planned)
+        if planned and crawl is not None:
+            _progress(emit, "news", "Reading the company's newsroom and investor pages")
+        today = date.today()
+        if crawl is not None:
+            try:
+                own = await newsroom.discover_newsroom(ctx, crawl, today=today, crawled_only=not planned)
+            except Exception as exc:  # a connector bug becomes a recorded failure, never an empty "no news"
+                log.exception("newsroom discovery failed", extra={"org_number": st.org_number})
+                own = newsroom.NewsroomResult(module=not_run("news", source_id=newsroom.SOURCE_ID, source_name=newsroom.SOURCE_NAME, source_class="company_owned", state="failed",
+                                                              note=f"The newsroom could not be checked (internal error: {type(exc).__name__}). This is not evidence that nothing was announced."))
+        else:
+            own = newsroom.NewsroomResult(module=not_run("news", source_id=newsroom.SOURCE_ID, source_name=newsroom.SOURCE_NAME, source_class="company_owned", state="not_applicable",
+                                                          note="No identity-verified website, so no company newsroom or investor-relations page could be read."))
+        if mode == "deep" and planned:
+            try:
+                press = await news_discovery.discover_news(ctx, crawl, st.identity, today=today,
+                                                           on_search=lambda: _progress(emit, "news", "Searching reputable outlets for press coverage"))
+            except Exception as exc:
+                log.exception("news coverage search failed", extra={"org_number": st.org_number})
+                press = news_discovery.NewsSearchResult(module=not_run(news_discovery.MODULE, source_id=news_discovery.SOURCE_ID, source_name=news_discovery.SOURCE_NAME,
+                                                                       source_class="search_discovery", state="failed", tier="C",
+                                                                       note=f"Press coverage could not be checked (internal error: {type(exc).__name__}). This is not evidence that nothing was reported."))
+        else:
+            press = news_discovery.NewsSearchResult(module=not_run(news_discovery.MODULE, source_id=news_discovery.SOURCE_ID, source_name=news_discovery.SOURCE_NAME,
+                                                                   source_class="search_discovery", state="not_applicable", tier="C",
+                                                                   note=f"Press coverage is not searched in {mode} research." if planned else "Company news was not part of the selected research plan."))
+        st.observations += own.observations + press.observations
+        st.modules["news"] = own.module  # type: ignore[assignment]
+        st.extra_modules += press.modules
+        if press.module is not None:
+            st.modules[news_discovery.MODULE] = press.module
+        if press.searched:
+            st.trace.append({"action": "search_news", "state": press.module.state if press.module else None, "accepted": len(press.observations), "considered": len(press.candidates)})
+        st.news = {"newsroom": {"state": own.module.state if own.module else None, "note": own.module.note if own.module else None, "sources": own.sources},
+                   "search": press.summary()}
+        total = len(own.observations) + len(press.observations)
+        state = "available" if total else (own.module.state if own.module else "not_available")
+        parts = [f"{len(own.observations)} announcement(s) read from the company's own pages" if own.observations else (own.module.note if own.module else "")]
+        if press.observations:
+            parts.append(f"{len(press.observations)} press article(s) verified as reporting on this company")
+        payload = {"key": "news", "source_name": "Company newsroom, investor relations and press coverage", "duration_ms": _ms(t), "facts": total, "evidence": total, "state": state,
+                   "message": "; ".join(p for p in parts if p) or None}
+        if not planned:
+            return
+        if state == "blocked":
+            emit("step_blocked", payload)
+        elif state == "failed":
+            emit("step_failed", {**payload, "retryable": True})
+        else:
+            emit("step_completed", {**payload, "outcome": "verified" if total else "not_available"})
+
     async def _website(self, st: ResearchState, ctx: ConnectorContext, budget: CompanyBudget, emit: EventSink) -> None:
         s = self.settings
         identity = st.identity
@@ -360,12 +471,13 @@ class Orchestrator:
         max_pages = s.max_pages_per_site if st.options.mode != "quick" else 3
         best: SiteCrawl | None = None
         for url, origin in self._site_candidates(st)[:3]:
+            _progress(emit, "website", f"Reading {host_of(url) or url}")
             crawl = await self._crawl_with_norid(ctx, url, identity, origin=origin, max_pages=max_pages, st=st)
             best = _better(best, crawl)
             if crawl.verified:
                 break
         if (best is None or not best.verified) and s.search_enabled and st.options.mode != "quick":
-            best = _better(best, await self._search_for_site(st, ctx, identity, max_pages))
+            best = _better(best, await self._search_for_site(st, ctx, identity, max_pages, emit))
         if best is None:
             note = "The register lists no website and no company domain could be derived from registered contact details."
             if not s.search_enabled:
@@ -399,11 +511,12 @@ class Orchestrator:
                                  "signals": crawl.audit.signals if crawl.audit else [], "conflicts": crawl.audit.conflicts if crawl.audit else [], "note": crawl.note})
         return crawl
 
-    async def _search_for_site(self, st: ResearchState, ctx: ConnectorContext, identity: CanonicalIdentity, max_pages: int) -> SiteCrawl | None:
+    async def _search_for_site(self, st: ResearchState, ctx: ConnectorContext, identity: CanonicalIdentity, max_pages: int, emit: EventSink) -> SiteCrawl | None:
         tried = {a["domain"] for a in st.site_attempts}
         domains: list[str] = []
         screened: list[str] = []
         for query in search.identity_queries(identity.legal_name or "", identity.org_number, identity.municipality)[:2]:
+            _progress(emit, "website", "The register-listed site was not verified; searching the web for the company's website")
             mod, hits = await search.web_search(ctx, query)
             st.extra_modules.append(mod)
             screened_here = 0
@@ -425,6 +538,7 @@ class Orchestrator:
         st.search_summary = {"candidates": len(domains), "screened_out": len(screened)}
         best = None
         for dom in domains[:2]:
+            _progress(emit, "website", f"Checking whether {dom} belongs to this company")
             crawl = await self._crawl_with_norid(ctx, f"https://{dom}", identity, origin="search", max_pages=max_pages, st=st)
             best = _better(best, crawl)
             if crawl.verified:
@@ -437,7 +551,13 @@ class Orchestrator:
         crawl = st.crawl
         assert crawl is not None and st.identity is not None
         t = _step_start(emit, "jobs")
-        company = await jobs_conn.collect_jobs(ctx, crawl, st.identity.legal_name or "")
+        limit = self.settings.jobs_step_timeout_seconds
+        try:
+            company = await asyncio.wait_for(jobs_conn.collect_jobs(ctx, crawl, st.identity.legal_name or ""), timeout=limit)
+        except TimeoutError:
+            # Slow company pages must not hold the whole run: say the careers pages were not (fully) read — never "no openings".
+            company = jobs_conn.CompanyJobs([], [], "", failures=[{"kind": "careers", "name": "Company careers pages", "classification": "timeout", "url": crawl.start_url}])
+            company.note = f"The company's careers pages did not finish loading within {limit:.0f} s."
         st.company_jobs = company
         st.extra_modules += company.modules
         items, note = company.jobs, company.note
@@ -462,8 +582,12 @@ class Orchestrator:
 
     async def _discover_jobs(self, st: ResearchState, ctx: ConnectorContext, known: list[jobs_conn.JobItem]) -> job_discovery.DiscoveryResult:
         assert st.crawl is not None and st.identity is not None
+        limit = self.settings.jobs_discovery_timeout_seconds
         try:
-            disc = await job_discovery.discover_jobs(ctx, st.crawl, st.identity, known)
+            disc = await asyncio.wait_for(job_discovery.discover_jobs(ctx, st.crawl, st.identity, known), timeout=limit)
+        except TimeoutError:
+            disc = job_discovery.DiscoveryResult(module=not_run(job_discovery.MODULE, source_id=job_discovery.SOURCE_ID, source_name=job_discovery.SOURCE_NAME,
+                                                                source_class="search_discovery", state="failed", note=f"The search for job pages did not answer within {limit:.0f} s.", tier="C"))
         except Exception as exc:  # discovery is a bonus: its failure never breaks the research
             disc = job_discovery.DiscoveryResult(module=not_run(job_discovery.MODULE, source_id=job_discovery.SOURCE_ID, source_name=job_discovery.SOURCE_NAME,
                                                                 source_class="search_discovery", state="failed", note=f"internal error ({type(exc).__name__})", tier="C"))
@@ -483,10 +607,13 @@ class Orchestrator:
             parts.append(f"{current} current opening(s) after merging duplicates" + (f" ({len(navs)} from NAV Arbeidsplassen)" if navs else ""))
         source = (f"Company careers ({st.crawl.domain})" if st.crawl is not None and st.crawl.verified else "Company careers pages") + (" and NAV Arbeidsplassen" if self.settings.enable_nav_jobs else "")
         outcome = (st.hiring or {}).get("outcome")
-        emit("step_completed", {"key": "jobs", "facts": len(st.jobs), "evidence": len(st.jobs), "duration_ms": _ms(t), "source_name": source,
-                                "outcome": "verified" if current else "not_available",
-                                "message": (st.hiring or {}).get("message") if outcome and outcome != "verified" else ("; ".join(parts) if parts else
-                                                                                                                      (st.jobs_note or "No verified job postings were found."))})
+        message = ((st.hiring or {}).get("message") if outcome and outcome != "verified" else ("; ".join(parts) if parts else (st.jobs_note or "No verified job postings were found.")))
+        payload = {"key": "jobs", "facts": len(st.jobs), "evidence": len(st.jobs), "duration_ms": _ms(t), "source_name": source, "message": message}
+        if outcome == "source_unavailable":
+            # A hiring source could not be reached or read and nothing verified was found: this is a failed check, not "no openings" (and not a clean success).
+            emit("step_failed", {**payload, "retryable": True})
+            return
+        emit("step_completed", {**payload, "outcome": "verified" if current else "not_available"})
 
     async def _nav(self, st: ResearchState, ctx: ConnectorContext) -> None:
         """NAV Arbeidsplassen ads whose employer resolves to this exact organisation (see connectors/nav.py).
@@ -521,8 +648,16 @@ class Orchestrator:
         st.hiring = hiring.assess(st, self.settings, current=current, zero_stated=zero)
         st.observations = hiring.drop_zero_count(st.observations, st.hiring)
 
-    async def _research_loop(self, st: ResearchState, ctx: ConnectorContext, budget: CompanyBudget, runner: llm_tasks.LLMRunner, emit: EventSink) -> None:
-        """Bounded follow-up: fetch more pages of the verified site. LLM chooses when available; otherwise a fixed rule."""
+    async def _research_loop(self, st: ResearchState, ctx: ConnectorContext, budget: CompanyBudget, runner: llm_tasks.LLMRunner, emit: EventSink,
+                             *, focus: list[str] | None = None) -> None:
+        """Bounded follow-up: fetch more pages of the verified site. LLM chooses when available; otherwise a fixed rule.
+
+        Quick research makes one round. Deep research keeps going round by round while there are relevant pages it has not read, and reads the pages that
+        are about the research focus (``focus``: page kinds, see ``agent.focus``) before the generic ones."""
+        focus = focus or []
+        deep = st.options.mode == "deep"
+        llm_planning = runner.enabled
+        reserve = 2 if deep else 0  # Deep keeps two model calls for reading the verified pages and writing the summary; planning must not use them up
         crawl = st.crawl
         assert crawl is not None and st.identity is not None
         rounds = max(0, min(self.settings.max_research_rounds, 1 if st.options.mode == "quick" else self.settings.max_research_rounds))
@@ -534,22 +669,27 @@ class Orchestrator:
                 break
             have = {p.kind for p in crawl.pages if p.doc}
             missing = [k for k in ("careers", "news", "products", "about", "team", "investors") if k not in have]
+            can_plan = llm_planning and runner.enabled and budget.max_llm_calls - budget.llm_calls > reserve
             chosen = await llm_tasks.plan_actions(runner, st.identity, sorted(have), missing, options,
-                                                  f"{budget.max_requests - budget.requests} requests, {int(budget.deadline_left())} s", max_actions=2) if runner.enabled else None
+                                                  f"{budget.max_requests - budget.requests} requests, {int(budget.deadline_left())} s", max_actions=2) if can_plan else None
             planner = "llm" if chosen else "rule"
             if not chosen:
-                # No (valid) model plan: fall back to the fixed rule — fetch the most informative missing page kinds.
-                chosen = [o for o in options if o["hint"] in missing][:2]
+                llm_planning = False  # no usable model plan: later rounds use the fixed rule without asking again
+            if not chosen:
+                # No (valid) model plan: fall back to the fixed rule — the most informative missing page kinds, those about the focus first.
+                pool = [o for o in options if o["hint"] in missing or o["hint"] in focus]
+                chosen = sorted(pool, key=lambda o: o["hint"] not in focus)[:2]
             if not chosen:
                 break
             for action in chosen:
+                _progress(emit, "followup", f"Reading {urlsplit(action['arg']).path or '/'}")
                 page_res, doc = await fetch_page(ctx, action["arg"], optional=True)
                 kind = next((o["hint"] for o in options if o["arg"] == action["arg"]), "other")
                 crawl.pages.append(_fetched(kind, page_res, doc))
                 crawl.requests += 0 if page_res.from_cache else 1
                 st.trace.append({"round": round_no + 1, "planner": planner, "tool": "fetch_page", "url": action["arg"], "kind": kind, "result": page_res.classification,
                                  "reason": action.get("reason")})
-            if planner == "rule":
+            if planner == "rule" and not deep:
                 break
 
     # ------------------------------------------------------------ publishing --
@@ -593,6 +733,101 @@ class Orchestrator:
 
 
 # --------------------------------------------------------------------- helpers --
+def _effort_report(st: ResearchState, runner: llm_tasks.LLMRunner, operations: dict[str, Any], s: Settings) -> dict[str, Any]:
+    """What this run did beyond the core registers — and, for each optional workflow that did not run, why not.
+
+    Everything here is read from what actually happened (modules, the action trace, the pages fetched); nothing is estimated. Quick research lists the
+    Deep workflows it does not run, so two runs of the same company can be compared honestly."""
+    mode = st.options.mode
+    deep = mode == "deep"
+    crawl = st.crawl
+    verified = crawl is not None and crawl.verified
+    wanted = set(st.options.step_keys) if st.options.step_keys is not None else None
+    flows: list[dict[str, Any]] = []
+
+    def add(key: str, label: str, status: str, detail: str) -> None:
+        flows.append({"key": key, "label": label, "status": status, "detail": detail})
+
+    def removed(key: str) -> bool:
+        return wanted is not None and key not in wanted
+
+    # Filed annual reports (multi-year history)
+    fh = st.modules.get("financial_history")
+    if "filings" in st.ran and fh is not None:
+        add("filings", "Filed annual reports", "failed" if fh.state in ("failed", "blocked") else "ran", fh.note or ("Filing history listed." if fh.state == "available" else "No filed reports were listed."))
+    elif removed("filings") and deep:
+        add("filings", "Filed annual reports", "skipped", "Removed from the research plan.")
+    else:
+        add("filings", "Filed annual reports", "skipped", "Quick research reads the latest filed accounts only; the multi-year filing history is a Deep step.")
+
+    # Pages of the company website
+    follow = [t for t in st.trace if t.get("tool") == "fetch_page"]
+    if crawl is not None:
+        pages = len(crawl.docs())
+        limit = s.max_pages_per_site if mode != "quick" else 3
+        add("site_pages", "Company website pages", "ran" if crawl.verified else "skipped",
+            f"Read {pages} page(s) on {crawl.domain} (up to {limit} in {mode} research)." if crawl.verified
+            else (crawl.note or f"{crawl.domain} did not verify as this company's website, so none of its pages were used."))
+    else:
+        add("site_pages", "Company website pages", "skipped", (st.modules.get("website").note if st.modules.get("website") else None) or "No company website was found.")
+
+    # Searching the web for the website
+    searches = [t for t in st.trace if t.get("action") == "search_web"]
+    if mode == "quick":
+        add("site_search", "Web search for the website", "skipped", "Quick research does not search the web for a company website.")
+    elif searches:
+        sm = st.search_summary or {}
+        add("site_search", "Web search for the website", "ran", f"{len(searches)} search(es); {sm.get('candidates', 0)} candidate domain(s), {sm.get('screened_out', 0)} unrelated result(s) not fetched.")
+    elif not s.search_enabled and not verified:
+        add("site_search", "Web search for the website", "skipped", "Web search is not configured (TAVILY_API_KEY missing).")
+    else:
+        add("site_search", "Web search for the website", "skipped", "Not needed: the website was found through the register or its contact details.")
+
+    # Follow-up pages
+    rounds = max((int(t.get("round") or 0) for t in follow), default=0)
+    focus = focus_kinds(st.options.focus) if deep else []
+    if not verified:
+        add("followup", "Follow-up pages", "skipped", "No identity-verified website to follow links from.")
+    elif follow:
+        kinds = ", ".join(dict.fromkeys(str(t.get("kind")) for t in follow))
+        add("followup", "Follow-up pages", "ran", f"Read {len(follow)} further page(s) ({kinds}) in {rounds} round(s)" + (f", guided by your focus ({', '.join(focus)})." if focus else "."))
+    else:
+        add("followup", "Follow-up pages", "ran", "No further relevant pages were linked from the verified site.")
+
+    # Language-model reading
+    if mode == "quick":
+        add("extract", "AI reading of verified pages", "skipped", "Quick research does not use the language model to read pages.")
+    elif runner.provider is None:
+        add("extract", "AI reading of verified pages", "skipped", "No language-model provider is configured, so pages were read by fixed extraction rules only.")
+    elif st.extract_count is None:
+        add("extract", "AI reading of verified pages", "skipped",
+            "The language-model call budget for this company was used up before the pages were read." if verified else "No identity-verified website to read.")
+    else:
+        add("extract", "AI reading of verified pages", "ran", f"{st.extract_count} quote-verified statement(s) extracted." if st.extract_count else "No quote-verified statements were extracted.")
+
+    # Press coverage
+    press_mod = st.modules.get(news_discovery.MODULE)
+    searched = [t for t in st.trace if t.get("action") == "search_news"]
+    if mode == "quick":
+        add("press", "Press coverage search", "skipped", "Quick research does not search press coverage.")
+    elif searched:
+        t = searched[-1]
+        failed = press_mod is not None and press_mod.state in ("failed", "blocked")
+        add("press", "Press coverage search", "failed" if failed else "ran",
+            (press_mod.note if failed and press_mod else None) or f"{t.get('accepted', 0)} article(s) verified as reporting on this company; {t.get('considered', 0)} candidate(s) considered.")
+    else:
+        add("press", "Press coverage search", "skipped", (press_mod.note if press_mod and press_mod.note else None) or "Press coverage was not searched.")
+
+    # Cross-check
+    if st.crosscheck is not None:
+        add("crosscheck", "Cross-source check", "ran", crosscheck.describe(st.crosscheck))
+    else:
+        add("crosscheck", "Cross-source check", "skipped", "Quick research does not cross-check facts across sources." if mode == "quick" else "Removed from the research plan.")
+
+    return {"mode": mode, "requests": int(operations.get("requests") or 0), "llmCalls": runner.calls, "pagesRead": len(crawl.docs()) if crawl is not None else 0,
+            "timedOut": st.timed_out, "workflows": flows, "crosscheck": st.crosscheck, "focusKinds": focus}
+
+
 def _safe_sink(sink: EventSink | None) -> EventSink:
     def emit(kind: str, data: dict[str, Any]) -> None:
         if sink is None:
@@ -608,6 +843,11 @@ def _step_start(emit: EventSink, key: str, *, announce: bool = True) -> float:
     if announce:
         emit("step_started", {"key": key, "source_name": STEP_META[key][2]})
     return time.monotonic()
+
+
+def _progress(emit: EventSink, key: str, message: str) -> None:
+    """What a running step is doing right now. Only called at the moment that work really starts."""
+    emit("step_progress", {"key": key, "message": message})
 
 
 def _ms(t0: float) -> int:

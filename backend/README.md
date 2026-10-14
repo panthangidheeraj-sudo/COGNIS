@@ -200,7 +200,7 @@ robots.txt is respected (unreachable robots.txt ⇒ treated as disallow, RFC 930
 ## 12. Tests, smoke test, benchmark
 
 ```powershell
-python -m pytest -q                     # 75 tests, fully offline (fixtures + fake LLM)
+python -m pytest -q                     # 285 tests, fully offline (fixtures + fake LLM)
 ruff check app scripts tests
 python scripts/smoke_test.py            # 100 companies, offline, injected failures → out/smoke/smoke-report.md
 python scripts/smoke_test.py --live     # the same 100 companies against the real sources

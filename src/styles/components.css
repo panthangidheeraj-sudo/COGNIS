@@ -337,6 +337,71 @@
   accent-color: var(--accent);
 }
 
+/* Export dialog: one selectable card per export type */
+.export-options {
+  display: grid;
+  gap: var(--sp-3);
+}
+.export-option {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--sp-3);
+  align-items: start;
+  padding: 14px 16px;
+  border: var(--bw) solid var(--line-strong);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  cursor: pointer;
+  transition:
+    border-color var(--motion-fast),
+    background var(--motion-fast);
+}
+.export-option:hover:not(.is-disabled) {
+  border-color: color-mix(in oklab, var(--accent-soft) 40%, var(--line-strong));
+}
+.export-option.is-selected {
+  background: var(--accent-wash-2);
+  border-color: color-mix(in oklab, var(--accent-soft) 60%, transparent);
+}
+.export-option.is-disabled {
+  opacity: 0.62;
+  cursor: not-allowed;
+}
+.export-option input[type='radio'] {
+  width: 16px;
+  height: 16px;
+  margin-top: 3px;
+  accent-color: var(--accent);
+}
+.export-option:focus-within {
+  box-shadow: 0 0 0 3px var(--accent-wash-2);
+}
+.export-option__body {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.export-option__head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-weight: 600;
+  color: var(--text-1);
+}
+.export-option__head svg {
+  color: var(--text-3);
+}
+.export-option__badge {
+  padding: 1px 8px;
+  border-radius: var(--r-pill);
+  border: var(--bw) solid var(--line-strong);
+  font-size: var(--fs-micro);
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  color: var(--text-2);
+}
+
 /* ---------------- Pills / badges / status ---------------- */
 .pill {
   display: inline-flex;
@@ -457,6 +522,39 @@
 .chip svg {
   width: 14px;
   height: 14px;
+}
+/* A suggested filter: the same pill, drawn as an open (dashed) offer rather than a selected state */
+.chip--suggest {
+  border-style: dashed;
+  background: transparent;
+}
+.chip--suggest:hover {
+  background: var(--accent-wash);
+}
+.suggest-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.suggest-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 4px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  letter-spacing: var(--tracking-micro);
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.suggest-label svg {
+  width: 13px;
+  height: 13px;
+}
+.suggest-note {
+  text-transform: none;
+  letter-spacing: 0;
 }
 .chip .chip-x {
   margin-right: -4px;
@@ -1008,7 +1106,7 @@
 }
 .kv {
   display: grid;
-  grid-template-columns: minmax(110px, 38%) 1fr;
+  grid-template-columns: minmax(110px, 38%) minmax(0, 1fr);
   gap: 10px 16px;
   font-size: var(--fs-sm);
 }
@@ -1019,6 +1117,7 @@
   margin: 0;
   color: var(--text-1);
   min-width: 0;
+  overflow-wrap: anywhere;
 }
 .section-title {
   display: flex;
@@ -1086,4 +1185,20 @@
 .card .table thead th,
 .card .table thead .sticky-col {
   background: var(--solid-card-head);
+}
+
+/* ---------------- Whole-card links ----------------
+   A card (.co-card on Discover, .lib-card on Library and Data Sheets) opens through one empty <a class="co-card-link"> stretched over it,
+   while its content passes clicks through (pointer-events: none).
+   This lives in the global sheet on purpose: a page's own stylesheet only loads with that page, and when the stretch rule sat in
+   discover.css the Data Sheets and Library cards got a zero-size link, so clicking a card did nothing until Discover had been opened. */
+.co-card-link {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+}
+.co-card-link:focus-visible {
+  outline-offset: -3px;
+  border-radius: inherit;
 }

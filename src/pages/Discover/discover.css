@@ -138,12 +138,7 @@
   border-color: color-mix(in oklab, var(--accent-soft) 70%, transparent);
   box-shadow: var(--glow-edge);
 }
-.co-card-link {
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  z-index: 0;
-}
+/* .co-card-link (the stretched whole-card link) is defined in styles/components.css so every page's cards get it. */
 .co-card > *:not(.co-card-link) {
   position: relative;
   z-index: 1;

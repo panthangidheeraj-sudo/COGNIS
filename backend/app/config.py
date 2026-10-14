@@ -43,12 +43,17 @@ class Settings(BaseSettings):
     user_agent: str = "COGNIS-Signalpost/1.0 (company research agent; respects robots.txt)"
     http_timeout_seconds: float = 15.0
     http_connect_timeout_seconds: float = 6.0
+    # The two limits above apply per phase (connect, each read), so a server that answers one byte at a time, or a DNS lookup that never returns,
+    # could hold a request for minutes. These are wall-clock caps for one attempt.
+    http_total_timeout_seconds: float = 30.0
+    dns_timeout_seconds: float = 5.0
     max_fetch_bytes: int = 2_500_000
     max_pdf_bytes: int = 12_000_000
     max_redirects: int = 5
     retry_attempts: int = 2
     retry_base_delay_seconds: float = 0.6
     retry_max_delay_seconds: float = 6.0
+    registry_search_retries: int = 3  # Enhetsregisteret company search: extra attempts after a timeout, network error, 429 or 5xx (backoff + jitter, Retry-After honoured)
     host_concurrency: int = 2
     brreg_concurrency: int = 6
     brreg_account_copies_min_interval_seconds: float = 2.1  # ~30 starts/min allowance
@@ -117,13 +122,30 @@ class Settings(BaseSettings):
     nav_sync_run_share: float = 0.1  # a batch spends at most this share of its request budget on the feed
     nav_max_candidates_per_company: int = 12  # full ads fetched per company to check the employer's organisation number
     nav_min_interval_seconds: float = 0.2
-    nav_step_timeout_seconds: float = 25.0  # hard cap on the NAV step per company; a slow or unreachable NAV never holds up research
+    nav_step_timeout_seconds: float = 20.0  # hard cap on the NAV step per company; a slow or unreachable NAV never holds up research
+    nav_request_timeout_seconds: float = 8.0  # wall-clock cap for one NAV request (token, feed page or ad)
+    nav_retry_attempts: int = 1  # NAV is optional: at most one retry of a transient failure, then the source is reported unavailable
+    nav_unavailable_cooldown_seconds: float = 90.0  # after NAV proved unreachable, later requests are not sent for this long (they report the same reason at once)
+    jobs_step_timeout_seconds: float = 60.0  # hard cap on reading the company's own careers pages / job board
+    jobs_discovery_timeout_seconds: float = 30.0  # hard cap on the optional search for job pages
     nav_max_consecutive_failures: int = 2  # stop asking NAV for this company after this many unreachable responses in a row
 
     # ---- job-page discovery (Tavily results are candidates only; every page is fetched, identity-checked and re-verified) ----
     enable_job_discovery: bool = True
     job_discovery_max_pages: int = 4  # candidate job pages fetched per company
     job_max_age_days: int = 180  # a posting with no end date and no update inside this window is "stale", not "current"
+
+    # ---- company news (newsroom / investor relations / feeds, then reputable secondary sources; search results are candidates only) ----
+    enable_news_discovery: bool = True
+    news_discovery_max_pages: int = 4  # extra newsroom / investor-relations pages fetched per company (beyond what the site crawl already read)
+    news_max_age_days: int = 1825  # five years; older items are not collected as "recent activity"
+    news_max_items: int = 40  # announcements kept per source group
+    enable_secondary_news: bool = True  # reputable-outlet articles found by search; each one is fetched, identity-checked and robots-checked
+    secondary_news_max_pages: int = 6  # candidate articles fetched per company
+    secondary_news_domains: str = (
+        "e24.no,dn.no,finansavisen.no,nrk.no,tv2.no,tu.no,ukeavisenledelse.no,kapital.no,europower.no,energiwatch.no,upstreamonline.com,offshore-mag.com,"
+        "reuters.com,bloomberg.com,ft.com,wsj.com,cnbc.com,newsweb.oslobors.no,mynewsdesk.com,newsclient.omxgroup.com,globenewswire.com,prnewswire.com,businesswire.com"
+    )  # comma-separated allowlist; a result from any other host is recorded as skipped
 
     # ---- public procurement (free) ----------------------------------------
     ted_api_base: str = "https://api.ted.europa.eu/v3"

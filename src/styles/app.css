@@ -37,9 +37,12 @@
   flex-direction: column;
   gap: 2px;
   min-width: 0;
+  max-width: 100%;
 }
 .fact-btn {
   white-space: nowrap;
+  min-width: 0;
+  max-width: 100%;
   display: inline-flex;
   align-items: flex-start;
   gap: 2px;
@@ -59,6 +62,7 @@
   text-decoration-color: var(--warn);
 }
 .fact-count {
+  flex: none; /* the citation marker never shrinks away when the value beside it wraps */
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -85,6 +89,18 @@
   white-space: normal;
   display: inline;
 }
+/* Long values (a description, a list of names, a URL) wrap inside their container; the citation count stays beside the last line, always visible and clickable. */
+.fact--wrap .fact-btn,
+.fact--prose .fact-btn {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+.fact--wrap .fact-btn > :first-child,
+.fact--prose .fact-btn > :first-child {
+  min-width: 0;
+}
+
 .fact--missing {
   color: var(--text-3);
   font-style: italic;

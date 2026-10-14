@@ -7,11 +7,15 @@ detection (``normalize_entity`` / ``normalize_financials`` / ``normalize_roles``
 """
 from __future__ import annotations
 
+import json
+import re
+from dataclasses import dataclass, field
 from typing import Any
 
 from ..core.util import clean_ws, date_only
 from ..evidence.models import ModuleResult
 from ..identity.model import CanonicalIdentity, identity_from_entity
+from ..security.redaction import redact
 from .base import ConnectorContext, module_from_fetch, not_run
 
 BRREG_ENTITY = "https://data.brreg.no/enhetsregisteret/api/enheter/{org}"
@@ -340,12 +344,127 @@ async def fetch_financial_history(ctx: ConnectorContext, identity: CanonicalIden
     return mod
 
 
-async def search_entities(ctx: ConnectorContext, params: dict[str, Any]) -> tuple[list[dict[str, Any]], int, str | None]:
-    """Enhetsregisteret search (used by Discover / global search). Returns (rows, total, error)."""
-    res = await ctx.fetch(BRREG_SEARCH, connector="brreg_search", params=params, accept=JSON, expect="json", cache_ttl=3600, optional=True)
+REGISTRY_HOST = "data.brreg.no"
+
+
+@dataclass
+class RegistryFailure:
+    """Why an Enhetsregisteret search did not return a usable answer. Nothing here is a guess: ``kind`` is the HTTP client's own classification,
+    ``http_status`` / ``detail`` come from the response or the transport error, and ``attempts`` counts every try including retries."""
+
+    kind: str  # timeout | network | server_error | rate_limited | client_error | blocked | unsafe_url | invalid_content | unexpected_response | budget_exhausted | too_large
+    cause: str  # one sentence a person can act on
+    retryable: bool  # could the same request plausibly succeed if tried again (without changing anything)?
+    http_status: int | None = None
+    attempts: int = 1
+    detail: str | None = None  # the underlying error text (redacted, one line)
+    elapsed_ms: int = 0
+
+    def as_details(self) -> dict[str, Any]:
+        out: dict[str, Any] = {"source": "enhetsregisteret", "reason": self.kind, "cause": self.cause, "retryable": self.retryable, "attempts": self.attempts,
+                               "elapsedMs": self.elapsed_ms}
+        if self.http_status:
+            out["httpStatus"] = self.http_status
+        if self.detail:
+            out["detail"] = self.detail
+        return out
+
+
+@dataclass
+class SearchOutcome:
+    rows: list[dict[str, Any]] = field(default_factory=list)
+    total: int = 0
+    failure: RegistryFailure | None = None
+
+
+def _error_detail(res: Any) -> str | None:
+    """A short, redacted excerpt of what the register itself said about a rejected request (its JSON ``message``/``error`` or the start of the page)."""
+    if not res.body:
+        return None
+    text = res.text()
+    try:
+        data = json.loads(text)
+    except ValueError:
+        data = None
+    if isinstance(data, dict):
+        for key in ("message", "detail", "error_description", "title", "error"):
+            value = data.get(key)
+            if isinstance(value, str) and value.strip():
+                return redact(clean_ws(value))[:200]
+        return None
+    stripped = re.sub(r"<[^>]+>", " ", text)
+    return redact(clean_ws(stripped))[:200] or None
+
+
+def describe_failure(res: Any) -> RegistryFailure:
+    """Turn a failed fetch into the real reason, in words. Pure: no I/O, so every branch is unit-tested."""
+    kind = str(res.classification)
+    status = int(res.status or 0) or None
+    attempts = int(res.retries or 0) + 1
+    detail = redact(res.error)[:240] if res.error else None
+    base = {"http_status": status, "attempts": attempts, "elapsed_ms": int(res.elapsed_ms or 0)}
+    tries = f"{attempts} attempts" if attempts > 1 else "one attempt"
+    if kind == "timeout":
+        return RegistryFailure("timeout", f"Enhetsregisteret did not answer in time ({tries}). The register may be slow or unreachable from this network.", True, detail=detail, **base)
+    if kind == "network":
+        low = (res.error or "").lower()
+        if "certificate" in low or "ssl" in low or "tls" in low:
+            hint = ("The TLS certificate for data.brreg.no could not be verified. A corporate proxy, antivirus HTTPS scanning or an outdated system "
+                    "certificate store is the usual cause.")
+        elif any(w in low for w in ("getaddrinfo", "name or service not known", "nodename", "name resolution", "11001")):
+            hint = f"The name {REGISTRY_HOST} could not be resolved. Check the internet connection, DNS or VPN."
+        elif "refused" in low or "unreachable" in low or "reset" in low:
+            hint = "The connection was refused or dropped. A firewall, VPN or proxy may be blocking outbound HTTPS."
+        else:
+            hint = "Check the internet connection, VPN or proxy settings."
+        return RegistryFailure("network", f"Could not connect to {REGISTRY_HOST} ({tries}). {hint}", True, detail=detail, **base)
+    if kind == "rate_limited":
+        return RegistryFailure("rate_limited", f"Enhetsregisteret is rate-limiting requests (HTTP 429) after {tries}. Wait a minute and retry.", True, detail=_error_detail(res) or detail, **base)
+    if kind == "server_error":
+        return RegistryFailure("server_error", f"Enhetsregisteret reported a server-side error (HTTP {status}) on {tries}. This is usually temporary; retry in a moment.", True,
+                               detail=_error_detail(res) or detail, **base)
+    if kind == "client_error":
+        said = _error_detail(res)
+        return RegistryFailure("client_error", f"Enhetsregisteret rejected the search request (HTTP {status}){': ' + said if said else ''}. Retrying the same request will not help; "
+                               "change the filters.", False, detail=said or detail, **base)
+    if kind == "blocked":
+        return RegistryFailure("blocked", f"Enhetsregisteret refused access (HTTP {status}). COGNIS does not bypass access controls.", False, detail=_error_detail(res) or detail, **base)
+    if kind == "unsafe_url":
+        return RegistryFailure("unsafe_url", f"COGNIS's network safety check stopped the request to {REGISTRY_HOST}: {detail or 'address check failed'}. "
+                               "Check DNS, VPN or proxy settings.", True, detail=detail, **base)
+    if kind == "invalid_content":
+        ctype = (res.content_type or "unknown").split(";")[0]
+        return RegistryFailure("invalid_content", f"Enhetsregisteret answered, but the response was not valid JSON (content type {ctype}). A proxy, firewall or captive portal "
+                               "may be intercepting the request.", True, detail=_error_detail(res) or detail, **base)
+    if kind == "budget_exhausted":
+        return RegistryFailure("budget_exhausted", "COGNIS's request budget for this session is used up, so the register was not asked.", False, detail=detail, **base)
+    if kind == "too_large":
+        return RegistryFailure("too_large", "The response from Enhetsregisteret was larger than COGNIS accepts. Narrow the search.", False, detail=detail, **base)
+    return RegistryFailure(kind or "unknown", f"Enhetsregisteret could not be searched ({kind or 'unknown failure'}{', HTTP ' + str(status) if status else ''}).", False, detail=detail, **base)
+
+
+def _usable_search_body(body: Any) -> bool:
+    """An empty result is still a HAL object with ``page``/``_links``; anything else (a list, a bare error object) is not a search answer."""
+    return isinstance(body, dict) and any(k in body for k in ("page", "_embedded", "_links", "totalElements"))
+
+
+async def search_entities(ctx: ConnectorContext, params: dict[str, Any], *, retries: int | None = None) -> SearchOutcome:
+    """Enhetsregisteret search (used by Discover, Data Sheets and global search).
+
+    Transient failures (timeout, network error, 429, 5xx) are retried with backoff by the HTTP client (``registry_search_retries``); a failure that
+    survives them is returned with its real cause. Failures are never cached and never turned into an empty list: "the register failed" and
+    "the register found nothing" stay different outcomes.
+    """
+    res = await ctx.fetch(BRREG_SEARCH, connector="brreg_search", params=params, accept=JSON, expect="json", cache_ttl=3600, optional=True,
+                          retry_attempts=ctx.settings.registry_search_retries if retries is None else retries)
     if not res.ok:
-        return [], 0, res.error or res.classification
-    body = res.json() or {}
+        return SearchOutcome(failure=describe_failure(res))
+    body = res.json()
+    if not _usable_search_body(body):
+        shape = type(body).__name__ if not isinstance(body, dict) else "an object without page or _embedded"
+        return SearchOutcome(failure=RegistryFailure("unexpected_response", "Enhetsregisteret answered with JSON in an unexpected shape, so COGNIS did not use it.", False,
+                                                     http_status=int(res.status or 0) or None, attempts=int(res.retries or 0) + 1, detail=f"response was {shape}",
+                                                     elapsed_ms=int(res.elapsed_ms or 0)))
     rows = _get(body, "_embedded", "enheter") or []
     total = int(_get(body, "page", "totalElements") or len(rows))
-    return rows, total, None
+    return SearchOutcome(rows=rows, total=total)

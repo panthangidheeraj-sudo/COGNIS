@@ -379,6 +379,7 @@ export const mockApi: CognisApi = {
         ],
         capabilities: {
           exports: ['csv', 'json'],
+          exportKinds: ['data', 'evidence'],
           pdfReports: false,
           pauseResearch: false,
           cancelResearch: true,
@@ -444,8 +445,9 @@ export const mockApi: CognisApi = {
       let interpretation: QueryInterpretation | undefined;
       let keywords = query.text?.trim();
       if (query.text && query.interpret) {
+        // The interpretation is only a suggestion: its filters come back for the user to choose and are never applied here.
+        // What restricts the results is `query.filters` (explicitly selected) and the words the interpreter left as keywords.
         interpretation = interpretText(query.text);
-        filters = { ...filtersFrom(interpretation.filters), ...filters };
         keywords = interpretation.keywords;
       }
       let items = allSummaries();
@@ -512,7 +514,8 @@ export const mockApi: CognisApi = {
         else {
           const ql = q.toLowerCase().replace(/^research\s+/, '');
           const matches = ALL_SPECS.filter((s) => s.name.toLowerCase().includes(ql) || ql.includes(s.name.toLowerCase().replace(/ as$| asa$/, '')));
-          if (matches.length > 1) {
+          if (matches.length >= 1) {
+            // A typed name never starts research by itself — even one match has to be confirmed (mirrors the backend).
             const run: ResearchRun = {
               id: `run-${++runCounter}`,
               query: q,
@@ -522,7 +525,7 @@ export const mockApi: CognisApi = {
               ambiguity: {
                 query: q,
                 candidates: matches.map((m) => profileFor(m.org).company),
-                message: 'We found possible matches, but could not establish exact-company identity.',
+                message: matches.length === 1 ? 'One registered company matches this name. Confirm it is the company you mean.' : 'We found possible matches, but could not establish exact-company identity.',
               },
               plan: planFor(input.mode),
               startedAt: nowIso(),
@@ -532,10 +535,13 @@ export const mockApi: CognisApi = {
             runs.set(run.id, { run, script: [], delivered: 0 });
             return clone(run);
           }
-          org = matches[0]?.org;
         }
       }
       if (!org || !specsByOrg.has(org)) throw new ApiError('not_found', `No Norwegian company matched “${q}”. Try the full legal name or the 9-digit organization number.`, 404);
+      const registered = profileFor(org).company.legalName;
+      const norm = (v: string) => v.toLowerCase().replace(/[^a-z0-9æøå]+/g, ' ').replace(/ (as|asa)$/, '').trim();
+      if (input.expectedName && norm(input.expectedName) !== norm(registered))
+        throw new ApiError('ambiguous', `Organization number ${org} is registered to “${registered}”, not “${input.expectedName}”. Select the company again.`, 409);
       const plan = planFor(input.mode, input.stepKeys);
       const run: ResearchRun = {
         id: `run-${++runCounter}`,
@@ -576,7 +582,7 @@ export const mockApi: CognisApi = {
       if (!r) throw new ApiError('not_found', 'Research run not found.', 404);
       const lastSeq = r.script[r.delivered - 1]?.event.seq ?? 0;
       r.script = r.script.slice(0, r.delivered);
-      r.script.push({ delay: 50, event: { type: 'run.failed', seq: lastSeq + 1, runId, at: nowIso(), message: 'Research cancelled. Verified data gathered so far is kept.' } });
+      r.script.push({ delay: 50, event: { type: 'run.failed', seq: lastSeq + 1, runId, at: nowIso(), message: 'Research cancelled. Verified data gathered so far is kept.', cancelled: true } });
       r.run.status = 'cancelled';
       return clone(r.run);
     },
@@ -1109,7 +1115,37 @@ export const mockApi: CognisApi = {
     async request(req: ExportRequest): Promise<ExportResult> {
       await latency(600);
       seed();
-      if (req.format === 'pdf' || req.format === 'xlsx') return { status: 'failed', filename: '', message: `${req.format.toUpperCase()} export is not supported by this backend yet.` };
+      if (req.kind === 'report' || req.format === 'pdf') return { status: 'failed', filename: '', message: 'The Full Research Report is produced by the live backend; the demo backend has no PDF generator.' };
+      if (req.format === 'xlsx') return { status: 'failed', filename: '', message: 'XLSX export is not supported by this backend yet.' };
+      if (req.kind === 'evidence') {
+        if (req.target.type !== 'company' && req.target.type !== 'artifact') return { status: 'failed', filename: '', message: 'Evidence & Sources is available for a single company.' };
+        const org = req.target.id.replace('art-', '');
+        const p = profileFor(org);
+        const facts = [
+          ...Object.values(p.identity).filter((x): x is Fact => typeof x === 'object' && !!x),
+          ...p.keyMetrics,
+          ...p.financials.series.flatMap((s) => s.points.map((x) => x.fact)),
+          ...p.people.people.map((x) => x.fact),
+          ...p.locations.locations.map((x) => x.fact),
+        ];
+        const rows = facts.flatMap((f) =>
+          (f.evidence.length ? f.evidence : [undefined]).map((e) => ({
+            field: f.field,
+            label: f.label,
+            value: f.value ?? '',
+            reporting_period: f.reportingPeriod ?? '',
+            verification_status: f.status === 'verified' ? 'verified' : 'unavailable',
+            evidence_state: f.evidenceState,
+            source: e ? (p.sourceIndex[e.sourceId]?.name ?? e.sourceId) : '',
+            source_url: e?.url ?? '',
+            evidence_excerpt: e?.excerpt ?? '',
+            retrieved_at: e?.retrievedAt ?? '',
+          })),
+        );
+        const body = req.format === 'json' ? JSON.stringify({ company: p.company, facts: rows, note: 'COGNIS mock backend — fictional demo data' }, null, 2) : toCsv(rows);
+        const blob = new Blob([body], { type: req.format === 'json' ? 'application/json' : 'text/csv' });
+        return { status: 'ready', filename: `cognis-evidence-${org}.${req.format}`, url: typeof URL.createObjectURL === 'function' ? URL.createObjectURL(blob) : undefined };
+      }
       let data: Record<string, unknown>[] | unknown = [];
       let base = 'cognis-export';
       if (req.target.type === 'company' || req.target.type === 'artifact') {

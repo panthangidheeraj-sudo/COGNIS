@@ -1,9 +1,9 @@
 /**
  * The monochrome intelligence globe (Home, Discover and anywhere else the workspace shows the globe).
  *
- * Look: deep navy negative space with bright ivory-white geography: fine ivory dots for land, a crisp white coastline with
- * one faint inland contour, a thin silver rim and a barely-there silver halo. No satellite imagery: geography comes from
- * Natural Earth (the same dots as the static fallback, plus a 2048x1024 land mask for the coast). Sparse, small nodes mark
+ * Look: a bright ivory-white sphere (the oceans) with navy-ink geography: fine dots for land, a crisp coastline with one faint
+ * inland contour, a soft steel rim that rounds the limb, and a barely-there silver halo. No satellite imagery: geography comes
+ * from Natural Earth (the same dots as the static fallback, plus a 2048x1024 land mask for the coast). Sparse, small nodes mark
  * places. It is an instrument, not a picture of the planet, so nothing in it glows or colours.
  */
 import * as THREE from 'three';
@@ -55,7 +55,7 @@ export function createIntelSurface({ renderer, lowPower, light, invalidate }: Su
   mask.generateMipmaps = true;
   mask.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
 
-  // ---- Sphere: matte navy, coast + contour from the mask, silver rim ----
+  // ---- Sphere: matte ivory-white, coast + contour from the mask, soft steel rim ----
   const sphereMat = new THREE.ShaderMaterial({
     uniforms: {
       uMask: { value: mask },
@@ -187,10 +187,9 @@ export function createIntelSurface({ renderer, lowPower, light, invalidate }: Su
   return {
     globe: [sphere, land],
     scene: [halo],
-    markers: light
-      ? { core: '#16243d', focusCore: '#0a1630', ring: '#33445f', focusRing: '#0a1630', coreScale: 0.005, focusCoreScale: 0.0085, ringBase: 0.012, focusRingBase: 0.022, ringSpan: 0.03, focusRingSpan: 0.062, ringOpacity: 0.38, focusRingOpacity: 0.66 }
-      : { core: '#f4efe4', focusCore: '#ffffff', ring: '#cfd6e2', focusRing: '#ffffff', coreScale: 0.005, focusCoreScale: 0.0085, ringBase: 0.012, focusRingBase: 0.022, ringSpan: 0.03, focusRingSpan: 0.062, ringOpacity: 0.38, focusRingOpacity: 0.66 },
-    arcs: { hubs: ARC_HUBS, color: raw(pal.ink), base: 1.1, signal: 0.42, nodes: { color: pal.ink, size: 0.0052, opacity: light ? 0.6 : 0.5 } },
+    // the sphere is pale in both themes, so markers are navy ink on it
+    markers: { core: '#16243d', focusCore: '#0a1630', ring: '#33445f', focusRing: '#0a1630', coreScale: 0.005, focusCoreScale: 0.0085, ringBase: 0.012, focusRingBase: 0.022, ringSpan: 0.03, focusRingSpan: 0.062, ringOpacity: 0.38, focusRingOpacity: 0.66 },
+    arcs: { hubs: ARC_HUBS, color: raw(pal.ink), base: 1.1, signal: 0.42, nodes: { color: pal.ink, size: 0.0052, opacity: light ? 0.6 : 0.55 } },
     motion: { baseSpeed: 0.05, maxImpulse: 0.16, impulsePerPx: 0.0006, impulseDecayS: 1.1, pointerYaw: 0.09, pointerPitch: 0.05, pointerCam: 0.06 },
     update() {
       // nothing breathes or twinkles: the globe only turns

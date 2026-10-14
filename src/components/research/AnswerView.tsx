@@ -21,12 +21,21 @@ export function AnswerView({ answer, sourceIndex, context }: { answer: ResearchA
           {answer.question}
         </span>
       </div>
-      {answer.blocks.length === 0 && <p className="t-sm t-muted">The available evidence does not answer this question.</p>}
+      {answer.blocks.length === 0 && (
+        <p className="t-sm t-muted" role="note">
+          {answer.limitation ?? 'The available evidence does not answer this question.'}
+        </p>
+      )}
       {answer.blocks.map((b) => (
         <div key={b.id} className="answer-block">
           <p>{b.text}</p>
           <div className="row-wrap" style={{ gap: 6 }}>
             {b.reportingPeriod && <span className="tag">{b.reportingPeriod}</span>}
+            {b.detail?.startsWith('http') && (
+              <a className="cite" href={b.detail} target="_blank" rel="noreferrer noopener">
+                Open source
+              </a>
+            )}
             {b.citations.length > 0 ? (
               <button className="cite" onClick={() => open({ title: 'Supporting evidence', value: b.text, evidence: b.citations.map((c) => c.evidence) })}>
                 {b.citations.length} source{b.citations.length === 1 ? '' : 's'}: {b.citations.map((c) => c.sourceName).join(', ')}
@@ -37,6 +46,7 @@ export function AnswerView({ answer, sourceIndex, context }: { answer: ResearchA
           </div>
         </div>
       ))}
+      {answer.blocks.length > 0 && answer.limitation && <p className="t-sm t-muted">{answer.limitation}</p>}
       {answer.gaps && answer.gaps.length > 0 && (
         <div className="answer-gaps">
           <span className="t-micro">Not verified</span>

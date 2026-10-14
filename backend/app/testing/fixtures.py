@@ -27,7 +27,7 @@ class FixtureNetwork:
         self.query_routes: dict[str, Any] = {}  # exact URL incl. query → body
         self.sites: dict[str, dict[str, str]] = {}  # host → path → html
         self.robots: dict[str, str] = {}
-        self.failures: list[tuple[str, str]] = []  # (url prefix, kind)
+        self.failures: list[tuple[str, str, int | None]] = []  # (url prefix, kind, remaining count or None for always)
         self.requests: list[str] = []
         self.handlers: list[Callable[[httpx.Request], httpx.Response | None]] = []
 
@@ -40,8 +40,13 @@ class FixtureNetwork:
         if robots is not None:
             self.robots[host.lower()] = robots
 
-    def fail(self, url_prefix: str, kind: str) -> None:
-        self.failures.append((url_prefix, kind))
+    def fail(self, url_prefix: str, kind: str, *, times: int | None = None) -> None:
+        """Make requests under ``url_prefix`` fail the same way. ``times`` limits it to the first N matching requests (a transient outage);
+        None fails them all. Kinds: timeout, network, tls, dns, 400, 403, 404, 429, 500, 503, html (200 with a web page), badshape (200 JSON that is not a search answer)."""
+        self.failures.append((url_prefix, kind, times))
+
+    def clear_failures(self) -> None:
+        self.failures.clear()
 
     def load_brreg_probes(self, directory: Path | None = None) -> list[str]:
         directory = directory or FIXTURE_DIR / "brreg"
@@ -82,12 +87,25 @@ class FixtureNetwork:
     def _handle(self, request: httpx.Request) -> httpx.Response:
         url = str(request.url)
         self.requests.append(url)
-        for prefix, kind in self.failures:
-            if url.startswith(prefix):
+        for i, (prefix, kind, remaining) in enumerate(self.failures):
+            if url.startswith(prefix) and (remaining is None or remaining > 0):
+                if remaining is not None:
+                    self.failures[i] = (prefix, kind, remaining - 1)
                 if kind == "timeout":
                     raise httpx.ReadTimeout("fixture timeout", request=request)
                 if kind == "network":
                     raise httpx.ConnectError("fixture connection reset", request=request)
+                if kind == "tls":
+                    raise httpx.ConnectError("[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate", request=request)
+                if kind == "dns":
+                    raise httpx.ConnectError("[Errno 11001] getaddrinfo failed", request=request)
+                if kind == "html":
+                    return httpx.Response(200, text="<html><body>Sign in to the guest network</body></html>", headers={"content-type": "text/html"})
+                if kind == "badshape":
+                    return _json([{"unexpected": "list"}])
+                if kind == "400":
+                    body = {"status": 400, "error": "Bad Request", "message": "Invalid value for parameter fraAntallAnsatte", "path": "/enhetsregisteret/api/enheter"}
+                    return httpx.Response(400, content=json.dumps(body).encode(), headers={"content-type": "application/json"})
                 status = {"429": 429, "500": 500, "503": 503, "403": 403, "404": 404}.get(kind, 500)
                 headers = {"Retry-After": "0"} if status == 429 else {}
                 return httpx.Response(status, headers=headers, text="fixture failure")
@@ -126,10 +144,11 @@ class FixtureNetwork:
         return httpx.Response(404, text="unknown host in fixture network")
 
     def _search(self, query: dict[str, list[str]]) -> dict[str, Any]:
+        # Like the real register: a search without a name lists entities (here: every one this network knows).
         name = (query.get("navn") or [""])[0].casefold()
         rows = []
         for url, body in self.json_routes.items():
-            if re.search(r"/enheter/\d{9}$", url) and isinstance(body, dict) and name and name in str(body.get("navn", "")).casefold():
+            if re.search(r"/enheter/\d{9}$", url) and isinstance(body, dict) and (not name or name in str(body.get("navn", "")).casefold()):
                 rows.append(body)
         return {"_embedded": {"enheter": rows[:20]}, "page": {"totalElements": len(rows), "size": 20, "number": 0}}
 

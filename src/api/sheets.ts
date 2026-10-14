@@ -10,7 +10,7 @@ export const liveSheets: SheetsApi = {
   get: (id) => http.get<DataSheet>(`/sheets/${id}`),
   // POST /sheets/interpret body: { text } → QueryInterpretation
   interpret: (text) => http.post<QueryInterpretation>('/sheets/interpret', { text }),
-  // POST /sheets body: { title, criteria, text? } → DataSheetSummary
+  // POST /sheets body: { title, criteria, text?, fallback?: 'verified' } → DataSheetSummary (503 `unavailable` with details when the register search fails)
   create: (input) => http.post<DataSheetSummary>('/sheets', input),
   // PATCH /sheets/:id body: { title }
   rename: (id, title) => http.patch<DataSheetSummary>(`/sheets/${id}`, { title }),

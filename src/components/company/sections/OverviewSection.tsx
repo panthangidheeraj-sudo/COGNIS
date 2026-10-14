@@ -9,7 +9,7 @@ import { CoverageList } from '@/components/company/Coverage';
 import { ExternalLink } from '@/components/common/ExternalLink';
 import { collectEvidence } from '@/utils/evidence';
 import { formatDate, formatOrgNumber, formatRelative } from '@/utils/format';
-import { EVENT_LABEL } from '@/utils/status';
+import { EVENT_LABEL, eventTier } from '@/utils/status';
 import type { CompanyTab } from '@/pages/Company/tabs';
 
 export function ExecutiveSummary({ profile, paper }: { profile: CompanyProfile; paper?: boolean }) {
@@ -123,7 +123,7 @@ const SNAPSHOT_FIELDS = (f: { field: string }) => f.field.startsWith('financials
 
 export function OverviewSection({ profile, onTab, hideSnapshotMetrics }: { profile: CompanyProfile; onTab: (t: CompanyTab) => void; hideSnapshotMetrics?: boolean }) {
   const metrics = hideSnapshotMetrics ? profile.keyMetrics.filter((f) => !SNAPSHOT_FIELDS(f)) : profile.keyMetrics;
-  const majorEvents = profile.activity.events.filter((e) => e.significance === 'major');
+  const majorEvents = profile.activity.events.filter((e) => eventTier(e) === 'major');
   const c = profile.company;
   const id = profile.identity;
   const ctx = c.legalName;
@@ -277,7 +277,7 @@ export function OverviewSection({ profile, onTab, hideSnapshotMetrics }: { profi
                 ))}
               </ul>
             ) : (
-              <p className="t-sm t-muted">{profile.activity.message ?? 'No verified major public changes were found in the searched sources.'}</p>
+              <p className="t-sm t-muted">{profile.activity.message ?? 'No major developments were found in the sources that could be read. This does not mean that nothing happened.'}</p>
             )}
           </section>
         </div>

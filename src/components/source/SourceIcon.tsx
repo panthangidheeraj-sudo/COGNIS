@@ -1,4 +1,4 @@
-import { Activity, Banknote, Briefcase, Globe, Landmark, Newspaper, Scale, Search, UsersRound } from 'lucide-react';
+import { Activity, Banknote, Briefcase, Globe, Landmark, Newspaper, Scale, Search, ShieldCheck, UsersRound } from 'lucide-react';
 import type { SourceKind } from '@/types';
 
 const MAP: Record<SourceKind, typeof Globe> = {
@@ -11,6 +11,7 @@ const MAP: Record<SourceKind, typeof Globe> = {
   web: Search,
   news: Newspaper,
   regulatory: Scale,
+  verification: ShieldCheck,
 };
 
 export function SourceIcon({ kind, size = 15 }: { kind: SourceKind; size?: number }) {

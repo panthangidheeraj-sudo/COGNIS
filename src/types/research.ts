@@ -3,7 +3,8 @@ import type { Evidence, Fact, ISODateTime, SourceKind } from './evidence';
 
 export type ResearchMode = 'quick' | 'deep';
 
-export type ResearchStepStatus = 'pending' | 'running' | 'done' | 'failed' | 'blocked' | 'skipped';
+/** `skipped`: the backend decided not to run it (with the reason in `message`). `cancelled`: it was running when the run was cancelled. */
+export type ResearchStepStatus = 'pending' | 'running' | 'done' | 'failed' | 'blocked' | 'skipped' | 'cancelled';
 
 /** Pipeline stages mirrored from the backend architecture. */
 export type ResearchStage = 'discover' | 'identify' | 'gather' | 'verify' | 'reconcile' | 'synthesize' | 'save';
@@ -23,9 +24,44 @@ export interface ResearchStep {
   factCount?: number;
   evidenceCount?: number;
   outcome?: 'verified' | 'not_available';
+  /** The final note: why it failed, was blocked or skipped, or what it found. */
   message?: string;
+  /** What a running step is doing right now (from step.progress events). */
+  detail?: string;
   retryable?: boolean;
 }
+
+/** An optional workflow a run did or did not perform, with the reason (the run's "effort" report). */
+export interface EffortWorkflow {
+  key: string;
+  label: string;
+  status: 'ran' | 'skipped' | 'failed';
+  detail: string;
+}
+
+/** How well independent sources agreed on what was published (Deep research). It reports; it never adds facts. */
+export interface CrossCheckResult {
+  checked: number;
+  corroborated: number;
+  singleSource: number;
+  conflicts: number;
+  corroboratedFacts?: { field: string; label: string; sources: string[] }[];
+  conflictFacts?: { field: string; label: string; reason?: string; candidates: { source?: string; value: string }[] }[];
+}
+
+export interface ResearchEffort {
+  mode: ResearchMode;
+  requests: number;
+  llmCalls: number;
+  pagesRead: number;
+  timedOut?: boolean;
+  workflows: EffortWorkflow[];
+  crosscheck?: CrossCheckResult | null;
+  focusKinds?: string[];
+}
+
+/** How a finished run ended: `completed` = every area verified and every source reachable; `partial` = it finished and saved, with the gaps listed. */
+export type RunOutcome = 'completed' | 'partial';
 
 /**
  * Completion summary sent by the backend with run.completed. Every count is a
@@ -45,6 +81,11 @@ export interface ResearchRunSummary {
   blockedSources?: number;
   failedSources?: number;
   elapsedMs?: number;
+  outcome?: RunOutcome;
+  issues?: string[];
+  effort?: ResearchEffort | null;
+  /** What happened to the saved report: a run always keeps earlier versions; `factsChanged` false means it found the same facts as before. */
+  report?: { newVersion: boolean; factsChanged?: boolean | null; versionId?: string };
 }
 
 export interface ResearchPlan {
@@ -90,10 +131,41 @@ export interface ResearchRun {
   autoSaved: boolean;
   coverage?: Coverage;
   summary?: ResearchRunSummary;
+  outcome?: RunOutcome;
+  issues?: string[];
+}
+
+/** How a saved research run ended. Only `completed` means every area was verified and every source was reachable. */
+export type RunSnapshotStatus = 'completed' | 'partial' | 'failed' | 'cancelled';
+
+/** One research run of a company, kept in the Library beside the report version it produced. */
+export interface ResearchRunSnapshot {
+  id: string;
+  mode: ResearchMode;
+  /** The focus or custom question; empty for the plain company brief. */
+  prompt?: string | null;
+  status: RunSnapshotStatus;
+  startedAt: ISODateTime;
+  finishedAt?: ISODateTime | null;
+  /** The Library version (report) this run produced; absent for failed/cancelled runs that saved nothing. */
+  versionId?: string | null;
+  versionNumber?: number | null;
+  hasReport: boolean;
+  /** True for the newest run whose report is the current one the dossier shows. */
+  isLatestReport: boolean;
+  /** False when the run found exactly the same facts as the run before it. */
+  evidenceChanged?: boolean | null;
+  summary?: ResearchRunSummary | null;
+  effort?: ResearchEffort | null;
+  steps: { key: string; label: string; status: ResearchStepStatus; sourceName?: string; message?: string; durationMs?: number; factCount?: number; evidenceCount?: number; outcome?: 'verified' | 'not_available' }[];
+  answer?: ResearchAnswer | null;
+  issues: string[];
 }
 
 export interface StartResearchInput {
   orgNumber?: string;
+  /** Legal name the user confirmed for `orgNumber`; the backend rejects the run if the registry says otherwise. */
+  expectedName?: string;
   query: string;
   prompt?: string;
   mode: ResearchMode;
@@ -126,6 +198,8 @@ export interface ResearchAnswer {
   generatedAt: ISODateTime;
   /** Things the evidence cannot answer. */
   gaps?: string[];
+  /** Set when the question cannot be answered from verified public evidence (e.g. confidential or future matters, or nothing relevant on record). */
+  limitation?: string;
 }
 
 interface EventBase {
@@ -151,14 +225,17 @@ export type ResearchEvent =
       /** e.g. "No current openings found in searched sources" */
       message?: string;
     })
+  | (EventBase & { type: 'step.progress'; stepId: string; message: string })
   | (EventBase & { type: 'step.failed'; stepId: string; sourceName?: string; message: string; retryable: boolean })
   | (EventBase & { type: 'step.blocked'; stepId: string; sourceName?: string; message: string })
+  | (EventBase & { type: 'step.skipped'; stepId: string; sourceName?: string; message: string })
+  | (EventBase & { type: 'step.cancelled'; stepId: string; sourceName?: string; message: string })
   | (EventBase & { type: 'fact.confirmed'; fact: Fact })
   | (EventBase & { type: 'synthesis.delta'; text: string })
   | (EventBase & { type: 'synthesis.completed'; answer: ResearchAnswer })
   | (EventBase & { type: 'run.paused'; message: string })
-  | (EventBase & { type: 'run.completed'; artifactId?: string; autoSaved: boolean; coverage: Coverage; summary?: ResearchRunSummary })
-  | (EventBase & { type: 'run.failed'; message: string });
+  | (EventBase & { type: 'run.completed'; artifactId?: string; autoSaved: boolean; coverage: Coverage; summary?: ResearchRunSummary; outcome?: RunOutcome; issues?: string[] })
+  | (EventBase & { type: 'run.failed'; message: string; cancelled?: boolean });
 
 export type ResearchEventType = ResearchEvent['type'];
 

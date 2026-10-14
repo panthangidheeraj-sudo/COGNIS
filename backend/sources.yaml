@@ -126,6 +126,32 @@ sources:
     capabilities: [jobs]
     notes: "Primary hiring source together with the careers page. Only ATS pages linked from the verified company website (or on the verified domain / a known job-board host and tied to the exact organisation) are visited; robots.txt is respected."
 
+  - id: company_newsroom
+    name: "Company newsroom, investor relations and RSS/Atom feeds"
+    category: company_owned
+    authority: primary
+    source_class: company_owned
+    access: http_fetch
+    licence: "company-published; robots.txt respected"
+    auth_required: false
+    rate_limit: "shares the website budget: pages the crawl already read, up to NEWS_DISCOVERY_MAX_PAGES more, at most two same-site feeds"
+    enabled_by_default: true
+    capabilities: [news, public_activity]
+    notes: "First stop for announcements, results, contracts and leadership changes. Only on an identity-verified website; a page that robots.txt disallows is recorded as blocked and never fetched; a script-rendered page is recorded as 'no dated items', never as 'no news'."
+
+  - id: secondary_news
+    name: "Reputable press and wire services (found by search)"
+    category: secondary
+    authority: secondary
+    source_class: secondary_news
+    access: http_fetch
+    licence: "third-party articles: only the headline, date, link and a verbatim lead of at most 300 characters are stored; robots.txt respected"
+    auth_required: true
+    env: TAVILY_API_KEY
+    enabled_by_default: true
+    capabilities: [news, public_activity]
+    notes: "Restricted to SECONDARY_NEWS_DOMAINS. Each article is fetched, dated and tied to the exact organisation (organisation number, or the exact registered name in the headline; a name that continues into a longer company name is rejected). Ranked below the company's own announcements."
+
   - id: tavily_search
     name: "Tavily Search API"
     category: discovery

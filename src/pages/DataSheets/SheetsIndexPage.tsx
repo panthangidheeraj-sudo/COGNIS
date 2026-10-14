@@ -3,11 +3,13 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { LoaderCircle, Plus, Sparkle, Table2, X } from 'lucide-react';
 import { api } from '@/api';
+import { failureDetails } from '@/api/errorDetails';
 import type { InterpretedFilter, QueryInterpretation } from '@/types';
 import { Skeleton } from '@/components/common/Skeleton';
 import { EmptyState } from '@/components/common/EmptyState';
 import { ErrorState } from '@/components/common/ErrorState';
 import { ArtifactThumb } from '@/components/library/ArtifactThumb';
+import { SuggestedFilters } from '@/components/search/SuggestedFilters';
 import { formatRelative } from '@/utils/format';
 import '../Library/library.css';
 import './sheets.css';
@@ -63,9 +65,14 @@ export default function SheetsIndexPage() {
                 <span className="t-xs t-muted">
                   {s.rowCount} companies · {s.columnCount} columns · updated {formatRelative(s.updatedAt)}
                 </span>
-                {s.criteria && s.criteria.length > 0 && (
+                {((s.criteria && s.criteria.length > 0) || s.discovery) && (
                   <div className="row-wrap" style={{ gap: 4 }}>
-                    {s.criteria.map((c) => (
+                    {s.discovery && (
+                      <span className="pill pill--sm" title={s.discovery.note}>
+                        Verified companies only
+                      </span>
+                    )}
+                    {(s.criteria ?? []).map((c) => (
                       <span key={c.key} className="pill pill--sm">
                         {c.display}
                       </span>
@@ -84,20 +91,25 @@ export default function SheetsIndexPage() {
 function SheetCreator({ onClose }: { onClose: () => void }) {
   const [text, setText] = useState('');
   const [interp, setInterp] = useState<QueryInterpretation | null>(null);
+  // `criteria` are the filters the user selected and the only thing that restricts the sheet. What the interpreter reads out of the
+  // description is offered as suggestions (`suggested`) and applies nothing until the user adds it.
   const [criteria, setCriteria] = useState<InterpretedFilter[]>([]);
   const [title, setTitle] = useState('');
   const [busy, setBusy] = useState<false | 'interpret' | 'create'>(false);
   const [error, setError] = useState<unknown>(null);
+  // which step failed, so Retry repeats that step (and the verified-companies choice is only offered after a failed create)
+  const [failed, setFailed] = useState<'interpret' | 'create' | null>(null);
   const nav = useNavigate();
   const qc = useQueryClient();
   const interpret = async (t = text) => {
     if (!t.trim()) return;
     setBusy('interpret');
     setError(null);
+    setFailed(null);
     try {
       const r = await api.sheets.interpret(t);
       setInterp(r);
-      setCriteria(r.filters);
+      setCriteria([]);
       setTitle(
         t
           .replace(/^build (a|me a) sheet of\s*/i, '')
@@ -107,22 +119,30 @@ function SheetCreator({ onClose }: { onClose: () => void }) {
       );
     } catch (e) {
       setError(e);
+      setFailed('interpret');
     } finally {
       setBusy(false);
     }
   };
-  const create = async () => {
+  const suggested = (interp?.filters ?? []).filter((f) => f.key !== 'hiring' && !criteria.some((c) => c.key === f.key));
+  const addCriterion = (f: InterpretedFilter) => setCriteria((cs) => [...cs.filter((c) => c.key !== f.key), f]);
+  // `fallback: 'verified'` is the user's explicit choice (the button below) to continue from already-verified companies when the register search is down.
+  const create = async (fallback?: 'verified') => {
     setBusy('create');
+    setError(null);
+    setFailed(null);
     try {
-      const s = await api.sheets.create({ title: title.trim() || 'Untitled sheet', criteria, text });
+      const s = await api.sheets.create({ title: title.trim() || 'Untitled sheet', criteria, text, ...(fallback ? { fallback } : {}) });
       qc.invalidateQueries({ queryKey: ['sheets'] });
       qc.invalidateQueries({ queryKey: ['library'] });
       nav(`/sheets/${s.id}`);
     } catch (e) {
       setError(e);
+      setFailed('create');
       setBusy(false);
     }
   };
+  const offer = failed === 'create' ? failureDetails(error)?.fallback : undefined;
   return (
     <section className="creator surface" aria-labelledby="creator-h">
       <div className="row">
@@ -152,9 +172,9 @@ function SheetCreator({ onClose }: { onClose: () => void }) {
       )}
       {interp && (
         <div className="creator-interp anim-fade-up">
-          <span className="t-micro">Interpreted criteria</span>
+          <span className="t-micro">Selected filters</span>
           {criteria.length === 0 ? (
-            <p className="t-sm t-muted">No structured criteria found. The sheet will start from a keyword match — consider adding a location or industry.</p>
+            <p className="t-sm t-muted">No filters selected. The sheet starts from the register without restriction — add a suggested filter below to narrow it.</p>
           ) : (
             <dl className="creator-criteria">
               {criteria.map((c) => (
@@ -169,6 +189,11 @@ function SheetCreator({ onClose }: { onClose: () => void }) {
                 </div>
               ))}
             </dl>
+          )}
+          <SuggestedFilters suggestions={suggested} onAdd={addCriterion} onAddAll={() => suggested.forEach(addCriterion)} label="Suggested from your description" />
+          {interp.filters.some((f) => f.key === 'hiring') && (
+            // Hiring is a fact to show for each company (the Hiring column in every sheet), not a reason to leave companies out.
+            <p className="t-xs t-muted">Hiring is a column in every sheet: it shows each company’s verified openings once researched and never removes a company.</p>
           )}
           {interp.notes?.map((n) => (
             <p key={n} className="t-xs t-muted">
@@ -187,10 +212,28 @@ function SheetCreator({ onClose }: { onClose: () => void }) {
               {busy === 'create' ? <LoaderCircle className="spin" aria-hidden /> : <Table2 aria-hidden />} Create sheet
             </button>
           </div>
-          <p className="t-xs t-muted">The backend selects matching companies. Columns that need research start as “Pending” until you run research.</p>
+          <p className="t-xs t-muted">Only the filters you selected narrow the sheet. Columns that need research start as “Pending” until you run research.</p>
         </div>
       )}
-      {error != null && <ErrorState error={error} compact />}
+      {error != null && <ErrorState error={error} compact onRetry={() => void (failed === 'interpret' ? interpret() : create())} />}
+      {offer && (
+        <div className="creator-fallback stack" style={{ gap: 6 }} data-testid="verified-fallback">
+          {offer.available ? (
+            <>
+              <p className="t-sm">
+                <strong>Continue without the register search?</strong> {offer.note} They are shown with the date they were last verified, and the sheet is labelled as built from stored companies — it is not a full register search.
+              </p>
+              <div>
+                <button className="btn" onClick={() => void create('verified')} disabled={busy === 'create'}>
+                  {busy === 'create' ? <LoaderCircle className="spin" aria-hidden /> : <Table2 aria-hidden />} Use {offer.count} verified {offer.count === 1 ? 'company' : 'companies'} instead
+                </button>
+              </div>
+            </>
+          ) : (
+            offer.note && <p className="t-xs t-muted">{offer.note}</p>
+          )}
+        </div>
+      )}
     </section>
   );
 }

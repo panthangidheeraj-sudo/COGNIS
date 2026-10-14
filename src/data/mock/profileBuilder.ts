@@ -30,6 +30,7 @@ import type {
   SourceUsage,
   TimelineEvent,
   TimelineEventType,
+  EventSignificance,
   WebsitePage,
   CompanyLocation,
 } from '@/types';
@@ -583,7 +584,7 @@ export function buildProfile(spec: CompanySpec): CompanyProfile {
       type: e.type,
       title: e.title,
       description: e.description,
-      significance: (e.major ?? MAJOR_EVENT_TYPES.includes(e.type)) ? ('major' as const) : ('minor' as const),
+      significance: mockTier(e),
       sourceIds: [c.srcId(e.sourceId)],
       evidence: [c.ev(e.sourceId, { documentTitle: e.title, excerpt: e.excerpt ?? e.description, retrievedAt: `${e.date}T12:00:00Z` })],
     }));
@@ -849,7 +850,15 @@ export function registryOnly(profile: CompanyProfile): CompanyProfile {
 }
 
 /* -------------------------------------------------------------------------- */
-const MAJOR_EVENT_TYPES: TimelineEventType[] = ['filing', 'leadership', 'acquisition', 'location', 'contract', 'funding', 'registration'];
+const MAJOR_EVENT_TYPES: TimelineEventType[] = ['acquisition', 'contract', 'funding', 'results', 'discovery', 'restructuring'];
+const RELEVANT_EVENT_TYPES: TimelineEventType[] = ['filing', 'leadership', 'location', 'partnership', 'production', 'project', 'regulatory'];
+
+/** Registrations, establishments and other register-style entries are never major by default; an explicit `major` flag in the spec decides otherwise. */
+function mockTier(e: EventSpec): EventSignificance {
+  if (e.major === true) return 'major';
+  if (e.major === false) return 'routine';
+  return MAJOR_EVENT_TYPES.includes(e.type) ? 'major' : RELEVANT_EVENT_TYPES.includes(e.type) ? 'relevant' : 'routine';
+}
 
 function defaultHeadline(ch: ChangeSpec): string {
   switch (ch.category) {

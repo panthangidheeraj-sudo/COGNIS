@@ -140,6 +140,8 @@ def build_record(st: ResearchState, *, operations: dict[str, Any], completed_at:
                  "outcome": _jsonable(st.hiring), "discovery_candidates": _jsonable(st.job_candidates[:20])},
         # name-only procurement notices: kept for review, never published (no organisation number in the role's identifier)
         "procurement_candidates": _jsonable(st.procurement_candidates[:25]),
+        # what the newsroom / investor-relations / press-coverage discovery read, page by page (also what it could not read)
+        "news": _jsonable(st.news),
         "roles": _jsonable(st.roles),
         "locations": _jsonable(st.locations),
         "financial_records": _jsonable(st.financial_records),
@@ -147,4 +149,6 @@ def build_record(st: ResearchState, *, operations: dict[str, Any], completed_at:
         "errors": _jsonable(st.errors),
         "trace": _jsonable(st.trace),
         "operations": _jsonable(operations),
+        # what this run did beyond the core registers and what it skipped (run bookkeeping: does not make a new report version by itself)
+        "effort": _jsonable(st.effort),
     }

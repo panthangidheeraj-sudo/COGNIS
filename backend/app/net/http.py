@@ -33,6 +33,7 @@ from ..runtime.rate_limits import HostLimiter
 from ..security.redaction import redact
 from ..security.urls import Resolver, canonical_url, check_resolved_host, check_url_syntax
 from ..storage.cache import ResponseCache
+from .cooldown import Cooldowns
 from .robots import RobotsCache
 
 Classification = Literal[
@@ -98,6 +99,15 @@ def classify_status(status: int) -> Classification:
     return "client_error"
 
 
+def _exc_detail(exc: BaseException) -> str:
+    """The low-level reason behind a transport error ("[SSL: CERTIFICATE_VERIFY_FAILED] …", "[Errno 11001] getaddrinfo failed"), so a
+    failure is diagnosable instead of just "ConnectError". Short, single line; callers redact it."""
+    text = " ".join(str(exc).split())
+    if not text and exc.__cause__ is not None:
+        text = " ".join(str(exc.__cause__).split())
+    return f" ({text[:200]})" if text else ""
+
+
 Budget = RunBudget | CompanyBudget | None
 
 
@@ -136,6 +146,7 @@ class HttpClient:
         self._sleep = sleep or asyncio.sleep
         self.total_requests = 0
         self.tripped: dict[str, str] = {}  # e.g. {"search": reason}: a source that must not be called again in this run
+        self.cooldowns = Cooldowns()  # sources that were unreachable moments ago: not asked again until the cooldown ends
 
     async def aclose(self) -> None:
         await self._client.aclose()
@@ -206,7 +217,10 @@ class HttpClient:
         expect: Literal["any", "json", "html", "pdf", "text"] = "any",
         run_id: str | None = None,
         org_number: str | None = None,
+        retry_attempts: int | None = None,
+        timeout: float | None = None,
     ) -> FetchResult:
+        """``timeout`` is the wall-clock cap (seconds) for one attempt; default ``http_total_timeout_seconds``. ``retry_attempts`` caps the retries."""
         full_url = self.build_url(url, params)
         started = time.monotonic()
         try:
@@ -239,7 +253,7 @@ class HttpClient:
 
         limit = max_bytes or (self.settings.max_pdf_bytes if expect == "pdf" else self.settings.max_fetch_bytes)
         req_headers = {"Accept": accept, **(headers or {})}
-        result = await self._fetch_with_retries(full_url, method, req_headers, body_bytes, limit, budget, connector, optional, interval_key)
+        result = await self._fetch_with_retries(full_url, method, req_headers, body_bytes, limit, budget, connector, optional, interval_key, retry_attempts, timeout)
         result.elapsed_ms = int((time.monotonic() - started) * 1000)
         if result.ok:
             result = self._check_content(result, expect)
@@ -274,15 +288,17 @@ class HttpClient:
             result.error = f"unexpected content type {ctype}"
         return result
 
-    async def _fetch_with_retries(self, url: str, method: str, headers: dict[str, str], body: bytes | None, limit: int, budget: Budget, connector: str, optional: bool, interval_key: str | None) -> FetchResult:
+    async def _fetch_with_retries(self, url: str, method: str, headers: dict[str, str], body: bytes | None, limit: int, budget: Budget, connector: str, optional: bool,
+                                  interval_key: str | None, max_retries: int | None = None, timeout: float | None = None) -> FetchResult:
         s = self.settings
+        allowed = s.retry_attempts if max_retries is None else max(0, max_retries)
         attempt = 0
         last: FetchResult | None = None
         while True:
-            last = await self._fetch_once(url, method, headers, body, limit, budget, connector, optional, interval_key)
+            last = await self._fetch_once(url, method, headers, body, limit, budget, connector, optional, interval_key, timeout)
             last.retries = attempt
             retryable = last.classification in ("timeout", "network") or last.status in RETRYABLE_STATUS
-            if not retryable or attempt >= s.retry_attempts:
+            if not retryable or attempt >= allowed:
                 return last
             delay = min(s.retry_max_delay_seconds, s.retry_base_delay_seconds * (2 ** attempt)) * (0.75 + random.random() * 0.5)
             retry_after = last.headers.get("retry-after")
@@ -299,7 +315,9 @@ class HttpClient:
             attempt += 1
             await self._sleep(delay)
 
-    async def _fetch_once(self, url: str, method: str, headers: dict[str, str], body: bytes | None, limit: int, budget: Budget, connector: str, optional: bool, interval_key: str | None) -> FetchResult:
+    async def _fetch_once(self, url: str, method: str, headers: dict[str, str], body: bytes | None, limit: int, budget: Budget, connector: str, optional: bool, interval_key: str | None,
+                          timeout: float | None = None) -> FetchResult:
+        total = timeout if timeout is not None else self.settings.http_total_timeout_seconds
         current = url
         redirects = 0
         retrieved_at = now_iso()
@@ -307,44 +325,49 @@ class HttpClient:
             try:
                 parts = check_url_syntax(current)
                 if not self.skip_dns_check:
-                    await check_resolved_host(parts.hostname or "", self.resolver)
+                    await asyncio.wait_for(check_resolved_host(parts.hostname or "", self.resolver), timeout=self.settings.dns_timeout_seconds)
             except UnsafeUrlError as exc:
                 return FetchResult(url, current, 0, "unsafe_url", error=str(exc), retrieved_at=retrieved_at, redirects=redirects)
+            except TimeoutError:
+                return FetchResult(url, current, 0, "timeout", error=f"timeout: the host name did not resolve within {self.settings.dns_timeout_seconds:.0f} s", retrieved_at=retrieved_at, redirects=redirects)
             host = (parts.hostname or "").lower()
             try:
                 async with self.limiter.slot(host, interval_key):
-                    self.total_requests += 1
-                    retrieved_at = now_iso()
-                    request = self._client.build_request(method, current, headers=headers, content=body)
-                    response = await self._client.send(request, stream=True)
-                    try:
-                        if response.is_redirect and response.headers.get("location"):
-                            location = urllib.parse.urljoin(current, response.headers["location"])
+                    async with asyncio.timeout(total):  # wall-clock cap: also covers a server that answers one byte at a time
+                        self.total_requests += 1
+                        retrieved_at = now_iso()
+                        request = self._client.build_request(method, current, headers=headers, content=body)
+                        response = await self._client.send(request, stream=True)
+                        try:
+                            if response.is_redirect and response.headers.get("location"):
+                                location = urllib.parse.urljoin(current, response.headers["location"])
+                                await response.aclose()
+                                redirects += 1
+                                if redirects > self.settings.max_redirects:
+                                    return FetchResult(url, location, response.status_code, "client_error", error="too many redirects", retrieved_at=retrieved_at, redirects=redirects)
+                                if not self._reserve(budget, connector, optional, 0.0, False):
+                                    return FetchResult(url, location, 0, "budget_exhausted", error="budget exhausted during redirect", retrieved_at=retrieved_at, redirects=redirects)
+                                current = location
+                                if method == "POST" and response.status_code in (301, 302, 303):
+                                    method, body = "GET", None
+                                continue
+                            chunks: list[bytes] = []
+                            size = 0
+                            async for chunk in response.aiter_bytes():
+                                size += len(chunk)
+                                if size > limit:
+                                    return FetchResult(url, str(response.url), response.status_code, "too_large", error=f"response larger than {limit} bytes", retrieved_at=retrieved_at, redirects=redirects,
+                                                       headers={k.lower(): v for k, v in response.headers.items()})
+                                chunks.append(chunk)
+                            data = b"".join(chunks)
+                        finally:
                             await response.aclose()
-                            redirects += 1
-                            if redirects > self.settings.max_redirects:
-                                return FetchResult(url, location, response.status_code, "client_error", error="too many redirects", retrieved_at=retrieved_at, redirects=redirects)
-                            if not self._reserve(budget, connector, optional, 0.0, False):
-                                return FetchResult(url, location, 0, "budget_exhausted", error="budget exhausted during redirect", retrieved_at=retrieved_at, redirects=redirects)
-                            current = location
-                            if method == "POST" and response.status_code in (301, 302, 303):
-                                method, body = "GET", None
-                            continue
-                        chunks: list[bytes] = []
-                        size = 0
-                        async for chunk in response.aiter_bytes():
-                            size += len(chunk)
-                            if size > limit:
-                                return FetchResult(url, str(response.url), response.status_code, "too_large", error=f"response larger than {limit} bytes", retrieved_at=retrieved_at, redirects=redirects,
-                                                   headers={k.lower(): v for k, v in response.headers.items()})
-                            chunks.append(chunk)
-                        data = b"".join(chunks)
-                    finally:
-                        await response.aclose()
             except httpx.TimeoutException as exc:
                 return FetchResult(url, current, 0, "timeout", error=redact(f"timeout: {type(exc).__name__}"), retrieved_at=retrieved_at, redirects=redirects)
+            except TimeoutError:  # the wall-clock cap (a subclass of OSError, so it must come before the network branch)
+                return FetchResult(url, current, 0, "timeout", error=f"timeout: no complete response within {total:.0f} s", retrieved_at=retrieved_at, redirects=redirects)
             except (httpx.TransportError, OSError) as exc:
-                return FetchResult(url, current, 0, "network", error=redact(f"network error: {type(exc).__name__}"), retrieved_at=retrieved_at, redirects=redirects)
+                return FetchResult(url, current, 0, "network", error=redact(f"network error: {type(exc).__name__}{_exc_detail(exc)}"), retrieved_at=retrieved_at, redirects=redirects)
             hdrs = {k.lower(): v for k, v in response.headers.items()}
             status = response.status_code
             return FetchResult(

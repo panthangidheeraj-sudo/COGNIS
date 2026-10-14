@@ -9,6 +9,10 @@ import { useOpenEvidence } from './useEvidence';
 import { VALUE_STATUS } from '@/utils/status';
 import { cn } from '@/utils/cn';
 
+/** Values longer than this wrap inside their container instead of staying on one line. Short numbers and names keep their tidy one-line form. */
+export const LONG_FACT_CHARS = 24;
+export const isLongFactText = (text: string) => text.length > LONG_FACT_CHARS;
+
 /**
  * Inline fact: value + tiny source-count marker. Click → compact evidence
  * popover → "View evidence" opens the full drawer. Unavailable facts say so.
@@ -26,10 +30,11 @@ export function FactValue({ fact, sourceIndex, context, showFreshness, exact, cl
   }
   const sources = new Set(fact.evidence.map((e) => e.sourceId));
   const first = fact.evidence[0];
+  const text = formatFactValue(fact, { exact });
   return (
-    <span className={cn('fact', className)} data-fact-id={fact.id}>
+    <span className={cn('fact', isLongFactText(text) && 'fact--wrap', className)} data-fact-id={fact.id}>
       <button ref={btn} className={cn('fact-btn', fact.conflict && 'fact-btn--conflict')} onClick={() => setOpen((o) => !o)} aria-haspopup="dialog" aria-expanded={open}>
-        <span className="t-num">{formatFactValue(fact, { exact })}</span>
+        <span className="t-num">{text}</span>
         <sup className="fact-count" aria-label={`${sources.size} source${sources.size === 1 ? '' : 's'}`}>
           {fact.conflict ? <CircleAlert width={11} height={11} aria-hidden /> : sources.size}
         </sup>

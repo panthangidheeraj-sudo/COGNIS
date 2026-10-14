@@ -72,7 +72,8 @@ describe('corporate features (mock backend contract)', () => {
     const p = await mockApi.companies.get('921604337');
     expect(p.changes.changes.some((c) => c.material)).toBe(true);
     expect(p.changes.changes.some((c) => !c.material)).toBe(true);
-    expect(p.activity.events.every((e) => e.significance === 'major' || e.significance === 'minor')).toBe(true);
+    expect(p.activity.events.every((e) => ['major', 'relevant', 'routine'].includes(e.significance))).toBe(true);
+    expect(p.activity.events.filter((e) => e.type === 'registration' && e.significance === 'major')).toEqual([]); // register entries are never major by default
   });
 
   it('returns a comparison executive strip without winners', async () => {

@@ -47,19 +47,20 @@ SOURCE_RANK: dict[str, int] = {
     "official_job_feed": 2,
     "official_procurement_notice": 2,
     "licensed_secondary": 4,
+    "secondary_news": 4,  # a reputable outlet that names the company; never preferred over the company's own words
 }
 OFFICIAL_CLASSES = {k for k, v in SOURCE_RANK.items() if v <= 1}
 WEBSITE_CLASSES = {"company_owned", "company_owned_email_domain", "company_owned_discovered", "company_linked_social_profile", "company_linked_job_board"}
 NEVER_EVIDENCE = {"search_result", "search_snippet", "web_search", "llm_generated"}
-# Records published by third parties that name the company (NAV job ads, procurement notices): only exact resolutions.
-EXACT_IDENTITY_CLASSES = {"official_job_feed", "official_procurement_notice"}
+# Records published by third parties that name the company (NAV job ads, procurement notices, press articles): only exact resolutions.
+EXACT_IDENTITY_CLASSES = {"official_job_feed", "official_procurement_notice", "secondary_news"}
 MIN_EXACT_IDENTITY = 0.95
 
 CONFIDENCE: dict[str, float] = {
     "official_registry_live": 0.99, "official_registry_bulk": 0.98, "official_annual_accounts": 0.98, "official_roles": 0.97,
     "official_subunits": 0.97, "official_group_structure": 0.97, "official_annual_account_copies": 0.97, "official_classification": 0.95,
     "company_owned": 0.9, "company_owned_email_domain": 0.88, "company_owned_discovered": 0.85, "company_linked_social_profile": 0.88,
-    "company_linked_job_board": 0.85, "official_job_feed": 0.9, "official_procurement_notice": 0.93, "licensed_secondary": 0.8,
+    "company_linked_job_board": 0.85, "official_job_feed": 0.9, "official_procurement_notice": 0.93, "licensed_secondary": 0.8, "secondary_news": 0.8,
 }
 MIN_WEBSITE_IDENTITY = 0.6
 

@@ -20,6 +20,9 @@ beautifulsoup4==4.15.0
 soupsieve==2.10
 lxml==6.1.3
 pypdf==6.19.0
+reportlab==5.0.1        # Full Research Report (PDF) — drawing/layout engine
+pillow==12.3.0          # reportlab dependency
+charset-normalizer==3.5.2  # reportlab dependency
 openpyxl==3.1.5
 et-xmlfile==2.0.0
 pyyaml==6.0.3

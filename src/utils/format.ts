@@ -149,6 +149,22 @@ export function formatOrgNumber(org: string): string {
   return d.length === 9 ? `${d.slice(0, 3)} ${d.slice(3, 6)} ${d.slice(6)}` : org;
 }
 
+export type CompanyInput = { kind: 'empty' } | { kind: 'name'; text: string } | { kind: 'org'; digits: string; valid: boolean };
+
+/**
+ * What the company field holds. Text made only of digits, spaces and dots is treated as an organization number, which must be exactly
+ * 9 digits (`valid`); the check digit and the registry lookup are verified by the backend. Anything else is a name — only ever a search term.
+ */
+export function classifyCompanyInput(raw: string): CompanyInput {
+  const text = raw.trim();
+  if (!text) return { kind: 'empty' };
+  if (/^[\d\s.]+$/.test(text)) {
+    const digits = text.replace(/\D/g, '');
+    return { kind: 'org', digits, valid: digits.length === 9 };
+  }
+  return { kind: 'name', text };
+}
+
 export function pluralize(n: number, one: string, many = `${one}s`) {
   return `${n} ${n === 1 ? one : many}`;
 }

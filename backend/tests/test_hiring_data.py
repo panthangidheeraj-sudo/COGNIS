@@ -51,6 +51,7 @@ def site(postings: list[dict] | None = None, *, body: str = "<h1>Ledige stilling
 
 
 def settings_with(settings: Settings, **update: Any) -> Settings:
+    update.setdefault("enable_secondary_news", False)  # these tests are about job discovery; the press-coverage search has its own tests (test_activity.py)
     for key, value in update.items():
         setattr(settings, key, value)
     return settings

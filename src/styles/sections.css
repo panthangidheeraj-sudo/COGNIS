@@ -116,6 +116,7 @@
   gap: 12px;
 }
 .about-text {
+  overflow-wrap: anywhere;
   font-size: var(--fs-body-lg);
   line-height: 1.65;
   color: var(--text-2);
@@ -126,7 +127,7 @@
   text-decoration-color: color-mix(in oklab, var(--accent-soft) 30%, transparent);
 }
 .about-kv {
-  grid-template-columns: 170px 1fr;
+  grid-template-columns: 170px minmax(0, 1fr);
 }
 .mini-bars {
   display: grid;
@@ -686,7 +687,7 @@ a.page-tile:hover {
     scroll-snap-align: start;
   }
   .about-kv {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     gap: 2px;
   }
   .about-kv dd {
@@ -881,6 +882,61 @@ a.page-tile:hover {
 }
 .tl-bar .link-btn {
   font-size: var(--fs-xs);
+}
+
+/* Event tiers: major reads as a development, routine register entries stay available but quiet */
+.tag--major {
+  color: var(--text-1);
+  font-weight: 600;
+}
+.tag--relevant {
+  color: var(--text-2);
+}
+.tag--routine {
+  color: var(--text-4);
+}
+.tl-item--major .tl-title {
+  font-weight: 600;
+}
+.tl-item--routine {
+  opacity: 0.78;
+}
+.tl-item--routine .tl-title {
+  font-weight: 400;
+}
+.tl-item--routine .tl-dot {
+  transform: scale(0.78);
+  background: transparent;
+}
+.tl-why {
+  display: grid;
+  gap: 4px;
+}
+.tl-why ul,
+.tl-checks ul {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 3px;
+  font-size: var(--fs-xs);
+  color: var(--text-2);
+}
+.tl-checks {
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+}
+.tl-checks summary {
+  cursor: pointer;
+  font-size: var(--fs-xs);
+  letter-spacing: var(--tracking-micro);
+  color: var(--text-3);
+}
+.tl-checks[open] summary {
+  margin-bottom: 6px;
+}
+.tl-check--blocked,
+.tl-check--failed {
+  color: var(--warn);
 }
 
 /* ---------- Changes: minor updates are quieter ---------- */

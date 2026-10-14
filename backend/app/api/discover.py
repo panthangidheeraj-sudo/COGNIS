@@ -2,9 +2,10 @@
 
 Interpretation is deterministic first (place names, sizes, years, statuses,
 industry words); the LLM, when configured, can add filters but only with values
-taken from the user's own words. Filters that need research data (revenue,
-hiring, coverage) are applied to already-researched companies only, and the
-result says so.
+taken from the user's own words. Interpreted filters are SUGGESTIONS: they are
+returned to the UI for the user to select and never restrict a result on their
+own. Filters that need research data (revenue, hiring, coverage) are applied to
+already-researched companies only, and the result says so.
 """
 from __future__ import annotations
 
@@ -12,9 +13,13 @@ import re
 from typing import Any
 
 from ..agent import llm_tasks
-from ..core.util import fold, title_case_no
+from ..core.util import fold, now_iso, title_case_no
+from ..errors import ApiError
 from ..identity.model import COUNTIES
 from ..storage import repository as repo
+from ..storage.db import loads
+
+NAME_MAX = 180  # Enhetsregisteret's `navn` search parameter takes 1-180 characters
 
 # Major municipalities (2024 numbering) — the full list is fetched from Geonorge and cached.
 MUNICIPALITIES: dict[str, str] = {
@@ -64,9 +69,13 @@ INDUSTRY_WORDS: list[tuple[tuple[str, ...], str, str]] = [
     (("staffing", "bemanning", "recruitment", "rekruttering"), "78", "Employment services"),
 ]
 STOP_WORDS = {"companies", "company", "selskaper", "selskap", "bedrifter", "firma", "in", "i", "with", "med", "and", "og", "the", "a", "an", "that", "som", "are", "er",
-              "over", "under", "than", "more", "less", "employees", "ansatte", "founded", "after", "since", "etter", "registered", "located", "based", "find", "show",
+              "over", "under", "above", "below", "exceeding", "than", "more", "less", "employees", "ansatte", "founded", "after", "since", "etter", "registered", "located", "based", "find", "show",
               "list", "all", "hiring", "active", "aktive", "norwegian", "norske", "norway", "norge", "revenue", "omsetning", "million", "mill", "mnok", "nok", "billion",
-              "from", "fra", "at", "least", "minst", "most", "før", "before", "to", "til", "of", "av", "for"}
+              "from", "fra", "at", "least", "minst", "most", "før", "before", "to", "til", "of", "av", "for",
+              # words of a request rather than of a company name: "build me a sheet of ... currently hiring" must not become a name search
+              "current", "currently", "now", "build", "create", "make", "give", "get", "me", "sheet", "table", "need", "want", "looking", "who", "which",
+              "have", "has", "had", "open", "positions", "roles", "jobs", "job", "openings", "vacancies", "new", "businesses", "business", "firms",
+              "organizations", "organisations", "people", "staff", "workers", "employ", "employing", "large", "big", "small", "top", "per", "any", "some"}
 
 ALLOWED_KEYS = {"location", "municipality", "industry", "status", "employeesMin", "employeesMax", "revenueMin", "revenueMax", "hiring", "coverageMin",
                 "recentActivity", "foundedAfter"}
@@ -135,8 +144,14 @@ def interpret_text(text: str) -> dict[str, Any]:
     m6 = re.search(r"(?:revenue|omsetning|turnover)\s*(?:under|below|less than|mindre enn|<)\s*(?:nok\s*)?(\d+(?:[.,]\d+)?)\s*(b\w*|m\w*|k\w*|mrd)?", t)
     if m6:
         filters["revenueMax"] = _money(m6.group(1), m6.group(2))
+    role_words: set[str] = set()
     if re.search(r"\b(hiring|recruiting|ansetter|rekrutterer|ledige stillinger)\b", t):
         filters["hiring"] = True
+        # "hiring engineers": the role is not a company name, and roles cannot be filtered on, so say so instead of searching for it
+        role = re.search(r"\b(?:hiring|recruiting|ansetter|rekrutterer)\s+(?!now\b|currently\b)([a-zæøå][a-zæøå ]*?)(?=\s+(?:in|i|with|med|and|og)\b|[,.;]|\s*$)", t)
+        if role:
+            role_words = set(re.findall(r"[\wæøå]+", role.group(1)))
+            notes.append(f"Role-level filtering (“{role.group(1).strip()}”) is not supported yet; hiring means any verified current openings.")
     if re.search(r"\b(bankrupt|konkurs)\b", t):
         filters["status"] = "bankruptcy"
     elif re.search(r"\b(liquidation|avvikling)\b", t):
@@ -147,22 +162,27 @@ def interpret_text(text: str) -> dict[str, Any]:
         if re.search(rf"(?<![\wæøå]){re.escape(name)}(?![\wæøå])", t):
             filters["municipality"] = title_case_no(name.upper())
             break
+    consumed: set[str] = set()  # the words of the text that became a suggestion are not left over as a name search
     for words, _code, label in INDUSTRY_WORDS:
-        if any(re.search(rf"(?<![\wæøå]){re.escape(w)}", t) for w in words):
+        hit = next((m for w in words if (m := re.search(rf"(?<![\wæøå]){re.escape(w)}[\wæøå]*", t))), None)
+        if hit:
             filters["industry"] = label
+            consumed.add(hit.group(0))
             break
     code = re.search(r"\b(\d{2}(?:\.\d{1,3})?)\b(?=.*(nace|næringskode|industry code))", t)
     if code:
         filters["industry"] = code.group(1)
-    used = set()
+    used = set(consumed) | role_words
     for value in filters.values():
         used.update(re.findall(r"[\wæøå]+", str(value).casefold()))
-    tokens = [w for w in re.findall(r"[\wæøå&.-]+", original) if w.casefold() not in STOP_WORDS and w.casefold() not in used and not re.fullmatch(r"[\d.,+]+", w)]
+    amounts = r"[\d.,]+(?:m|mnok|mill|million|b|bn|mrd|k)?" if ("revenueMin" in filters or "revenueMax" in filters) else r"[\d.,+]+"
+    words = [w.strip(".,;:!?") for w in re.findall(r"[\wæøå&.-]+", original)]
+    tokens = [w for w in words if w and w.casefold() not in STOP_WORDS and w.casefold() not in used and not re.fullmatch(amounts, w.casefold())]
     industry_words = {w for words, _c, _l in INDUSTRY_WORDS for w in words}
     tokens = [w for w in tokens if w.casefold() not in industry_words and fold(w) not in MUNICIPALITIES and fold(w) not in COUNTY_NAMES]
     keywords = " ".join(tokens).strip() or None
     if any(k in filters for k in ("revenueMin", "revenueMax", "hiring")):
-        notes.append("Revenue and hiring filters apply to companies COGNIS has already researched.")
+        notes.append("Revenue and hiring filters only match companies COGNIS has already researched, so applying them narrows the list to those.")
     return {"original": original, "filters": [{"key": k, "label": LABELS[k], "value": v, "display": _display(k, v)} for k, v in filters.items()],
             **({"keywords": keywords} if keywords else {}), **({"notes": notes} if notes else {})}
 
@@ -231,15 +251,20 @@ async def discover(s: Any, body: dict[str, Any]) -> dict[str, Any]:
     interpretation = None
     keywords = None
     if text and body.get("interpret"):
+        # The interpretation is a SUGGESTION: it is returned for the user to choose from and never merged into `filters`. Only the
+        # filters the user selected restrict the result, so a sentence like "... currently hiring" cannot silently turn on the
+        # research-only hiring filter and empty the list. What the interpreter left over stays the name search.
         interpretation = await interpret(s, text)
-        for f in interpretation["filters"]:
-            filters.setdefault(f["key"], f["value"])
         keywords = interpretation.get("keywords")
     elif text:
         keywords = text
     params: dict[str, Any] = {"size": page_size, "page": page - 1}
     notes: list[str] = []
     if keywords:
+        if len(keywords) > NAME_MAX:
+            # The register's `navn` parameter accepts 1-180 characters and answers longer values with HTTP 400, so cut at a word boundary and say so.
+            keywords = keywords[:NAME_MAX].rsplit(" ", 1)[0].strip() or keywords[:NAME_MAX]
+            notes.append(f"The company-name search was shortened to its first {len(keywords)} characters (the register accepts at most {NAME_MAX}).")
         params["navn"] = keywords
     place = filters.get("municipality") or filters.get("location")
     if place:
@@ -269,13 +294,36 @@ async def discover(s: Any, body: dict[str, Any]) -> dict[str, Any]:
         params["konkurs"] = "false"
         params["underAvvikling"] = "false"
     research_filters = any(filters.get(k) not in (None, "", False) for k in ("revenueMin", "revenueMax", "hiring", "coverageMin", "recentActivity"))
+    source: dict[str, Any] | None = None
     if research_filters:
         items = _researched_matches(s, filters, keywords, notes)
         total = len(items)
         items = items[(page - 1) * page_size: page * page_size]
     else:
-        rows, total = await s.search_entities(params)
-        items = s.summaries_for_rows(rows)
+        fallback_requested = body.get("fallback") == "verified"
+        try:
+            # A fallback request does not wait out a failure this server saw moments ago again; with none on record it makes one quick attempt.
+            known = s.recent_registry_failure() if fallback_requested else None
+            if known is not None:
+                raise known[1]
+            rows, total = await s.search_entities(params, retries=0 if fallback_requested else None)
+            items = s.summaries_for_rows(rows)
+        except ApiError as exc:
+            if exc.code != "unavailable" or not isinstance(exc.details, dict):
+                raise
+            offer = fallback_offer(s, filters, keywords)
+            if not fallback_requested or not offer["available"]:
+                # No fallback was asked for (the error offers it) or there is nothing to fall back to: the failure is reported as it is.
+                raise ApiError(exc.code, exc.message, status=exc.status, details={**exc.details, "fallback": offer}) from None
+            # The user chose to continue with companies COGNIS has already verified. The failure is one this server itself observed, the list is
+            # exactly the stored companies that match the selected filters, and the result says both.
+            when = (s.recent_registry_failure() or (now_iso(), exc))[0]
+            items = verified_matches(s, filters, keywords, notes)
+            total = len(items)
+            items = [verified_summary(s, row) for row in items[(page - 1) * page_size: page * page_size]]
+            source = {"kind": "verified_companies", "registryAvailable": False, "reason": exc.details.get("reason"), "cause": exc.details.get("cause"), "at": when,
+                      "count": total, "note": f"The Enhetsregisteret search was unavailable, so this list contains only the {total} companies COGNIS had already verified "
+                                              "that match the selected filters. It is not a full register search."}
     sort = body.get("sort") or "relevance"
     keyfn = {"name": lambda c: c["legalName"].casefold(), "employees": lambda c: -(c.get("employees") or -1),
              "revenue": _revenue_sort_key, "researched": lambda c: c.get("lastResearchedAt") or "",
@@ -287,7 +335,90 @@ async def discover(s: Any, body: dict[str, Any]) -> dict[str, Any]:
     out = {"items": items, "total": int(total), "page": page, "pageSize": page_size, "appliedFilters": {k: v for k, v in filters.items() if v not in (None, "")}}
     if interpretation is not None:
         out["interpretation"] = interpretation
+    if source is not None:
+        out["source"] = source
+        out["notes"] = notes
     return out
+
+
+def _stored_company_rows(s: Any, filters: dict[str, Any], keywords: str | None, notes: list[str] | None = None) -> list[Any]:
+    """Companies COGNIS has already verified against the register (a stored record with a resolved identity) that match the registry filters the user
+    selected. Cheap: only the stored columns are consulted, so a long list costs one query. Unknown is not a match: a company with no stored
+    employee count is left out of an employee filter, exactly as the register would not return it."""
+    from .profile_builder import STATUS_MAP
+
+    place = filters.get("municipality") or filters.get("location")
+    place_key = fold(str(place)) if place else ""
+    code = None
+    if filters.get("industry"):
+        code = industry_code(str(filters["industry"]))
+        if not code and notes is not None:
+            notes.append(f"No industry code matched “{filters['industry']}”.")
+    out = []
+    for row in s.db.all("SELECT * FROM companies ORDER BY updated_at DESC"):
+        identity = loads(row["registry_json"], {}) if row["registry_json"] else {}
+        if not identity or not row["legal_name"]:
+            continue
+        if keywords and fold(keywords) not in fold(row["legal_name"]):
+            continue
+        if place_key:
+            number = str(row["municipality_number"] or "")
+            county = COUNTIES.get(number[:2], "")
+            if place_key in COUNTY_NAMES:
+                ok = number.startswith(COUNTY_NAMES[place_key])
+            elif place_key in MUNICIPALITIES:
+                ok = number == MUNICIPALITIES[place_key]
+            elif re.fullmatch(r"\d{4}", str(place).strip()):
+                ok = number == str(place).strip()
+            else:
+                ok = place_key in fold(f"{row['municipality'] or ''} {county}")
+            if not ok:
+                continue
+        if code and not str(row["industry_code"] or "").startswith(code):
+            continue
+        employees = row["employees"]
+        if filters.get("employeesMin") is not None and (employees is None or employees < int(filters["employeesMin"])):
+            continue
+        if filters.get("employeesMax") is not None and (employees is None or employees > int(filters["employeesMax"])):
+            continue
+        if filters.get("foundedAfter"):
+            founded = str(identity.get("founded") or "")
+            if not founded[:4].isdigit() or int(founded[:4]) < int(filters["foundedAfter"]):
+                continue
+        wanted = filters.get("status")
+        if wanted and STATUS_MAP.get(row["status"] or "", "other") != wanted:
+            continue
+        out.append(row)
+    return out
+
+
+def verified_matches(s: Any, filters: dict[str, Any], keywords: str | None, notes: list[str] | None = None) -> list[Any]:
+    """The stored, register-verified companies that satisfy the selected registry filters (rows; see ``verified_summary``)."""
+    return _stored_company_rows(s, filters, keywords, notes)
+
+
+def verified_summary(s: Any, row: Any) -> dict[str, Any]:
+    """CompanySummary of a stored company, from its own latest saved record. ``verifiedAt`` is when that record was really retrieved from the
+    register: it is never replaced by the time of the fallback."""
+    record = repo.latest_record(s.db, row["org_number"])
+    if record is None or not record.get("identity"):
+        return {"orgNumber": row["org_number"], "legalName": row["legal_name"], "verifiedAt": row["updated_at"]}
+    summary = s.profile_for(record)["company"]
+    summary["verifiedAt"] = record.get("completed_at") or row["updated_at"]
+    return summary
+
+
+def fallback_offer(s: Any, filters: dict[str, Any], keywords: str | None) -> dict[str, Any]:
+    """What the failed search can fall back to: how many already-verified companies match the selected filters (never a made-up list)."""
+    matches = len(_stored_company_rows(s, filters, keywords))
+    stored = s.db.one("SELECT COUNT(*) AS n FROM companies WHERE registry_json IS NOT NULL")["n"]
+    if matches:
+        note = f"{matches} {'company' if matches == 1 else 'companies'} COGNIS has already verified match the selected filters."
+    elif not stored:
+        note = "COGNIS has not verified any companies yet, so there is nothing to fall back to."
+    else:
+        note = f"None of the {stored} companies COGNIS has verified match the selected filters."
+    return {"available": matches > 0, "count": matches, "kind": "verified_companies", "note": note}
 
 
 def _revenue_sort_key(company: dict[str, Any]) -> tuple[int, str, float]:

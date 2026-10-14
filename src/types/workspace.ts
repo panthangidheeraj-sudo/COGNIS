@@ -1,4 +1,5 @@
 import type { CompanyProfile, CompanyStatus, CompanySummary, Coverage } from './company';
+import type { ResearchRunSnapshot } from './research';
 import type { Evidence, EvidenceState, Fact, FactPrimitive, ISODateTime, Source, ValueStatus } from './evidence';
 
 /* ============================== Common ============================== */
@@ -52,6 +53,7 @@ export interface InterpretedFilter {
 
 export interface QueryInterpretation {
   original: string;
+  /** Filters the backend inferred from the text. Suggestions only: shown for the user to select, never applied automatically. */
   filters: InterpretedFilter[];
   /** Remaining free-text the backend kept as a keyword search. */
   keywords?: string;
@@ -66,12 +68,17 @@ export interface DiscoverQuery {
   sort: DiscoverSort;
   page: number;
   pageSize: number;
-  /** When true the backend interprets `text` as natural language. */
+  /**
+   * When true the backend interprets `text` as natural language and returns the interpretation as SUGGESTED filters.
+   * Suggestions are never applied: only `filters` (explicitly selected by the user) restrict the results; the words
+   * the interpreter did not turn into suggestions (`interpretation.keywords`) remain the text search.
+   */
   interpret?: boolean;
 }
 
 export interface DiscoverResult extends Paged<CompanySummary> {
   interpretation?: QueryInterpretation;
+  /** The filters that restricted this result: exactly the ones the user selected. */
   appliedFilters: DiscoverFilters;
 }
 
@@ -153,6 +160,8 @@ export interface CompanyArtifact {
   versionId: string;
   versions: ArtifactVersion[];
   freshness: ArtifactFreshness;
+  /** Every research run of this company, newest first. The dossier itself shows the latest report; earlier runs keep their own versions. */
+  runs?: ResearchRunSnapshot[];
   tags: string[];
   pinned: boolean;
   profile: CompanyProfile;
@@ -251,6 +260,23 @@ export interface BatchStatus {
   errors: { rowId: string; columnId: string; message: string }[];
 }
 
+/**
+ * Present only on a sheet that was built from companies COGNIS had already verified because the Enhetsregisteret search was unavailable when the
+ * sheet was created. A sheet built from a live register search has no `discovery`.
+ */
+export interface SheetDiscovery {
+  kind: 'verified_companies';
+  registryAvailable: false;
+  /** Machine-readable class of the register failure (timeout, server_error, …). */
+  reason?: string;
+  /** The register failure in plain words. */
+  cause?: string;
+  /** When the failure was observed. */
+  at: ISODateTime;
+  count: number;
+  note: string;
+}
+
 export interface DataSheetSummary {
   id: string;
   title: string;
@@ -259,6 +285,7 @@ export interface DataSheetSummary {
   columnCount: number;
   updatedAt: ISODateTime;
   criteria?: InterpretedFilter[];
+  discovery?: SheetDiscovery;
 }
 
 export interface DataSheet extends DataSheetSummary {
@@ -380,6 +407,14 @@ export interface SignalFeedGroup {
 
 export type ExportFormat = 'csv' | 'xlsx' | 'json' | 'pdf';
 
+/**
+ * What an export contains:
+ *  report   – Full Research Report, a multi-page PDF built from the saved research
+ *  data     – Research Data, the structured facts (csv / xlsx / json) — the original export
+ *  evidence – Evidence & Sources, every fact with its source URL, excerpt, verification status, timestamps and period (csv / json)
+ */
+export type ExportKind = 'report' | 'data' | 'evidence';
+
 export interface ExportOptions {
   sourceLinks: boolean;
   evidence: boolean;
@@ -390,6 +425,8 @@ export interface ExportOptions {
 
 export interface ExportRequest {
   target: { type: 'company' | 'sheet' | 'comparison' | 'artifact'; id: string };
+  /** Omitted = 'data', so requests from before the report existed behave as they always did. */
+  kind?: ExportKind;
   format: ExportFormat;
   options: ExportOptions;
 }
@@ -406,6 +443,8 @@ export interface ExportResult {
 
 export interface SystemCapabilities {
   exports: ExportFormat[];
+  /** Export types the backend can produce. Older backends omit it: then only 'data' is offered (plus 'report' when `pdfReports` is true). */
+  exportKinds?: ExportKind[];
   pdfReports: boolean;
   pauseResearch: boolean;
   cancelResearch: boolean;

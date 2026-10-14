@@ -96,6 +96,27 @@ async def _network_checks(s: Any, report: dict[str, Any], section: Any, say: Any
         say(f"enheter/923609016 → {res.classification} (HTTP {res.status}) in {report['brreg']['ms']} ms"
             + (f" · name: {(res.json() or {}).get('navn')}" if res.ok else f" · {res.error}"))
 
+        # The company *search* is a different endpoint from the single-company lookup above, and it is what Discover and Data Sheets call. Same
+        # parameters they send, same retries, and the real cause when it fails (this is the check for "Company search in Enhetsregisteret failed").
+        from app.connectors import brreg as brreg_search
+
+        report["brreg_search"] = []
+        for label, params in (("by name (Equinor)", {"navn": "equinor", "size": 5}), ("Data Sheets default (no filters, 50 rows)", {"size": 50, "page": 0}),
+                              ("filtered (Oslo, 50+ employees)", {"kommunenummer": "0301", "fraAntallAnsatte": 50, "size": 5})):
+            t = time.monotonic()
+            ctx = ConnectorContext(org_number="", http=http, budget=unlimited_budget(), run_id="live-check", settings=s, fresh=True)
+            found = await brreg_search.search_entities(ctx, params)
+            ms = int((time.monotonic() - t) * 1000)
+            row: dict[str, Any] = {"check": label, "ms": ms, "ok": found.failure is None}
+            if found.failure is None:
+                row.update(rows=len(found.rows), total=found.total)
+                say(f"search {label} → OK, {len(found.rows)} rows of {found.total} in {ms} ms")
+            else:
+                row["failure"] = found.failure.as_details()
+                say(f"search {label} → FAILED ({found.failure.kind}, {found.failure.attempts} attempt(s), {ms} ms): {found.failure.cause}"
+                    + (f" [{found.failure.detail}]" if found.failure.detail else ""))
+            report["brreg_search"].append(row)
+
         # ------------------------------------------------------------ 3 LLM
         section("3. Language model")
         provider = build_provider(http, s)

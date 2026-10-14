@@ -1,5 +1,6 @@
 /**
- * Globe refinement: the workspace globe is the monochrome "intel" look; the natural Earth is for the About story only.
+ * Globe refinement: the workspace globe is the monochrome "intel" look: a bright ivory-white sphere (white oceans) with navy-ink
+ * geography. The natural Earth (blue ocean) is for the About story only.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render } from '@testing-library/react';
@@ -12,6 +13,8 @@ import { INTEL_DARK, INTEL_LIGHT, intelLit } from '@/components/globe/intelPalet
 import intelSurfaceSource from '@/components/globe/surfaces/intelSurface.ts?raw';
 import intelGlobeSource from '@/components/globe/IntelGlobe.tsx?raw';
 import fallbackSource from '@/components/globe/GlobeFallback.tsx?raw';
+import earthSurfaceSource from '@/components/globe/surfaces/earthSurface.ts?raw';
+import { GlobeFallback } from '@/components/globe/GlobeFallback';
 
 describe('GlobeStage variants', () => {
   beforeEach(() => {
@@ -133,12 +136,13 @@ describe('intel palette', () => {
     return (Math.max(...c) - Math.min(...c)) / Math.max(...c);
   };
 
-  it('is a navy sphere with ivory geography, inverted to paper and ink on the light theme', () => {
-    expect(lum(INTEL_DARK.mid)).toBeLessThan(40); // near-black navy
-    expect(lum(INTEL_DARK.ink)).toBeGreaterThan(220); // ivory
+  it('is an ivory-white sphere with navy-ink geography, and the paper-and-ink sphere on the light theme', () => {
+    expect(lum(INTEL_DARK.mid)).toBeGreaterThan(235); // bright ivory-white ocean (the lit side)
+    expect(lum(INTEL_DARK.deep)).toBeGreaterThan(170); // even the shaded side is light: the ocean never reads as dark blue
+    expect(lum(INTEL_DARK.ink)).toBeLessThan(60); // navy land, coast and dots
     expect(lum(INTEL_LIGHT.mid)).toBeGreaterThan(200); // paper
     expect(lum(INTEL_LIGHT.ink)).toBeLessThan(60); // navy ink
-    // restrained: a faint rim, a crisp but never solid coast, no glow
+    // restrained: a soft rim, a crisp but never solid coast, no glow
     for (const p of [INTEL_DARK, INTEL_LIGHT]) {
       expect(p.rimAmount).toBeLessThan(0.5);
       expect(p.haloStrength).toBeLessThan(0.2);
@@ -146,29 +150,125 @@ describe('intel palette', () => {
     }
   });
 
-  it('makes white / ivory the dominant colour of the dark globe, with deep navy negative space', () => {
-    // bright ivory-white geography: warm (red >= blue), not a grey and not a blue
-    const [r, , b] = [1, 3, 5].map((i) => parseInt(INTEL_DARK.ink.slice(i, i + 2), 16));
-    expect(lum(INTEL_DARK.ink)).toBeGreaterThan(235);
+  const contrast = (a: string, b: string) => {
+    const channel = (v: number) => (v / 255 <= 0.03928 ? v / 255 / 12.92 : ((v / 255 + 0.055) / 1.055) ** 2.4);
+    const rl = (hex: string) => [1, 3, 5].map((i) => channel(parseInt(hex.slice(i, i + 2), 16))).reduce((acc, c, i) => acc + c * [0.2126, 0.7152, 0.0722][i], 0);
+    const [hi, lo] = [rl(a), rl(b)].sort((x, y) => y - x);
+    return (hi + 0.05) / (lo + 0.05);
+  };
+
+  it('makes the ocean of the dark theme white, with enough contrast against the land for the geography to stay readable', () => {
+    // bright ivory-white: warm (red >= blue), not a grey and not a blue
+    const [r, , b] = [1, 3, 5].map((i) => parseInt(INTEL_DARK.mid.slice(i, i + 2), 16));
     expect(r).toBeGreaterThanOrEqual(b);
-    // dots and the coastline are the bright things: dots stay bright on the shaded side too, the coast is crisp
-    expect(INTEL_DARK.dotOpacity).toBe(1);
-    expect(INTEL_DARK.dotFloor).toBeGreaterThanOrEqual(0.6);
-    expect(INTEL_DARK.coast).toBeGreaterThanOrEqual(0.8);
+    expect(lum(INTEL_DARK.mid)).toBeGreaterThan(lum(INTEL_LIGHT.mid)); // brighter than the ivory theme's paper sphere
+    // land against ocean: the lit and the shaded side both keep strong contrast
+    expect(contrast(INTEL_DARK.ink, INTEL_DARK.mid)).toBeGreaterThan(12);
+    expect(contrast(INTEL_DARK.ink, INTEL_DARK.deep)).toBeGreaterThan(7);
+    // the dots, the coast and the faint inland contour are the dark things on the white
+    expect(INTEL_DARK.dotOpacity).toBeGreaterThanOrEqual(0.9);
+    expect(INTEL_DARK.dotFloor).toBeGreaterThanOrEqual(0.55); // dots stay clear on the shaded side too
+    expect(INTEL_DARK.coast).toBeGreaterThanOrEqual(0.5);
+    expect(INTEL_DARK.fill).toBeGreaterThan(0); // land carries a faint tone so the continents read before the dots do
     expect(INTEL_DARK.contour).toBeGreaterThan(0);
     expect(INTEL_DARK.contour).toBeLessThan(0.35); // a faint echo of the coast, not a second outline
-    // the ocean and the shaded side are near-black navy
-    expect(lum(INTEL_DARK.deep)).toBeLessThan(12);
-    expect(lum(INTEL_DARK.mid)).toBeLessThan(30);
+    // no navy ocean left anywhere in the dark palette
+    for (const hex of [INTEL_DARK.deep, INTEL_DARK.mid]) expect(lum(hex)).toBeGreaterThan(170);
   });
 
-  it('keeps the rim and halo silver: thin, faint and never a blue glow', () => {
-    for (const hex of [INTEL_DARK.rim, INTEL_DARK.halo]) {
-      expect(lum(hex)).toBeGreaterThan(190); // silver, not a colour
-      expect(saturation(hex)).toBeLessThan(0.12); // neutral: no blue cast
-    }
-    expect(INTEL_DARK.rimAmount).toBeLessThanOrEqual(0.35);
-    expect(INTEL_DARK.rimPower).toBeGreaterThanOrEqual(4); // hugs the limb
+  it('keeps the rim a soft neutral shade and the halo a faint silver: never a blue glow', () => {
+    expect(saturation(INTEL_DARK.halo)).toBeLessThan(0.12); // neutral: no blue cast
+    expect(lum(INTEL_DARK.halo)).toBeGreaterThan(190);
+    expect(saturation(INTEL_DARK.rim)).toBeLessThan(0.25);
+    expect(lum(INTEL_DARK.rim)).toBeGreaterThan(100); // a shade that rounds the limb, not a dark outline
+    expect(INTEL_DARK.rimAmount).toBeLessThanOrEqual(0.45);
+    expect(INTEL_DARK.rimPower).toBeGreaterThanOrEqual(3); // hugs the limb
     expect(INTEL_DARK.haloStrength).toBeLessThanOrEqual(0.1);
+  });
+});
+
+describe('white oceans on the Home and Discover globe', () => {
+  /** A 2D context that keeps what the globe puts on it: the shaded sphere (ImageData) and every gradient stop. */
+  function recordingContext() {
+    const rec = { image: null as ImageData | null, stops: [] as string[] };
+    const gradient = { addColorStop: (_o: number, c: string) => void rec.stops.push(c) };
+    const ctx = {
+      createImageData: (w: number, h: number) => ({ data: new Uint8ClampedArray(w * h * 4), width: w, height: h }),
+      putImageData: (img: ImageData) => void (rec.image = img),
+      createRadialGradient: () => gradient,
+      createLinearGradient: () => gradient,
+      save() {}, restore() {}, scale() {}, beginPath() {}, arc() {}, fill() {},
+      fillStyle: '', globalAlpha: 1, globalCompositeOperation: 'source-over',
+    };
+    return { ctx, rec };
+  }
+  const paint = (theme: 'dark' | 'light', variant: 'intel' | 'earth') => {
+    const { ctx, rec } = recordingContext();
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(ctx as unknown as CanvasRenderingContext2D);
+    render(<GlobeFallback variant={variant} theme={theme} lat={25} lon={14} />);
+    vi.restoreAllMocks();
+    return rec;
+  };
+  const lumAt = (img: ImageData, x: number, y: number) => {
+    const i = (y * img.width + x) * 4;
+    return img.data[i] * 0.299 + img.data[i + 1] * 0.587 + img.data[i + 2] * 0.114;
+  };
+  /** Mean luminance of the opaque sphere pixels. */
+  const sphereLum = (img: ImageData) => {
+    let sum = 0;
+    let n = 0;
+    for (let i = 0; i < img.data.length; i += 4) {
+      if (img.data[i + 3] < 250) continue;
+      sum += img.data[i] * 0.299 + img.data[i + 1] * 0.587 + img.data[i + 2] * 0.114;
+      n++;
+    }
+    return { mean: sum / n, n };
+  };
+
+  it('paints the dark-theme sphere bright ivory-white, from the lit face to the shaded limb', () => {
+    const { image } = paint('dark', 'intel');
+    expect(image).not.toBeNull();
+    const img = image!;
+    const c = img.width / 2;
+    const R = img.width * SPHERE_RADIUS;
+    expect(lumAt(img, Math.round(c - R * 0.35), Math.round(c - R * 0.3))).toBeGreaterThan(225); // lit face: ivory-white
+    expect(lumAt(img, Math.round(c + R * 0.6), Math.round(c + R * 0.4))).toBeGreaterThan(170); // shaded side: still light, never navy
+    const { mean, n } = sphereLum(img);
+    expect(n).toBeGreaterThan(100000);
+    expect(mean).toBeGreaterThan(205); // the sphere as a whole is white, not a dark ball with white dots
+  });
+
+  it('is not the navy ocean any more, and is still lit from one side so it reads as a sphere', () => {
+    const { image } = paint('dark', 'intel');
+    const img = image!;
+    const c = img.width / 2;
+    const R = img.width * SPHERE_RADIUS;
+    const litSide = lumAt(img, Math.round(c - R * 0.5), Math.round(c - R * 0.4));
+    const shadeSide = lumAt(img, Math.round(c + R * 0.75), Math.round(c + R * 0.45));
+    expect(litSide - shadeSide).toBeGreaterThan(15); // subtle lighting survives: visible fall-off across the sphere
+    expect(litSide - shadeSide).toBeLessThan(120); // ... but it is shading, not a dark half
+  });
+
+  it('keeps the light theme a paper sphere, a little deeper than the dark theme white', () => {
+    const light = sphereLum(paint('light', 'intel').image!).mean;
+    const dark = sphereLum(paint('dark', 'intel').image!).mean;
+    expect(light).toBeGreaterThan(190);
+    expect(light).toBeLessThan(dark);
+  });
+
+  it('draws no hard-coded navy ocean and no ivory markers (they would vanish on a white sphere)', () => {
+    expect(intelSurfaceSource).not.toMatch(/#03060c|#0a1220/i); // the old ocean colours
+    expect(intelSurfaceSource).not.toMatch(/#f4efe4|#ffffff/i); // markers are navy ink on the pale sphere
+    expect(intelSurfaceSource).toMatch(/uMid/); // the ocean colour comes from the palette
+    expect(intelSurfaceSource).toMatch(/pal\.mid/);
+  });
+
+  it('leaves the natural Earth of the About page unchanged: blue ocean, its own surface, none of the intel palette', () => {
+    expect(earthSurfaceSource).not.toMatch(/intelPalette|INTEL_/);
+    expect(fallbackSource).toContain("'#14467f'"); // the blue ocean gradient of drawEarth
+    const { stops } = paint('dark', 'earth');
+    expect(stops).toEqual(expect.arrayContaining(['#2a6db0', '#14467f', '#071d3a']));
+    const { stops: lightStops } = paint('light', 'earth');
+    expect(lightStops).toEqual(expect.arrayContaining(['#2a6db0', '#14467f', '#071d3a']));
   });
 });

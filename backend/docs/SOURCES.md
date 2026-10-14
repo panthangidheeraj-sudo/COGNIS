@@ -98,8 +98,31 @@ contradicting) and counted once. The merged entry keeps every listing's URL, pub
 | Research incomplete | the sources were not all checked (no verified website, budget/time limit, NAV index still catching up) — no conclusion |
 
 Missing data is never read as "not hiring". A "0 open positions" is published only from the company's own explicit statement, and is withheld while a source
-was unavailable. A NAV timeout ends the NAV step after `NAV_STEP_TIMEOUT_SECONDS` (25 s) or two unreachable responses in a row and is shown as "NAV could not
+was unavailable. A NAV timeout ends the NAV step after `NAV_STEP_TIMEOUT_SECONDS` (20 s; each request is capped at `NAV_REQUEST_TIMEOUT_SECONDS`, 8 s, with one retry, and an unreachable NAV is not asked again for `NAV_UNAVAILABLE_COOLDOWN_SECONDS`) or two unreachable responses in a row and is shown as "NAV could not
 be checked"; it never removes or lowers what the company's own pages established.
+
+## Recent activity — what is read, in what order, and what is kept
+
+Order of sources for company announcements (`connectors/newsroom.py`, then `connectors/news_discovery.py`):
+
+1. **The company's own newsroom and investor-relations pages**, on the identity-verified website only: pages the site crawl already read, then newsroom / investor pages linked from the site, then the sitemap, then a few
+   common paths (`/news`, `/nyheter`, `/investors` …) only if the site links none. Dated items are read from listings (`<time>`, printed dates, table rows) and from JSON-LD `NewsArticle` data.
+2. **RSS / Atom feeds** that those pages advertise (same site only, at most two).
+3. **Reputable secondary sources** found by search (Tavily, restricted to `SECONDARY_NEWS_DOMAINS`: business and trade press, wire services, exchange notices). Search results are *candidates*: every article is fetched,
+   dated, and tied to this exact organisation before it is used (organisation number on the page; or the exact registered name in the headline plus a link to the verified website; or the exact registered name in the
+   headline, unless that name continues into a longer one — "Autobjørn Bergen AS" is a different company; a page stating another organisation's number is rejected; generic names are not searched at all).
+4. **Registers**: Enhetsregisteret (registration, establishments, group, name changes) and procurement notices (TED, Doffin). Register entries are always `routine` or `relevant`, never `major`.
+
+Rules that apply:
+
+* `robots.txt`, the SSRF policy, per-host rate limits and request budgets apply to every request. A page that robots.txt disallows is never fetched and is recorded as blocked; no login, CAPTCHA or paywall is bypassed.
+* What is stored: the headline, the publication date, the link, and a short verbatim lead of at most 300 characters (the headline alone when the page says `nosnippet`). Article bodies are not stored.
+* The same announcement found in several places is shown once with all its sources; the company's own words (investor relations, then newsroom) are the primary source, press coverage is last. Different figures or people are
+  different announcements. TED and Doffin notices with the same notice id are one event.
+* Every event needs a valid date (not in the future), a source URL and an evidence excerpt; news-like events also need their headline inside that excerpt. Anything else is excluded and counted in the section.
+* A source that could not be read, a search that returned nothing, an unconfigured search key, a script-rendered newsroom — each is shown as a limitation of the research. None of them is read as "nothing happened".
+* Classification (`app/events/`): Major / Relevant / Routine from the wording of the announcement (Norwegian and English), a stated amount and — only in the same currency — its size against the latest filed revenue,
+  the type of source and recency. Currencies are never assumed or converted ("kroner" and "$" are not currency codes). Every event stores the reasons for its tier.
 
 ## Public procurement — coverage
 

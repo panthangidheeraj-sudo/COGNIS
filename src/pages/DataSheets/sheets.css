@@ -14,6 +14,13 @@
   border: var(--bw) solid color-mix(in oklab, var(--accent-soft) 30%, var(--line));
   background: var(--frost-sheen), var(--surface-1);
 }
+/* shown under a failed create: the choice to continue from already-verified companies */
+.creator-fallback {
+  padding: 12px 14px;
+  border-radius: var(--r-lg);
+  border: var(--bw) dashed var(--line);
+  background: var(--surface-1);
+}
 .creator-criteria {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));

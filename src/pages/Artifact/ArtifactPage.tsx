@@ -5,6 +5,7 @@ import { ArrowLeft, ArrowRight, ArrowUp, Download, GitCompareArrows, History, Lo
 import { api } from '@/api';
 import type { CompanyArtifact, CompanyProfile, ReportArtifact, ResearchAnswer, VersionComparison } from '@/types';
 import { ErrorState, ErrorBoundary } from '@/components/common/ErrorState';
+import { RunHistory } from '@/components/company/RunHistory';
 import { Skeleton, LoadingRegion } from '@/components/common/Skeleton';
 import { Modal } from '@/components/common/Overlay';
 import { ExportModal } from '@/components/common/ExportModal';
@@ -236,6 +237,7 @@ function Dossier({ artifact, viewing }: { artifact: CompanyArtifact; viewing: Co
               </button>
             )}
           </section>
+          <RunHistory runs={artifact.runs ?? []} artifactId={artifact.id} viewingVersionId={viewing?.versionId ?? artifact.versionId} />
           <AskResearch profile={profile} artifactId={artifact.id} />
         </aside>
       </div>

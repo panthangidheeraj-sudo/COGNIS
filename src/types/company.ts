@@ -256,7 +256,34 @@ export type TimelineEventType =
   | 'location'
   | 'announcement'
   | 'registration'
-  | 'funding';
+  | 'funding'
+  | 'results'
+  | 'partnership'
+  | 'discovery'
+  | 'project'
+  | 'production'
+  | 'regulatory'
+  | 'restructuring';
+
+/**
+ * How much an event matters to an assessment of the company.
+ * - major: acquisitions, material contracts, results, discoveries, top-level leadership changes … (backend scores impact, money, operations, strategy, recency)
+ * - relevant: worth knowing, but not by itself a change to the picture of the company
+ * - routine: register entries (registrations, establishments), invitations, webinars and other routine notices — kept, but never counted as developments
+ * Older saved data may still say 'minor'; it is shown as routine.
+ */
+export type EventSignificance = 'major' | 'relevant' | 'routine';
+
+/** Where an event was found. Official sources outrank press coverage when the same announcement appears in several places. */
+export type EventSourceType = 'investor_relations' | 'company_newsroom' | 'public_procurement' | 'official_registry' | 'secondary_news';
+
+export interface EventSourceRef {
+  sourceIds: string[];
+  sourceType: EventSourceType;
+  url?: string | null;
+  title?: string;
+  date?: ISODate;
+}
 
 export interface TimelineEvent {
   id: string;
@@ -264,18 +291,47 @@ export interface TimelineEvent {
   type: TimelineEventType;
   title: string;
   description?: string;
-  /**
-   * Backend classification. 'major' = CEO changes, annual filings, ownership
-   * changes, acquisitions, new locations, major public contracts, expansions,
-   * significant hiring. The executive timeline shows only major events.
-   */
-  significance: 'major' | 'minor';
+  /** Backend classification (see EventSignificance). Legacy 'minor' is read as 'routine'. */
+  significance: EventSignificance | 'minor';
+  /** 0–100 ranking score and 1-based rank within the section (1 = most significant). Present for researched profiles. */
+  score?: number;
+  rank?: number;
+  /** Plain-language reasons for the classification, e.g. "Contract or order (decisive wording)". */
+  reasons?: string[];
+  sourceType?: EventSourceType;
+  /** The announcement itself, when the source links to it. */
+  url?: string;
+  /** Every place the same announcement was found (the event is shown once). */
+  sources?: EventSourceRef[];
+  /** How many duplicate reports were merged into this event. */
+  duplicates?: number;
   sourceIds: string[];
   evidence: Evidence[];
 }
 
+/** What was looked at for the Recent activity section and what came of it. A source that could not be read is a limitation, never "no events". */
+export type ActivityCheckStatus = 'read' | 'blocked' | 'not_found' | 'failed' | 'not_run' | 'no_dated_items' | 'not_checked';
+export interface ActivityCheck {
+  id: string;
+  kind: 'newsroom' | 'investor_relations' | 'feed' | 'news_search' | 'registry' | 'procurement';
+  name: string;
+  status: ActivityCheckStatus;
+  note: string;
+  url?: string;
+  items?: number;
+  sourceId?: string;
+}
+
 export interface ActivitySection extends SectionMeta {
   events: TimelineEvent[];
+  counts?: Record<EventSignificance, number>;
+  /** Duplicate reports of the same announcement that were merged into one event. */
+  consolidated?: number;
+  sourcesChecked?: ActivityCheck[];
+  /** Candidates that were not shown because they had no valid date, source URL or matching evidence. */
+  excluded?: { count: number; items: { title: string; date?: string | null; reason: string; sourceType?: EventSourceType }[] };
+  /** Lowest-ranked routine events beyond the display limit. */
+  omitted?: number;
 }
 
 export type ChangeKind = 'added' | 'removed' | 'modified';

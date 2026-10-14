@@ -18,12 +18,41 @@ def _value_sha(value: Any) -> str:
     return sha256_json(value)[:24]
 
 
+# Run bookkeeping that does not change what the evidence says: it must not create a new report version on its own.
+_VERSION_IGNORED = ("operations", "trace", "started_at", "completed_at", "run_id", "effort")
+
+
+def _content_digest(record: dict[str, Any]) -> str:
+    return sha256_json({k: v for k, v in record.items() if k not in _VERSION_IGNORED})
+
+
+def facts_digest(record: dict[str, Any] | None) -> str:
+    """A fingerprint of *what the report says*: each published fact's key and value (not when or where it was fetched). Two runs with the same
+    digest found the same facts."""
+    rows = sorted((c.get("key") or "", json.dumps(c.get("value"), sort_keys=True, default=str), c.get("availability") or "", c.get("currency") or "")
+                  for c in (record or {}).get("claims") or [])
+    return sha256_json(rows)
+
+
+def version_id_for(record: dict[str, Any]) -> str:
+    """The id ``save_record`` will give this record: identical evidence always maps to the same version."""
+    return "pv-" + stable_id(record["organisation_number"], _content_digest(record), length=16)
+
+
+def version_exists(db: Database, version_id: str) -> bool:
+    return db.one("SELECT 1 FROM profile_versions WHERE id = ?", (version_id,)) is not None
+
+
+def latest_version_id(db: Database, org: str) -> str | None:
+    row = db.one("SELECT id FROM profile_versions WHERE org_number = ? ORDER BY created_at DESC LIMIT 1", (org,))
+    return row["id"] if row else None
+
+
 def save_record(db: Database, record: dict[str, Any], *, changes: list[dict[str, Any]] | None = None, label: str | None = None) -> str:
     """Persist a research record. Returns the profile-version id."""
     org = record["organisation_number"]
     now = now_iso()
-    content = {k: v for k, v in record.items() if k not in ("operations", "trace", "started_at", "completed_at", "run_id")}
-    digest = sha256_json(content)
+    digest = _content_digest(record)
     version_id = "pv-" + stable_id(org, digest, length=16)
     identity = record.get("identity") or {}
     with db.transaction() as conn:
@@ -130,7 +159,9 @@ def _module_for_field(field: str) -> str:
         return "group"
     if field in ("job_posting", "open_positions_count"):
         return "jobs"
-    if field in ("news_item", "official_website", "website_title", "website_description", "business_description", "contact_email", "contact_phone") or field.startswith("social_profile_"):
+    if field == "news_item":
+        return "news"
+    if field in ("official_website", "website_title", "website_description", "business_description", "contact_email", "contact_phone") or field.startswith("social_profile_"):
         return "website"
     return "registry_live"
 

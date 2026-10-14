@@ -11,6 +11,7 @@ from collections import Counter
 from typing import Any
 
 from ..core.util import currency_unit, format_int, format_money, normalize_currency, now_iso, stated_currencies, title_case_no
+from ..extraction.boilerplate import is_boilerplate
 from ..identity.model import COUNTIES, LEGAL_FORMS
 from .sources import STATIC_SOURCES, SourceIndex, to_frontend_evidence
 
@@ -166,7 +167,7 @@ class Builder:
         self.section = "hiring"
         hiring = self.hiring()
         self.section = "activity"
-        activity = self.activity()
+        activity = self.activity(financials)
         self.section = "changes"
         changes = self.changes_section()
         self.section = "relationships"
@@ -251,8 +252,8 @@ class Builder:
 
     def description(self) -> dict[str, Any] | None:
         desc = self.first("business_description")
-        if not desc:
-            return None
+        if not desc or is_boilerplate((desc.get("attributes") or {}).get("translation") or desc["value"]):
+            return None  # saved research may hold a scraped site menu or cookie banner as the "description": it is page furniture, not a company statement
         translation = (desc.get("attributes") or {}).get("translation")
         f = self.fact("overview.description", "What the company does", desc, value=translation or desc["value"])
         for ev in f["evidence"]:
@@ -505,66 +506,11 @@ class Builder:
             return {"nav"}
         return set()
 
-    def activity(self) -> dict[str, Any]:
-        events = []
+    def activity(self, financials: dict[str, Any]) -> dict[str, Any]:
+        """Recent activity: validated, de-duplicated, ranked events and the limits of what could be read (see ``activity_builder``)."""
+        from .activity_builder import build_activity
 
-        def add(date: str | None, typ: str, title: str, claim: dict[str, Any], major: bool, description: str | None = None) -> None:
-            if not date or not re.match(r"^\d{4}-\d{2}-\d{2}$", date[:10]):
-                return
-            evidence = self.evidence_for(claim)
-            ev = {"id": f"{self.org}-ev{len(events)}", "date": date[:10], "type": typ, "title": title, "significance": "major" if major else "minor",
-                  "sourceIds": sorted({e["sourceId"] for e in evidence}), "evidence": evidence}
-            if description:
-                ev["description"] = description
-            events.append(ev)
-
-        for c in self.by_field.get("news_item") or []:
-            title = str(c["value"])
-            low = title.casefold()
-            typ, major = "announcement", False
-            if re.search(r"oppkjøp|kjøper|acquir|fusjon|merger", low):
-                typ, major = "acquisition", True
-            elif re.search(r"nytt kontor|new office|åpner|opens|ny avdeling|etablerer", low):
-                typ, major = "location", True
-            elif re.search(r"kontrakt|contract|avtale med|agreement|tildelt|awarded", low):
-                typ, major = "contract", True
-            elif re.search(r"ny daglig leder|new ceo|ansetter .* som|appoint", low):
-                typ, major = "leadership", True
-            add(c.get("as_of"), typ, title, c, major)
-        for c in self.by_field.get("procurement_award") or []:
-            a = c.get("attributes") or {}
-            buyer = f" — buyer: {a['buyer_name']}" if a.get("buyer_name") else ""
-            add(c.get("as_of"), "contract", f"Public contract awarded: {c['value']}{buyer}", c, True,
-                description=" · ".join(x for x in (a.get("notice_type_label"), f"notice {a.get('notice_id')}" if a.get("notice_id") else None, a.get("coverage")) if x))
-        for c in self.by_field.get("procurement_notice_as_buyer") or []:
-            a = c.get("attributes") or {}
-            add(c.get("as_of"), "contract", f"Procurement published as buyer: {c['value']}", c, False,
-                description=" · ".join(x for x in (a.get("notice_type_label"), f"notice {a.get('notice_id')}" if a.get("notice_id") else None, a.get("coverage")) if x))
-        reg = self.first("registration_date")
-        if reg:
-            add(reg["value"], "registration", "Registered in Enhetsregisteret", reg, True)
-        founded = self.first("founded_date")
-        if founded and (not reg or founded["value"] != reg["value"]):
-            add(founded["value"], "registration", "Company founded", founded, True)
-        parent = self.first("parent_company")
-        if parent and parent.get("effective_from"):
-            add(parent["effective_from"], "acquisition", f"Became part of the {parent['value']} group", parent, True,
-                description=(parent.get("attributes") or {}).get("share") and f"Ownership basis: {(parent.get('attributes') or {}).get('share')}")
-        for c in self.by_field.get("subsidiary") or []:
-            if c.get("effective_from"):
-                add(c["effective_from"], "acquisition", f"Subsidiary registered: {c['value']}", c, False)
-        for c in self.by_field.get("registered_establishment") or []:
-            if c.get("effective_from"):
-                add(c["effective_from"], "location", f"Establishment opened: {(c.get('attributes') or {}).get('name') or c['value']}", c, True)
-        for c in self.by_field.get("former_name") or []:
-            if c.get("effective_to"):
-                add(c["effective_to"], "registration", f"Name changed from {c['value']}", c, True)
-        events.sort(key=lambda e: e["date"], reverse=True)
-        if events:
-            return {"status": "available", "events": events[:60]}
-        if not self.researched:
-            return {"status": "pending", "message": PENDING, "events": []}
-        return {"status": "not_available", "message": "No dated public events were found in the searched sources.", "events": []}
+        return build_activity(self, financials)
 
     def changes_section(self) -> dict[str, Any]:
         if not self.researched:

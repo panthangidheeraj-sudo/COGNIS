@@ -44,6 +44,12 @@ def job_board_source(org: str, host: str) -> dict[str, Any]:
     return {"id": f"jobs-{org}-{dom}", "name": f"Company job board ({dom})", "kind": "jobs", "tier": "secondary", "official": False, "url": f"https://{host}/", "domain": dom}
 
 
+def news_source(org: str, host: str) -> dict[str, Any]:
+    """A press outlet that reported on the company (never the company's own words)."""
+    dom = registrable_domain(host) or host
+    return {"id": f"news-{org}-{dom}", "name": f"Press coverage ({dom})", "kind": "news", "tier": "secondary", "official": False, "url": f"https://{host}/", "domain": dom}
+
+
 class SourceIndex:
     """Collects the frontend sources referenced by one profile."""
 
@@ -65,8 +71,10 @@ class SourceIndex:
             return self.add(STATIC_SOURCES[sid])
         url = ev.get("source_url") or ""
         dom = registrable_domain(host_of(url))
-        if module in ("website", "jobs") and self.domain and dom == self.domain:
+        if module in ("website", "jobs", "news") and self.domain and dom == self.domain:
             return self.add(website_source(self.org, self.domain))
+        if module == "news_discovery" and dom:
+            return self.add(news_source(self.org, host_of(url)))
         if module == "jobs" and dom:
             return self.add(job_board_source(self.org, host_of(url)))
         if dom:

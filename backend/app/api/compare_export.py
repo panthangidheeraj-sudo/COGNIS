@@ -1,4 +1,4 @@
-"""Compare view, exports (csv/json/xlsx) and the system status endpoint."""
+"""Compare view, exports (research data csv/json/xlsx, Full Research Report pdf, Evidence & Sources csv/json) and the system status endpoint."""
 from __future__ import annotations
 
 import csv
@@ -189,12 +189,85 @@ def _sheet_rows(sheet: dict[str, Any], opts: dict[str, Any]) -> list[dict[str, A
     return rows
 
 
+EXPORT_KINDS = ("data", "report", "evidence")
+REPORT_TARGET_ONLY = "The Full Research Report and the Evidence & Sources export are available for a single company's saved research. Open the company and export from there."
+
+
+def _company_org(s: Any, ttype: str, tid: str) -> str:
+    """The organisation number behind a company or saved-research target."""
+    org = tid.removeprefix("art-").split("-copy-")[0] if ttype == "artifact" and tid.startswith("art-") else tid
+    if ttype == "artifact" and tid.startswith("rep-"):
+        row = s.db.one("SELECT org_number FROM artifacts WHERE id = ?", (tid,))
+        org = row["org_number"] if row else ""
+    return s.clean_org(org)
+
+
+def _failed(message: str) -> dict[str, Any]:
+    return {"status": "failed", "filename": "", "message": message}
+
+
+def _file_stem(*parts: str) -> str:
+    return "".join(ch if ch.isalnum() or ch in "-_" else "-" for ch in "-".join(parts)).strip("-")[:90] or "export"
+
+
+def _register_export(s: Any, path: Path, filename: str, ctype: str, eid: str) -> dict[str, Any]:
+    s.db.execute("INSERT INTO exports(id, filename, path, content_type, created_at) VALUES (?,?,?,?,?)", (eid, filename, str(path), ctype, now_iso()))
+    return {"status": "ready", "filename": filename, "url": f"{s.settings.api_prefix}/exports/{eid}/download"}
+
+
+async def _research_export(s: Any, kind: str, fmt: str, target: dict[str, Any]) -> dict[str, Any]:
+    """The Full Research Report (PDF) and the Evidence & Sources export. Both read the *saved* research record only — they never start new research."""
+    import asyncio
+
+    from . import report_data, report_pdf
+
+    ttype, tid = target.get("type"), str(target.get("id") or "")
+    if ttype == "artifact" and tid.startswith("sheet-") or ttype not in ("company", "artifact"):
+        return _failed(REPORT_TARGET_ONLY)
+    if kind == "report" and fmt != "pdf":
+        return _failed("The Full Research Report is a PDF. Choose Research Data (CSV) for a spreadsheet.")
+    if kind == "evidence" and fmt not in ("csv", "json"):
+        return _failed("Evidence & Sources is available as CSV or JSON.")
+    try:
+        org = _company_org(s, ttype, tid)
+        sr = report_data.load_saved_research(s, org, generated_at=now_iso())
+    except ApiError as exc:
+        return _failed(exc.message)
+    folder = Path(s.settings.data_dir) / "exports"
+    folder.mkdir(parents=True, exist_ok=True)
+    stem = _file_stem("COGNIS", "Research-Report" if kind == "report" else "Evidence", sr.company["legalName"], org)
+    eid = "exp-" + stable_id(stem, fmt, time.time_ns(), length=12)
+    path = folder / f"{eid}.{fmt}"
+    if kind == "report":
+        if not report_pdf.pdf_available():
+            return _failed("PDF reports cannot be produced on this installation (the report fonts are missing). Re-install the backend files.")
+        await asyncio.to_thread(report_pdf.render_report, sr, path)
+        return _register_export(s, path, f"{stem}.pdf", "application/pdf", eid)
+    if fmt == "json":
+        path.write_text(json.dumps(report_data.evidence_json(sr), ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+        return _register_export(s, path, f"{stem}.json", "application/json", eid)
+    buf = io.StringIO()
+    writer = csv.DictWriter(buf, fieldnames=report_data.EVIDENCE_COLUMNS)
+    writer.writeheader()
+    for row in report_data.evidence_rows(sr):
+        writer.writerow({k: ("" if v is None else v) for k, v in row.items()})
+    path.write_text("\ufeff" + buf.getvalue(), encoding="utf-8")
+    return _register_export(s, path, f"{stem}.csv", "text/csv", eid)
+
+
 async def export(s: Any, req: dict[str, Any]) -> dict[str, Any]:
+    """``kind`` picks what is exported: ``data`` (structured facts: csv/xlsx/json — the original export), ``report`` (Full Research Report, PDF) or
+    ``evidence`` (facts with their sources and evidence: csv/json). Requests without a ``kind`` behave as before; ``format: pdf`` means the report."""
     target = req.get("target") or {}
-    fmt = req.get("format") or "csv"
+    kind = req.get("kind") or ("report" if req.get("format") == "pdf" else "data")
+    fmt = req.get("format") or ("pdf" if kind == "report" else "csv")
     opts = req.get("options") or {}
+    if kind not in EXPORT_KINDS:
+        return _failed(f"Unknown export type “{kind}”.")
+    if kind in ("report", "evidence"):
+        return await _research_export(s, kind, fmt, target)
     if fmt not in ("csv", "json", "xlsx"):
-        return {"status": "failed", "filename": "", "message": "PDF export is not available from this backend yet; use CSV, Excel or JSON."}
+        return _failed("Research Data is available as CSV, Excel or JSON. For a PDF choose Full Research Report.")
     ttype, tid = target.get("type"), str(target.get("id") or "")
     name = "export"
     rows: list[dict[str, Any]]
@@ -203,11 +276,7 @@ async def export(s: Any, req: dict[str, Any]) -> dict[str, Any]:
         if ttype == "artifact" and tid.startswith("sheet-"):
             ttype, tid = "sheet", tid.removeprefix("sheet-")
         else:
-            org = tid.removeprefix("art-").split("-copy-")[0] if ttype == "artifact" and tid.startswith("art-") else tid
-            if ttype == "artifact" and tid.startswith("rep-"):
-                row = s.db.one("SELECT org_number FROM artifacts WHERE id = ?", (tid,))
-                org = row["org_number"] if row else ""
-            org = s.clean_org(org)
+            org = _company_org(s, ttype, tid)
             p = await s.profile(org)
             rows = _fact_rows(p, opts)
             payload = p
@@ -257,8 +326,7 @@ async def export(s: Any, req: dict[str, Any]) -> dict[str, Any]:
             ws.column_dimensions[col[0].column_letter].width = min(60, max(10, max(len(str(c.value or "")) for c in col[:50]) + 2))
         wb.save(path)
         ctype = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    s.db.execute("INSERT INTO exports(id, filename, path, content_type, created_at) VALUES (?,?,?,?,?)", (eid, filename, str(path), ctype, now_iso()))
-    return {"status": "ready", "filename": filename, "url": f"{s.settings.api_prefix}/exports/{eid}/download"}
+    return _register_export(s, path, filename, ctype, eid)
 
 
 # ------------------------------------------------------------------- status --
@@ -270,7 +338,10 @@ def _failing(recent: list[Any], prefix: str) -> bool:
 def system_status(s: Any) -> dict[str, Any]:
     """Source availability as it really is. Sources COGNIS deliberately does not use are reported as ``not_used`` or
     ``alternative`` (a free source covers them) — never as "unavailable"."""
+    from .report_pdf import pdf_available
+
     st = s.settings
+    pdf_ok = pdf_available()
     recent = s.db.all("SELECT connector, classification FROM tool_calls ORDER BY id DESC LIMIT 200")
     brreg_failing = _failing(recent, "brreg")
     llm = describe(st)
@@ -313,7 +384,7 @@ def system_status(s: Any) -> dict[str, Any]:
         {"name": "LinkedIn", "kind": "people", "status": "not_used", "note": "Not used — automated collection is not permitted. Only company pages linked from verified websites are shown."},
     ]
     return {"mode": "live", "backend": "degraded" if brreg_failing else "connected", "research": "online", "version": st.version, "sources": sources,
-            "capabilities": {"exports": ["csv", "xlsx", "json"], "pdfReports": False, "pauseResearch": False, "cancelResearch": True, "watchlist": True, "versions": True,
+            "capabilities": {"exports": ["csv", "xlsx", "json"] + (["pdf"] if pdf_ok else []), "exportKinds": ["data"] + (["report"] if pdf_ok else []) + ["evidence"], "pdfReports": pdf_ok, "pauseResearch": False, "cancelResearch": True, "watchlist": True, "versions": True,
                              "archive": True, "tags": True, "share": False, "discoverFilters": FILTER_CAPABILITIES},
             "checkedAt": now_iso()}
 

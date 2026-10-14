@@ -105,11 +105,11 @@ export default function AboutPage() {
               </span>
             </Copy>
             <Copy className="copy--b" num="02" kicker="Find" title={<>Find the <em className="t-serif">right</em> companies.</>}>
-              Search by name, organization number, industry or place — or describe what you need in plain language. COGNIS turns the description into filters it can actually apply to Enhetsregisteret, and
-              shows its interpretation so you can correct it.
+              Search by name, organization number, industry or place — or describe what you need in plain language. COGNIS reads the description into filters it could apply to Enhetsregisteret and
+              suggests them — nothing is filtered until you choose it.
               <Points
                 items={[
-                  [Search, 'Natural-language discovery, with the interpretation shown as editable filters'],
+                  [Search, 'Natural-language discovery, with the interpretation offered as suggested filters you choose'],
                   [Fingerprint, 'One company, one organization number: exact identity before any research'],
                   [Earth, 'Results placed on the globe only where a location is verified'],
                 ]}

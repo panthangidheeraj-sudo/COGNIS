@@ -654,3 +654,50 @@ mark {
     break-inside: avoid-page;
   }
 }
+
+/* Research runs: one entry per run, newest first */
+.runs {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.run {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: var(--bw) solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+}
+.run.is-latest {
+  border-color: var(--accent-soft);
+}
+.run.is-viewing {
+  background: var(--accent-wash);
+}
+.run-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.run-mode {
+  font-weight: 500;
+  margin-right: 2px;
+}
+.run-issues {
+  margin: 2px 0 0;
+  padding-left: 16px;
+  color: var(--warn);
+}
+.run-issues.is-failed {
+  color: var(--err);
+}
+.run-actions {
+  margin-top: 2px;
+}
+.run-answer {
+  overflow-wrap: anywhere;
+}

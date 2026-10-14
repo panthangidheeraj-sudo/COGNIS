@@ -15,7 +15,7 @@ import { usePreferences } from '@/stores/preferences';
 afterEach(() => usePreferences.getState().set({ motion: 'system' }));
 
 describe('Discover', () => {
-  it('has no permanent filter rail; filters open in a drawer and keep their controls', async () => {
+  it('has no permanent filter rail; filters open in a drawer and keep their controls, with nothing preselected', async () => {
     renderWithProviders(
       <Routes>
         <Route path="/discover" element={<DiscoverPage />} />
@@ -24,7 +24,9 @@ describe('Discover', () => {
     );
     const button = await screen.findByRole('button', { name: /^Filters/ }, { timeout: 4000 });
     expect(screen.queryByRole('complementary', { name: 'Filters' })).not.toBeInTheDocument();
-    await waitFor(() => expect(button).toHaveTextContent(/2/), { timeout: 4000 }); // Location + Industry from the query
+    // Location + Industry are read from the query as suggestions only: nothing is selected, so there is no active count
+    await screen.findByRole('group', { name: 'Suggested filters' }, { timeout: 4000 });
+    expect(button).not.toHaveTextContent(/\d/);
     fireEvent.click(button);
     const drawer = await screen.findByRole('dialog', { name: 'Filters' });
     await waitFor(() => expect(within(drawer).getByLabelText(/Location/)).toBeInTheDocument(), { timeout: 4000 });

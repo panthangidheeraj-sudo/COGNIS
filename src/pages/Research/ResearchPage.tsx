@@ -14,12 +14,14 @@ import { ErrorState } from '@/components/common/ErrorState';
 import { StageTrack } from '@/components/research/StageTrack';
 import { PlanEditor, ResearchPlanView } from '@/components/research/ResearchPlan';
 import { SourceStack } from '@/components/research/SourceStack';
+import { SourceActivity } from '@/components/research/SourceActivity';
 import { CompletionSummary } from '@/components/research/CompletionSummary';
 import { EventTimeline } from '@/components/research/EventTimeline';
 import { AnswerView } from '@/components/research/AnswerView';
 import { AmbiguousCandidates } from '@/components/research/AmbiguousCandidates';
 import { FactValue } from '@/components/evidence/FactValue';
-import { formatOrgNumber } from '@/utils/format';
+import { classifyCompanyInput, formatOrgNumber } from '@/utils/format';
+import { researchOutcome } from '@/utils/status';
 import '@/styles/sections.css';
 import './research.css';
 
@@ -37,7 +39,7 @@ export default function ResearchPage() {
   const autostarted = useRef(false);
 
   const start = useCallback(
-    async (input: { orgNumber?: string; query: string; prompt?: string }) => {
+    async (input: { orgNumber?: string; expectedName?: string; query: string; prompt?: string }) => {
       setBusy(true);
       setStartError(null);
       try {
@@ -89,7 +91,7 @@ export default function ResearchPage() {
             </button>
           </div>
         </div>
-        <AmbiguousCandidates match={run.ambiguity} onPick={(org) => void start({ orgNumber: org, query: run.query, prompt: run.prompt })} />
+        <AmbiguousCandidates match={run.ambiguity} onPick={(org, name) => void start({ orgNumber: org, expectedName: name, query: run.query, prompt: run.prompt })} />
       </div>
     );
 
@@ -132,21 +134,109 @@ export default function ResearchPage() {
 
 /* ------------------------------------------------------------------ */
 
-function Composer({ orgParam, initialQuery, initialPrompt, mode, setMode, onStart, busy, error }: { orgParam: string | null; initialQuery: string; initialPrompt: string; mode: ResearchMode; setMode: (m: ResearchMode) => void; onStart: (i: { orgNumber?: string; query: string; prompt?: string }) => void; busy: boolean; error: unknown }) {
+function Composer({ orgParam, initialQuery, initialPrompt, mode, setMode, onStart, busy, error }: { orgParam: string | null; initialQuery: string; initialPrompt: string; mode: ResearchMode; setMode: (m: ResearchMode) => void; onStart: (i: { orgNumber?: string; expectedName?: string; query: string; prompt?: string }) => void; busy: boolean; error: unknown }) {
   const [company, setCompany] = useState<Pick<CompanySummary, 'orgNumber' | 'legalName' | 'municipality'> | null>(null);
   const [q, setQ] = useState(initialQuery);
   const [prompt, setPrompt] = useState(initialPrompt || 'Company brief');
   const [question, setQuestion] = useState('');
+  const [notice, setNotice] = useState<{ tone: 'warn' | 'info'; text: string } | null>(null);
+  const [checking, setChecking] = useState(false);
+  const qc = useQueryClient();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
+  const refocus = useRef(false);
   const dq = useDebounce(q.trim(), 200);
+  const input = classifyCompanyInput(q);
   const preset = useQuery({ queryKey: ['company', orgParam], queryFn: () => api.companies.get(orgParam!), enabled: !!orgParam });
   useEffect(() => {
     if (preset.data) setCompany(preset.data.company);
   }, [preset.data]);
+  useEffect(() => {
+    if (!company && refocus.current) {
+      refocus.current = false;
+      inputRef.current?.focus();
+    }
+  }, [company]);
   const sugg = useQuery({ queryKey: ['research-suggest', dq], queryFn: ({ signal }) => api.search.global(dq, signal), enabled: !company && dq.length >= 2 });
   const finalPrompt = question.trim() || prompt;
-  const submit = () => {
-    if (company) onStart({ orgNumber: company.orgNumber, query: company.legalName, prompt: finalPrompt });
-    else if (q.trim()) onStart({ query: q.trim(), prompt: finalPrompt });
+
+  // A selection belongs to the company that was picked. Changing the field drops it, so nothing typed afterwards can inherit it.
+  const type = (v: string) => {
+    setQ(v);
+    setNotice(null);
+  };
+  const choose = (c: Pick<CompanySummary, 'orgNumber' | 'legalName' | 'municipality'>) => {
+    setNotice(null);
+    setCompany(c);
+  };
+  const change = () => {
+    refocus.current = true;
+    setNotice(null);
+    setCompany(null);
+  };
+
+  const submit = async () => {
+    if (busy || checking) return;
+    if (company) {
+      onStart({ orgNumber: company.orgNumber, expectedName: company.legalName, query: company.legalName, prompt: finalPrompt });
+      return;
+    }
+    if (input.kind === 'empty') return;
+    // Typed text never starts research. A name has to be picked from the list; an organization number is looked up and then confirmed.
+    if (input.kind === 'org') {
+      if (!input.valid) {
+        setNotice({ tone: 'warn', text: 'An organization number has 9 digits, for example 916 664 974.' });
+        return;
+      }
+      setChecking(true);
+      setNotice(null);
+      try {
+        const res = await api.search.global(input.digits);
+        const hit = res.companies.find((c) => c.orgNumber === input.digits);
+        if (hit) {
+          setCompany(hit);
+          setNotice({ tone: 'info', text: 'Check the legal name and organization number, then press Start research to confirm.' });
+        } else {
+          setNotice({ tone: 'warn', text: `No company with organization number ${formatOrgNumber(input.digits)} was found in the registry. Check the number — it must have 9 digits and a valid check digit.` });
+        }
+      } catch {
+        setNotice({ tone: 'warn', text: 'The company register could not be reached, so this number could not be verified. Try again in a moment.' });
+      } finally {
+        setChecking(false);
+      }
+      return;
+    }
+    if (input.text.length < 2) {
+      setNotice({ tone: 'warn', text: 'Type at least two letters of the company name, or a 9-digit organization number.' });
+      return;
+    }
+    setChecking(true);
+    try {
+      // Same query key as the suggestion list, so the matches appear there; nothing is selected on the user's behalf.
+      const res = await qc.fetchQuery({ queryKey: ['research-suggest', input.text], queryFn: ({ signal }) => api.search.global(input.text, signal) });
+      setNotice(
+        res.companies.length > 0
+          ? { tone: 'warn', text: 'Select the company you mean from the list. COGNIS does not pick one for you.' }
+          : { tone: 'warn', text: `No registered company matched “${input.text}”. Try the full legal name or the 9-digit organization number.` },
+      );
+    } catch {
+      setNotice({ tone: 'warn', text: 'The company register could not be reached, so no company could be matched. Try again in a moment.' });
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  const options = () => Array.from(listRef.current?.querySelectorAll<HTMLButtonElement>('button[role="option"]') ?? []);
+  const onListKey = (e: React.KeyboardEvent) => {
+    const items = options();
+    const i = items.indexOf(document.activeElement as HTMLButtonElement);
+    if (e.key === 'ArrowDown') items[Math.min(i + 1, items.length - 1)]?.focus();
+    else if (e.key === 'ArrowUp') (i <= 0 ? inputRef.current : items[i - 1])?.focus();
+    else if (e.key === 'Home') items[0]?.focus();
+    else if (e.key === 'End') items[items.length - 1]?.focus();
+    else if (e.key === 'Escape') inputRef.current?.focus();
+    else return;
+    e.preventDefault();
   };
   return (
     <div className="composer">
@@ -168,10 +258,10 @@ function Composer({ orgParam, initialQuery, initialPrompt, mode, setMode, onStar
             <span className="stack" style={{ gap: 0, flex: 1, minWidth: 0 }}>
               <strong style={{ fontWeight: 500 }}>{company.legalName}</strong>
               <span className="t-xs t-muted">
-                {company.municipality} · Org <span className="t-mono">{formatOrgNumber(company.orgNumber)}</span>
+                {company.municipality ? `${company.municipality} · ` : ''}Org <span className="t-mono">{formatOrgNumber(company.orgNumber)}</span> · Confirmed company
               </span>
             </span>
-            <button className="btn btn--ghost btn--icon btn--sm" onClick={() => setCompany(null)} aria-label="Change company">
+            <button className="btn btn--ghost btn--icon btn--sm" onClick={change} aria-label="Change company">
               <X aria-hidden />
             </button>
           </div>
@@ -179,13 +269,27 @@ function Composer({ orgParam, initialQuery, initialPrompt, mode, setMode, onStar
           <div className="composer-search">
             <div className="input-wrap">
               <Building2 aria-hidden />
-              <input id="rc-company" className="input" style={{ height: 46, fontSize: 15 }} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Company name or 9-digit organization number" autoComplete="off" onKeyDown={(e) => e.key === 'Enter' && submit()} />
+              <input
+                ref={inputRef}
+                id="rc-company"
+                className="input"
+                style={{ height: 46, fontSize: 15 }}
+                value={q}
+                onChange={(e) => type(e.target.value)}
+                placeholder="Company name or 9-digit organization number"
+                autoComplete="off"
+                aria-describedby={notice ? 'rc-notice' : undefined}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') void submit();
+                  else if (e.key === 'ArrowDown' && options().length) (e.preventDefault(), options()[0]?.focus());
+                }}
+              />
             </div>
             {sugg.data && sugg.data.companies.length > 0 && dq.length >= 2 && (
-              <ul className="composer-sugg" role="listbox" aria-label="Matching companies">
+              <ul ref={listRef} className="composer-sugg" role="listbox" aria-label="Matching companies" onKeyDown={onListKey}>
                 {sugg.data.companies.slice(0, 5).map((c) => (
-                  <li key={c.orgNumber}>
-                    <button role="option" aria-selected={false} className="palette-item" onClick={() => setCompany(c)}>
+                  <li key={c.orgNumber} role="presentation">
+                    <button role="option" aria-selected={false} className="palette-item" onClick={() => choose(c)}>
                       <Building2 aria-hidden />
                       <span className="stack" style={{ gap: 0, flex: 1, minWidth: 0 }}>
                         <span className="truncate">{c.legalName}</span>
@@ -198,6 +302,13 @@ function Composer({ orgParam, initialQuery, initialPrompt, mode, setMode, onStar
                 ))}
               </ul>
             )}
+          </div>
+        )}
+
+        {notice && (
+          <div id="rc-notice" className={`notice notice--${notice.tone}`} role={notice.tone === 'warn' ? 'alert' : 'status'} style={{ marginTop: 10 }}>
+            <CircleAlert aria-hidden />
+            <span>{notice.text}</span>
           </div>
         )}
 
@@ -227,8 +338,8 @@ function Composer({ orgParam, initialQuery, initialPrompt, mode, setMode, onStar
           />
           <span className="t-xs t-muted">{mode === 'deep' ? 'Deep research shows the plan for review before it starts.' : 'Quick research starts immediately with the core sources.'}</span>
           <span className="spacer" />
-          <button className="btn btn--primary btn--lg" onClick={submit} disabled={busy || (!company && !q.trim())}>
-            {busy ? <LoaderCircle className="spin" aria-hidden /> : <Telescope aria-hidden />} Start research
+          <button className="btn btn--primary btn--lg" onClick={() => void submit()} disabled={busy || checking || (!company && input.kind === 'empty')}>
+            {busy || checking ? <LoaderCircle className="spin" aria-hidden /> : <Telescope aria-hidden />} Start research
           </button>
         </div>
         {error != null && (
@@ -265,7 +376,7 @@ function Composer({ orgParam, initialQuery, initialPrompt, mode, setMode, onStar
 /* ------------------------------------------------------------------ */
 
 function Workspace({ run, setRun, onNew }: { run: ResearchRun; setRun: (r: ResearchRun) => void; onNew: () => void }) {
-  const { state, setRun: setStreamRun } = useResearchStream(run);
+  const { state, setRun: setStreamRun, setStatus } = useResearchStream(run);
   const live = state.run ?? run;
   const qc = useQueryClient();
   const nav = useNavigate();
@@ -285,13 +396,15 @@ function Workspace({ run, setRun, onNew }: { run: ResearchRun; setRun: (r: Resea
       qc.invalidateQueries({ queryKey: ['companies'] });
       qc.invalidateQueries({ queryKey: ['library'] });
       qc.invalidateQueries({ queryKey: ['assess'] });
-      toast({ tone: 'ok', text: `Research complete · ${company.legalName}`, action: live.artifactId ? { label: 'Open', href: `/library/${live.artifactId}` } : undefined });
+      const o = researchOutcome(live);
+      const text = o.complete ? `Research complete · ${company.legalName}` : o.reported ? `Research finished · ${o.verified} of ${o.total} areas verified · ${company.legalName}` : `Research finished · coverage not reported · ${company.legalName}`;
+      toast({ tone: o.complete ? 'ok' : 'warn', text, action: live.artifactId ? { label: 'Open', href: `/library/${live.artifactId}` } : undefined });
     }
   }, [live.status, live.artifactId, company, qc, toast, state.lastSeq]);
 
   const cancel = async () => {
     const r = await api.research.cancel(live.id);
-    setStreamRun({ ...live, status: r.status });
+    setStatus(r.status); // moves a still-running run only; step states come from the stream's own events
   };
   const retry = async () => {
     const r = await api.research.retryFailed(live.id);
@@ -308,7 +421,7 @@ function Workspace({ run, setRun, onNew }: { run: ResearchRun; setRun: (r: Resea
         <div className="row" style={{ gap: 14, minWidth: 0 }}>
           {company && <BrandMark name={company.legalName} org={company.orgNumber} size={46} />}
           <div className="stack" style={{ gap: 4, minWidth: 0 }}>
-            <span className="eyebrow">{live.status === 'completed' ? 'Research complete' : live.status === 'cancelled' ? 'Research cancelled' : failed ? 'Research paused' : 'Researching'}</span>
+            <span className="eyebrow">{live.status === 'completed' ? (researchOutcome(live).complete ? 'Research complete' : 'Research finished') : live.status === 'cancelled' ? 'Research cancelled' : failed ? 'Research paused' : 'Researching'}</span>
             <h1 className="rs-title truncate">{company?.legalName ?? live.query}</h1>
             <span className="t-xs t-muted">
               {live.mode === 'deep' ? 'Deep research' : 'Quick research'} · Focus: {live.prompt ?? 'Company brief'}
@@ -410,6 +523,7 @@ function Workspace({ run, setRun, onNew }: { run: ResearchRun; setRun: (r: Resea
               Source activity
             </h2>
             <SourceStack steps={live.plan.steps} running={running} />
+            <SourceActivity run={live} connection={state.connection} error={state.error} />
           </div>
           <div className="rs-panel">
             <h2 className="rs-panel-title">Event timeline</h2>

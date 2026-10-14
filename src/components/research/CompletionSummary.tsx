@@ -6,6 +6,8 @@ import type { ResearchRun } from '@/types';
 import { CoverageMeter } from '@/components/company/Coverage';
 import { useUi } from '@/stores/ui';
 import { cn } from '@/utils/cn';
+import { researchOutcome } from '@/utils/status';
+import { EffortSummary, reportNote } from './EffortSummary';
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
@@ -27,6 +29,7 @@ export function CompletionSummary({ run, onSaved }: { run: ResearchRun; onSaved?
   const [saving, setSaving] = useState(false);
   const [savedId, setSavedId] = useState<string | undefined>(run.autoSaved ? run.artifactId : undefined);
   const coverage = s?.coverage ?? run.coverage;
+  const outcome = researchOutcome(run);
 
   const save = async () => {
     setSaving(true);
@@ -69,9 +72,12 @@ export function CompletionSummary({ run, onSaved }: { run: ResearchRun; onSaved?
   return (
     <section className="rs-complete" aria-labelledby="rs-complete-h">
       <div className="rs-complete-head">
-        <CircleCheck aria-hidden className="rs-complete-ico" />
+        {outcome.complete ? <CircleCheck aria-hidden className="rs-complete-ico" /> : <CircleAlert aria-hidden className="rs-complete-ico rs-complete-ico--partial" />}
         <div className="stack" style={{ gap: 2, minWidth: 0 }}>
-          <h2 id="rs-complete-h">Research complete{company ? ` · ${company.legalName}` : ''}</h2>
+          <h2 id="rs-complete-h">
+            {outcome.complete ? 'Research complete' : 'Research finished'}
+            {company ? ` · ${company.legalName}` : ''}
+          </h2>
           <span className="t-xs t-muted row" style={{ gap: 6 }}>
             {s?.elapsedMs != null && (
               <>
@@ -104,6 +110,27 @@ export function CompletionSummary({ run, onSaved }: { run: ResearchRun; onSaved?
           )}
         </div>
       </div>
+      {!outcome.complete && (
+        <div className="notice notice--warn" role="status" data-testid="coverage-gaps" style={{ marginBottom: 12 }}>
+          <CircleAlert aria-hidden />
+          <div className="stack" style={{ gap: 4 }}>
+            <strong>
+              {outcome.reported ? `${outcome.verified} of ${outcome.total} areas verified — not everything could be confirmed.` : 'Coverage was not reported, so completeness cannot be confirmed.'}
+            </strong>
+            {outcome.gaps.length > 0 && (
+              <ul className="rs-gaps" style={{ margin: 0, paddingLeft: 18 }}>
+                {outcome.gaps.map((g) => (
+                  <li key={g.area}>
+                    {g.label}: {g.status}
+                    {g.note ? ` — ${g.note}` : ''}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {outcome.unreachableSources > 0 && <span>{plural(outcome.unreachableSources, 'source')} could not be reached. A source that was unavailable is not evidence that nothing exists there.</span>}
+          </div>
+        </div>
+      )}
       <dl className="rs-complete-stats">
         {coverage && (
           <div className="rs-stat rs-stat--cov">
@@ -126,6 +153,12 @@ export function CompletionSummary({ run, onSaved }: { run: ResearchRun; onSaved?
           </div>
         ))}
       </dl>
+      {s?.report && (
+        <p className="t-xs t-muted rs-report" data-testid="report-note">
+          {reportNote(s.report)}
+        </p>
+      )}
+      {s?.effort && <EffortSummary effort={s.effort} />}
     </section>
   );
 }

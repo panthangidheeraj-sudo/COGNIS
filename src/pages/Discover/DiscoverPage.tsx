@@ -8,6 +8,7 @@ import { usePreferences } from '@/stores/preferences';
 import { CompanyCard, CompareToggle, ResearchStateLabel } from '@/components/company/CompanyCard';
 import { CoverageMeter } from '@/components/company/Coverage';
 import { FilterPanel } from '@/components/search/FilterPanel';
+import { SuggestedFilters } from '@/components/search/SuggestedFilters';
 import { Segmented } from '@/components/common/Tabs';
 import { Skeleton } from '@/components/common/Skeleton';
 import { EmptyState } from '@/components/common/EmptyState';
@@ -33,11 +34,10 @@ const PAGE_SIZE = 24;
 export default function DiscoverPage() {
   const [params, setParams] = useSearchParams();
   const q = params.get('q') ?? '';
-  const kw = params.get('kw') ?? '';
   const sort = (params.get('sort') as DiscoverSort) ?? 'relevance';
   const page = Number(params.get('page') ?? 1);
+  // Only filters the user selected (the f.* URL params) restrict the results. What the interpreter reads out of the search text is a suggestion.
   const explicit = useMemo(() => paramsToFilters(params), [params]);
-  const edited = params.get('edited') === '1';
   const view = usePreferences((s) => s.discoverView);
   const setPref = usePreferences((s) => s.set);
   const [text, setText] = useState(q);
@@ -50,12 +50,8 @@ export default function DiscoverPage() {
   const caps = status.data?.capabilities.discoverFilters ?? [];
 
   const query = useQuery({
-    queryKey: ['discover', q, kw, explicit, edited, sort, page, view],
-    queryFn: ({ signal }) =>
-      api.companies.discover(
-        edited ? { text: kw || undefined, filters: explicit, sort, page, pageSize: view === 'landscape' ? 500 : PAGE_SIZE, interpret: false } : { text: q || undefined, filters: explicit, sort, page, pageSize: view === 'landscape' ? 500 : PAGE_SIZE, interpret: !!q },
-        signal,
-      ),
+    queryKey: ['discover', q, explicit, sort, page, view],
+    queryFn: ({ signal }) => api.companies.discover({ text: q || undefined, filters: explicit, sort, page, pageSize: view === 'landscape' ? 500 : PAGE_SIZE, interpret: !!q }, signal),
     placeholderData: keepPreviousData,
   });
   const res = query.data;
@@ -66,32 +62,31 @@ export default function DiscoverPage() {
     p.delete('page');
     setParams(p);
   };
+  // A new search changes the text only: filters the user has selected stay selected until they remove them.
   const submit = (t: string) =>
     update((p) => {
-      for (const k of [...p.keys()]) if (k.startsWith('f.')) p.delete(k);
       p.delete('edited');
       p.delete('kw');
       if (t.trim()) p.set('q', t.trim());
       else p.delete('q');
     });
-  const applyFilters = (f: DiscoverFilters, keywords?: string) =>
+  const applyFilters = (f: DiscoverFilters) =>
     update((p) => {
       for (const k of [...p.keys()]) if (k.startsWith('f.')) p.delete(k);
       filtersToParams(f, p);
-      p.set('edited', '1');
-      if (keywords) p.set('kw', keywords);
-      else p.delete('kw');
     });
 
-  const activeFilters: DiscoverFilters = edited ? explicit : (res?.appliedFilters ?? explicit);
-  const chips: InterpretedFilter[] = !edited && res?.interpretation ? res.interpretation.filters : filtersToChips(activeFilters, caps);
-  const removeChip = (key: InterpretedFilter['key']) => {
-    const next = chipsToFilters(chips.filter((c) => c.key !== key));
-    applyFilters(next, edited ? kw : res?.interpretation?.keywords);
-  };
+  const activeFilters: DiscoverFilters = explicit;
+  const chips: InterpretedFilter[] = filtersToChips(activeFilters, caps);
+  const removeChip = (key: InterpretedFilter['key']) => applyFilters(chipsToFilters(chips.filter((c) => c.key !== key)));
+  // Suggestions: what the interpreter read from the text and the user has not chosen. Adding one is what makes it a filter.
+  const suggestions = (res?.interpretation?.filters ?? []).filter((f) => activeFilters[f.key] === undefined);
+  const addSuggestion = (f: InterpretedFilter) => applyFilters({ ...activeFilters, [f.key]: f.value } as DiscoverFilters);
+  const addAllSuggestions = () => applyFilters({ ...activeFilters, ...chipsToFilters(suggestions) });
+  const keywords = res?.interpretation?.keywords ?? (q && !res?.interpretation?.filters.length ? q : '');
   const hasQuery = !!q || chips.length > 0;
   const activeCount = Object.values(activeFilters).filter((v) => v !== undefined && v !== null && v !== '' && v !== false).length;
-  const clearFilters = () => applyFilters({}, edited ? kw : undefined);
+  const clearFilters = () => applyFilters({});
 
   // Globe: one node per result with a backend geo point; it turns toward the results.
   const setPoints = useGlobe((g) => g.setPoints);
@@ -167,11 +162,12 @@ export default function DiscoverPage() {
       )}
 
       {hasQuery && (
-        <section className="interp" aria-label="Interpreted filters">
+        <section className="interp" aria-label="Selected filters and suggestions">
           <div className="row-wrap" style={{ gap: 8 }}>
             <span className="interp-label">
-              <Sparkle aria-hidden /> {edited ? 'Filters' : res?.interpretation?.filters.length ? 'Interpreted as' : 'Keyword search'}
+              <SlidersHorizontal aria-hidden /> {chips.length ? 'Filters' : keywords ? 'Keyword search' : 'Search'}
             </span>
+            {chips.length === 0 && !keywords && <span className="t-xs t-muted">No filters selected</span>}
             {chips.map((c) => (
               <span key={c.key} className="chip is-active">
                 <span className="t-muted">{c.label}:</span> {c.display}
@@ -180,21 +176,22 @@ export default function DiscoverPage() {
                 </button>
               </span>
             ))}
-            {(edited ? kw : res?.interpretation?.keywords ?? (!res?.interpretation?.filters.length ? q : '')) && (
+            {keywords && (
               <span className="chip">
-                <span className="t-muted">Keywords:</span> {edited ? kw : (res?.interpretation?.keywords ?? q)}
+                <span className="t-muted">Keywords:</span> {keywords}
               </span>
             )}
             <button className="btn btn--sm" onClick={() => setFiltersOpen(true)}>
               <SlidersHorizontal aria-hidden /> Edit
             </button>
           </div>
-          {!edited && res?.interpretation?.notes?.map((n) => (
-            <p key={n} className="t-xs t-muted">
-              {n}
-            </p>
-          ))}
-          {edited && q && <p className="t-xs t-muted">Edited from: “{q}”</p>}
+          <SuggestedFilters suggestions={suggestions} onAdd={addSuggestion} onAddAll={addAllSuggestions} />
+          {suggestions.length > 0 &&
+            res?.interpretation?.notes?.map((n) => (
+              <p key={n} className="t-xs t-muted">
+                {n}
+              </p>
+            ))}
         </section>
       )}
       </div>
@@ -309,7 +306,7 @@ export default function DiscoverPage() {
           </div>
         }
       >
-        {caps.length ? <FilterPanel caps={caps} value={activeFilters} onChange={(f) => applyFilters(f, edited ? kw : res?.interpretation?.keywords)} /> : <Skeleton h={300} />}
+        {caps.length ? <FilterPanel caps={caps} value={activeFilters} onChange={applyFilters} /> : <Skeleton h={300} />}
         <p className="t-xs t-muted" style={{ marginTop: 16 }}>
           Results update as you change a filter. Only filters the backend can apply are shown.
         </p>

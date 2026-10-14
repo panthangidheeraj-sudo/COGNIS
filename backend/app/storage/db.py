@@ -337,6 +337,31 @@ MIGRATIONS: list[tuple[int, str, str]] = [
         CREATE INDEX IF NOT EXISTS ix_procurement_parties_org ON procurement_parties(org_number)
         """,
     ),
+    (
+        4,
+        "company research run history (one row per research run, kept beside the saved report versions)",
+        """
+        CREATE TABLE IF NOT EXISTS company_research_runs (
+            id TEXT PRIMARY KEY,
+            org_number TEXT NOT NULL,
+            artifact_id TEXT,
+            mode TEXT NOT NULL,
+            prompt TEXT,
+            status TEXT NOT NULL,
+            started_at TEXT NOT NULL,
+            finished_at TEXT,
+            profile_version_id TEXT,
+            previous_version_id TEXT,
+            evidence_changed INTEGER,
+            summary_json TEXT,
+            effort_json TEXT,
+            steps_json TEXT,
+            answer_json TEXT,
+            issues_json TEXT
+        );
+        CREATE INDEX IF NOT EXISTS ix_company_research_runs_org ON company_research_runs(org_number, started_at)
+        """,
+    ),
 ]
 
 

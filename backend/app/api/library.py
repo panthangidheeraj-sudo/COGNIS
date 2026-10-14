@@ -8,6 +8,7 @@ from ..connectors import brreg
 from ..core.util import now_iso, stable_id
 from ..errors import ApiError
 from ..storage import repository as repo
+from ..storage import run_history
 from ..storage.db import dumps, loads
 
 CAPABILITIES = {"rename": True, "duplicate": True, "tag": True, "archive": True, "delete": False, "refresh": True, "export": True, "pin": True}
@@ -31,6 +32,10 @@ def ensure_company_artifact(s: Any, record: dict[str, Any], version_id: str, lab
     if exists is None:
         s.db.execute("INSERT INTO artifact_versions(id, artifact_id, profile_version_id, created_at, label, note) VALUES (?,?,?,?,?,?)",
                      ("v-" + stable_id(aid, version_id, length=10), aid, version_id, record.get("completed_at") or now, label, None))
+    else:
+        # Research that found exactly the same evidence as an earlier run keeps that run's version, and it becomes the current report again
+        # (otherwise a later, different run would stay "Current" although this run is the newest).
+        s.db.execute("UPDATE artifact_versions SET created_at = ? WHERE id = ?", (record.get("completed_at") or now, exists["id"]))
     return aid
 
 
@@ -148,6 +153,27 @@ def _versions(s: Any, aid: str) -> list[dict[str, Any]]:
             for i, r in enumerate(rows)]
 
 
+def _runs(s: Any, aid: str, org: str, versions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The company's research runs, newest first, each tied to the report version it produced.
+
+    "Latest report" is the newest run that saved a report, and only while its version is the current one; every other saved run is an earlier run whose
+    report is still available under its own version."""
+    by_profile = {r["profile_version_id"]: r["id"] for r in s.db.all("SELECT id, profile_version_id FROM artifact_versions WHERE artifact_id = ?", (aid,))}
+    number = {v["id"]: len(versions) - i for i, v in enumerate(versions)}
+    current = versions[0]["id"] if versions else None
+    latest_taken = False
+    out: list[dict[str, Any]] = []
+    for r in run_history.runs_for_org(s.db, org):
+        vid = by_profile.get(r.pop("profileVersionId") or "")
+        r.pop("previousVersionId", None)
+        has_report = r["status"] in ("completed", "partial") and vid is not None
+        is_latest = has_report and not latest_taken and vid == current
+        latest_taken = latest_taken or has_report
+        r.update({"versionId": vid, "versionNumber": number.get(vid) if vid else None, "isLatestReport": is_latest, "hasReport": has_report})
+        out.append(r)
+    return out
+
+
 def get_artifact(s: Any, aid: str, version_id: str | None = None) -> dict[str, Any]:
     row = s.db.one("SELECT * FROM artifacts WHERE id = ?", (aid,))
     if row is None or row["type"] not in ("company", "report"):
@@ -175,7 +201,8 @@ def get_artifact(s: Any, aid: str, version_id: str | None = None) -> dict[str, A
     profile["artifactId"] = aid
     latest = versions[0]
     return {"id": aid, "type": "company", "title": row["title"], "orgNumber": row["org_number"], "createdAt": row["created_at"], "updatedAt": row["updated_at"],
-            "versionId": vid, "versions": versions, "tags": loads(row["tags_json"], []), "pinned": bool(row["pinned"]), "profile": profile,
+            "versionId": vid, "versions": versions, "runs": _runs(s, aid, row["org_number"], versions), "tags": loads(row["tags_json"], []), "pinned": bool(row["pinned"]),
+            "profile": profile,
             "freshness": {"state": "saved", "lastUpdatedAt": latest["createdAt"], "staleAreas": _stale_count(record), "changedSources": 0, "newFilings": 0}}
 
 

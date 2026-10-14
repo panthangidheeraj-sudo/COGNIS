@@ -54,6 +54,8 @@ AD_PAGE = "https://arbeidsplassen.nav.no/stillinger/stilling/{uuid}"
 FEED_MAX_BYTES = 12_000_000
 INDEX_MAX_AGE_HOURS = 48  # an index older than this may miss recent ads
 UNREACHABLE = {"timeout", "network", "server_error", "rate_limited", "blocked", "client_error", "unsafe_url", "too_large"}
+COOLDOWN_KEY = "nav"  # see net/cooldown.py: after NAV proved unreachable it is not asked again for a while
+_DOWN = {"timeout", "network", "server_error"}  # the answers that mean "NAV is down / unreachable" (a refusal or a missing ad is not an outage)
 _JWT = re.compile(r"eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+")
 
 
@@ -267,7 +269,7 @@ class _Token:
         if self.public and not refresh and time.monotonic() - self.fetched_at < 6 * 3600:
             return self.public, "public"
         res = await http.fetch(settings.nav_feed_base.rstrip("/") + TOKEN_PATH, connector="nav_feed", use_cache=False, accept="text/plain, */*", optional=True,
-                               interval_key="nav")
+                               interval_key="nav", timeout=settings.nav_request_timeout_seconds, retry_attempts=settings.nav_retry_attempts)
         match = _JWT.search(res.text()) if res.ok else None
         if match:
             self.public, self.fetched_at, self.failure = match.group(0), time.monotonic(), None
@@ -282,13 +284,28 @@ TOKEN = _Token()
 
 async def _get(http: HttpClient, settings: Settings, url: str, *, budget: CompanyBudget | RunBudget | None, headers: dict[str, str] | None = None,
                run_id: str | None = None, org: str | None = None) -> FetchResult:
-    """Authenticated GET (re-fetches the public token once when NAV rotated it)."""
+    """Authenticated GET (re-fetches the public token once when NAV rotated it).
+
+    Bounded on purpose: every request has a wall-clock cap and at most one retry, and once NAV has proved unreachable (timeout, network error, 5xx) it is not
+    asked again for ``nav_unavailable_cooldown_seconds`` — later calls return the same failure at once instead of each waiting for its own timeout."""
+    cooling = http.cooldowns.cooling(COOLDOWN_KEY)
+    if cooling is not None:
+        return FetchResult(url, url, 0, cooling.classification, error=f"NAV was unreachable moments ago ({cooling.reason}); not asked again for now", retrieved_at=now_iso())  # type: ignore[arg-type]
     for attempt in (0, 1):
         token, _kind = await TOKEN.get(http, settings, refresh=attempt == 1)
         if not token:  # a token endpoint that timed out is "unreachable", not "refused"
-            return FetchResult(url, url, 0, TOKEN.failure or "blocked", error="no NAV feed token", retrieved_at=now_iso())
+            failure = TOKEN.failure or "blocked"
+            if failure in _DOWN:  # without a token nothing else can be read: stop asking right away
+                http.cooldowns.trip(COOLDOWN_KEY, settings.nav_unavailable_cooldown_seconds, failure, f"the token request {failure.replace('_', ' ')}")
+            return FetchResult(url, url, 0, failure, error="no NAV feed token", retrieved_at=now_iso())  # type: ignore[arg-type]
         res = await http.fetch(url, connector="nav_feed", budget=budget, optional=True, headers={"Authorization": f"Bearer {token}", **(headers or {})},
-                               accept="application/json", use_cache=False, max_bytes=FEED_MAX_BYTES, interval_key="nav", run_id=run_id, org_number=org)
+                               accept="application/json", use_cache=False, max_bytes=FEED_MAX_BYTES, interval_key="nav", run_id=run_id, org_number=org,
+                               timeout=settings.nav_request_timeout_seconds, retry_attempts=settings.nav_retry_attempts)
+        if res.classification in _DOWN:
+            http.cooldowns.failure(COOLDOWN_KEY, threshold=max(1, settings.nav_max_consecutive_failures), seconds=settings.nav_unavailable_cooldown_seconds,
+                                   classification=res.classification, reason=res.classification.replace("_", " "))
+        elif res.ok or res.status in (304, 404, 410):  # NAV answered
+            http.cooldowns.success(COOLDOWN_KEY)
         if res.status != 401 or settings.nav_feed_token:
             return res
     return res

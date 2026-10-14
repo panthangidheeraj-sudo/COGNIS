@@ -10,6 +10,7 @@ import asyncio
 import json
 import re
 import time
+import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from typing import Any
@@ -82,10 +83,12 @@ STANDARD_COLUMNS = [
     {"id": "employees", "title": "Employees (registered)", "kind": "standard", "valueType": "number", "width": 120, "unit": "people"},
     {"id": "revenue", "title": "Revenue (latest filed)", "kind": "standard", "valueType": "currency", "width": 150},
     {"id": "ceo", "title": "CEO", "kind": "standard", "valueType": "person", "width": 180},
+    # hiring is a data column (verified openings per company, filled by research), never a filter that is switched on for the user
+    {"id": "hiring", "title": "Hiring", "kind": "standard", "valueType": "number", "width": 120, "unit": "roles"},
     {"id": "website", "title": "Website (verified)", "kind": "standard", "valueType": "url", "width": 180},
 ]
 STANDARD_FIELD = {"employees": "registered_employees", "revenue": "revenue", "ceo": "ceo", "website": "official_website", "municipality": "municipality",
-                  "industry": "industry_label"}
+                  "industry": "industry_label", "hiring": "open_positions_count"}
 
 
 def map_instruction(text: str) -> str | None:
@@ -150,6 +153,9 @@ class SheetManager:
         out = {"id": row["id"], "title": row["title"], "rowCount": n, "columnCount": len(cols), "updatedAt": row["updated_at"], "criteria": loads(row["criteria_json"], [])}
         if row["description"]:
             out["description"] = row["description"]
+        discovery = self.s.kv_get(f"sheet-discovery:{row['id']}")
+        if discovery:
+            out["discovery"] = discovery
         return out
 
     def list(self) -> list[dict[str, Any]]:
@@ -183,45 +189,66 @@ class SheetManager:
         self.s.db.execute("UPDATE sheets SET updated_at = ? WHERE id = ?", (now_iso(), sid))
 
     async def create(self, body: dict[str, Any]) -> dict[str, Any]:
-        from .discover import discover
+        from .discover import discover, interpret_text
 
         title = str(body.get("title") or "Untitled sheet").strip()[:120]
-        criteria = body.get("criteria") or []
-        filters = {c["key"]: c["value"] for c in criteria if isinstance(c, dict) and c.get("key")}
+        criteria = [c for c in (body.get("criteria") or []) if isinstance(c, dict) and c.get("key")]
+        filters = {c["key"]: c["value"] for c in criteria}
         text = body.get("text")
-        result = await discover(self.s, {"filters": filters, "text": None if filters else text, "page": 1, "pageSize": 50, "sort": "relevance"})
-        sid = "sh-" + stable_id(title, now_iso(), length=10)
+        query: dict[str, Any] = {"filters": filters, "page": 1, "pageSize": 50, "sort": "relevance"}
+        # Only the criteria the user selected restrict the sheet. What the interpreter reads as a suggestion (a place, an industry, a size,
+        # "currently hiring") never does, and a descriptive sentence is not a company name: only the words left over after the suggestions
+        # ("Equinor" in "Equinor in Oslo") are a name search. If nothing is left over, the sheet starts from the register unrestricted.
+        if not filters and text:
+            leftover = interpret_text(str(text)).get("keywords")
+            if leftover:
+                query["text"] = leftover
+        if body.get("fallback") == "verified":
+            # Opt-in: if (and only if) the register search is unavailable, continue with the companies COGNIS has already verified. The sheet is
+            # labelled as such; nothing is invented and a working register search is always preferred.
+            query["fallback"] = "verified"
+        result = await discover(self.s, query)
+        source = result.get("source")  # present only when the sheet was built from stored, already-verified companies
+        sid = "sh-" + stable_id(title, now_iso(), uuid.uuid4().hex, length=10)  # unique even for two sheets with one title in the same second
         now = now_iso()
         description = " · ".join(c.get("display") or str(c.get("value")) for c in criteria if isinstance(c, dict)) or (text or None)
+        if source:
+            lead = f"Enhetsregisteret search was unavailable — {len(result['items'])} already-verified {'company' if len(result['items']) == 1 else 'companies'} only"
+            description = f"{lead} · {description}" if description else lead
         self.s.db.execute("INSERT INTO sheets(id, title, description, criteria_json, columns_json, created_at, updated_at) VALUES (?,?,?,?,?,?,?)",
                           (sid, title, description, dumps(criteria), dumps(STANDARD_COLUMNS), now, now))
+        if source:
+            self.s.kv_set(f"sheet-discovery:{sid}", source)
         for i, company in enumerate(result["items"]):
             org = company["orgNumber"]
-            cells = self._initial_cells(company)
+            cells = self._initial_cells(company, retrieved_at=company.get("verifiedAt") if source else None, stored=bool(source))
             comp = {k: company.get(k) for k in ("orgNumber", "legalName", "municipality", "industry", "website") if company.get(k) is not None}
             self.s.db.execute("INSERT INTO sheet_rows(sheet_id, row_id, position, org_number, company_json, cells_json) VALUES (?,?,?,?,?,?)",
                               (sid, org, i, org, dumps(comp), dumps(cells)))
         return self._summary(self._row(sid))
 
-    def _initial_cells(self, company: dict[str, Any]) -> dict[str, Any]:
+    def _initial_cells(self, company: dict[str, Any], *, retrieved_at: str | None = None, stored: bool = False) -> dict[str, Any]:
+        """Registry cells of a new row. A row from a live register search was retrieved now; a row from a stored company keeps the time its record was
+        really retrieved (``retrieved_at``) and says it is a stored copy, so the timestamp never overstates how fresh the data is."""
         from .sources import STATIC_SOURCES
 
         org = company["orgNumber"]
-        ev = [{"id": f"ev-brreg-{org}", "sourceId": "brreg", "url": f"https://data.brreg.no/enhetsregisteret/api/enheter/{org}", "retrievedAt": now_iso(),
-               "excerpt": f"Enhetsregisteret — {company['legalName']}"}]
+        when = retrieved_at or now_iso()
+        ev = [{"id": f"ev-brreg-{org}", "sourceId": "brreg", "url": f"https://data.brreg.no/enhetsregisteret/api/enheter/{org}", "retrievedAt": when,
+               "excerpt": f"Enhetsregisteret — {company['legalName']}" + (" (stored copy from an earlier verification)" if stored else "")}]
         src = {"brreg": STATIC_SOURCES["brreg"]}
 
         def cell(value: Any, display: str | None = None) -> dict[str, Any]:
             if value is None:
                 return {"status": "pending", "value": None, "evidence": []}
             return {"status": "verified", "value": value, "display": display or str(value), "evidenceState": "primary", "evidence": ev, "sourceName": "Brønnøysundregistrene",
-                    "updatedAt": now_iso(), "_sources": src}
+                    "updatedAt": when, "_sources": src}
 
         industry = company.get("industry") or {}
         return {"company": cell(company["legalName"]), "org": cell(org), "municipality": cell(company.get("municipality")),
                 "industry": cell(industry.get("description") if industry else None), "employees": cell(company.get("employees"), format_int(company["employees"]) if company.get("employees") is not None else None),
                 "revenue": {"status": "pending", "value": None, "evidence": []}, "ceo": {"status": "pending", "value": None, "evidence": []},
-                "website": {"status": "pending", "value": None, "evidence": []}}
+                "hiring": {"status": "pending", "value": None, "evidence": []}, "website": {"status": "pending", "value": None, "evidence": []}}
 
     def rename(self, sid: str, title: str) -> dict[str, Any]:
         self._row(sid)
