@@ -74,6 +74,7 @@ class Settings(BaseSettings):
     max_concurrency: int = 8
 
     # ---- per-company budgets ---------------------------------------------
+    # These are the full budget (Deep research, batch/competition runs). Quick research has its own, smaller one (quick_* below); see agent/modes.py.
     per_company_max_seconds: float = 120.0
     per_company_max_requests: int = 30
     max_searches_per_company: int = 3
@@ -81,6 +82,24 @@ class Settings(BaseSettings):
     max_llm_calls_per_company: int = 4
     max_jobs_per_company: int = 50
     max_research_rounds: int = 3
+    # Quick research: the essential registers are never limited by these (they are not optional lookups); the caps bound everything optional.
+    quick_max_seconds: float = 60.0
+    quick_max_requests: int = 20
+    quick_max_searches: int = 1  # only ever spent on a focus that needs it (e.g. a hiring question), never on a generic brief
+
+    # ---- Discover enrichment (targeted lookups for figures a result card is missing; see api/enrich.py) ----
+    enable_discover_enrichment: bool = True
+    enrich_max_batch: int = 12  # companies per request (the client sends the visible results in small batches)
+    enrich_concurrency: int = 3  # companies looked up at the same time, across all requests
+    enrich_company_timeout_seconds: float = 20.0
+    # Each source has its own share, so one cannot starve another: the register and the filed accounts 2, NAV ad reads 6, the website 6.
+    # No web search and no language model are ever used.
+    enrich_nav_max_reads: int = 6
+    enrich_site_max_requests: int = 6
+    enrich_site_pages: int = 2  # pages of the register-listed website read to verify it before its careers page is used
+    enrich_check_careers: bool = True
+    enrich_cache_ttl_seconds: float = 6 * 3600.0
+    enrich_retry_after_seconds: float = 120.0  # a result with an unreachable source is kept this long, so it is not retried in a loop
 
     # ---- LLM --------------------------------------------------------------
     llm_provider: Literal["none", "groq", "openai_compatible", "fake"] = "none"
@@ -197,6 +216,10 @@ class Settings(BaseSettings):
         return False
 
     @property
+    def enrich_max_requests_per_company(self) -> int:
+        return 2 + self.enrich_nav_max_reads + self.enrich_site_max_requests
+
+    @property
     def search_enabled(self) -> bool:
         return self.enable_search and self.search_provider == "tavily" and bool(self.tavily_api_key)
 
@@ -213,6 +236,9 @@ class Settings(BaseSettings):
             "max_searches_per_company": self.max_searches_per_company,
             "max_pages_per_site": self.max_pages_per_site,
             "max_llm_calls_per_company": self.max_llm_calls_per_company,
+            "quick_max_seconds": self.quick_max_seconds,
+            "quick_max_requests": self.quick_max_requests,
+            "quick_max_searches": self.quick_max_searches,
         }
 
 
@@ -254,6 +280,11 @@ def validate_configuration(settings: Settings) -> list[str]:
         warnings.append("TAVILY_API_KEY is not set — web discovery is disabled (registry and registry-linked websites still work).")
     if settings.tavily_api_key and not settings.tavily_api_key.startswith("tvly-"):
         warnings.append("TAVILY_API_KEY does not start with 'tvly-' — check that you copied the whole key from the Tavily dashboard.")
+    from .api.pdf_support import pdf_status  # locates packages only; never imports ReportLab
+
+    pdf = pdf_status()
+    if not pdf["available"]:
+        warnings.append(f"{pdf['reason']} Everything else works; only the Full Research Report (PDF) export is unavailable.")
     if settings.max_requests <= 0 or settings.max_run_seconds <= 0:
         raise ConfigurationError("MAX_REQUESTS and MAX_RUN_SECONDS must be positive.")
     if settings.finalize_reserve_seconds >= settings.max_run_seconds:

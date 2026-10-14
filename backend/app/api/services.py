@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from collections import OrderedDict
 from collections.abc import Callable
 from typing import Any
 
@@ -49,15 +50,18 @@ class Services:
         self.budget = unlimited_budget()
         self.orch = Orchestrator(http=self.http, run_budget=self.budget, provider=self.provider, settings=self.settings, db=self.db)
         self._locks: dict[str, asyncio.Lock] = {}
+        self._entities: OrderedDict[str, tuple[float, str, dict[str, Any]]] = OrderedDict()  # recent register search rows (see remember_entity)
         self._nav_task: asyncio.Task | None = None
         self._registry_failure: tuple[float, str, ApiError] | None = None
         self.nav_last_sync: dict[str, Any] | None = None
         self.started_at = now_iso()
+        from .enrich import Enricher
         from .research_runs import RunManager
         from .sheets import SheetManager
 
         self.runs = RunManager(self)
         self.sheets = SheetManager(self)
+        self.enricher = Enricher(self)  # Discover: targeted lookups for the figures a result card is missing
 
     def start_background(self) -> None:
         """Keep the NAV job-ad index fresh while the API runs (bounded syncs; never blocks a request)."""
@@ -200,8 +204,24 @@ class Services:
         for row in rows:
             org = str(row.get("organisasjonsnummer") or "")
             stored = self.summary_for(org) if org else None
+            if org:
+                self.remember_entity(org, row)
             out.append(stored or summary_from_entity(row))
         return out
+
+    def remember_entity(self, org: str, row: dict[str, Any]) -> None:
+        """Keep the register rows a search just returned for a while: a Discover enrichment of the same results then needs no second register call."""
+        self._entities[org] = (time.monotonic(), now_iso(), row)
+        self._entities.move_to_end(org)
+        while len(self._entities) > 3000:
+            self._entities.popitem(last=False)
+
+    def recent_entity(self, org: str, max_age_seconds: float = 1800.0) -> tuple[str, dict[str, Any]] | None:
+        """``(retrieved_at, register row)`` from a recent search, or None."""
+        hit = self._entities.get(org)
+        if hit is None or time.monotonic() - hit[0] > max_age_seconds:
+            return None
+        return hit[1], hit[2]
 
     async def resolve_query(self, query: str, *, auto_pick: bool = True) -> tuple[str | None, list[dict[str, Any]]]:
         """Return (org, candidates). Never guesses: several plausible matches → no org + candidates.

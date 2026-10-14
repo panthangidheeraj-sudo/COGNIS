@@ -49,6 +49,18 @@ export interface CrossCheckResult {
   conflictFacts?: { field: string; label: string; reason?: string; candidates: { source?: string; value: string }[] }[];
 }
 
+/** The limits a run was held to. Quick has a smaller budget than Deep on every axis; the backend reports the values it actually enforced. */
+export interface ResearchBudget {
+  maxRequests: number;
+  maxSeconds: number;
+  maxSearches: number;
+  maxLlmCalls: number;
+  maxSitePages: number;
+  followUpRounds: number;
+  /** Search-engine discovery of job pages: always in Deep, in Quick only when the focus is about hiring. */
+  jobPageSearch: boolean;
+}
+
 export interface ResearchEffort {
   mode: ResearchMode;
   requests: number;
@@ -58,6 +70,7 @@ export interface ResearchEffort {
   workflows: EffortWorkflow[];
   crosscheck?: CrossCheckResult | null;
   focusKinds?: string[];
+  budget?: ResearchBudget;
 }
 
 /** How a finished run ended: `completed` = every area verified and every source reachable; `partial` = it finished and saved, with the gaps listed. */

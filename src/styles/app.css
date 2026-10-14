@@ -9,6 +9,15 @@
   gap: 10px;
   color: var(--text-1);
 }
+/* The emblem is an image with an exact width/height box; contain keeps its proportions if a parent ever constrains it. */
+.cg-logo-img {
+  display: block;
+  flex: none;
+  max-width: 100%;
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
+}
 .cg-logo-word {
   font-family: var(--font-mono);
   font-weight: 500;

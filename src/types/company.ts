@@ -54,6 +54,8 @@ export interface CompanySummary {
   /** `currency` is the one the latest filing states; empty when the filing states none. */
   revenue?: { value: number; currency: string; period: string } | null;
   openPositions?: number | null;
+  /** What hiring research established (researched companies): a count is only meaningful when this is 'verified'. 'none_found' is not "0 openings". */
+  openPositionsStatus?: 'verified' | 'none_found' | 'source_unavailable' | 'incomplete' | 'pending' | null;
   coverage: Coverage;
   lastResearchedAt?: ISODateTime | null;
   researchState: ResearchState;
@@ -63,6 +65,56 @@ export interface CompanySummary {
   /** Backend-detected changes since the user's last check. */
   changeCount?: number;
   tags?: string[];
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Discover enrichment (POST /companies/enrich)                              */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * What a targeted lookup established for one figure of a result card:
+ * `verified` the named source states it · `none_found` (openings) sources checked, none verified — not "0" ·
+ * `not_reported` the official source holds no value (no filed accounts, no registered count) — not a zero ·
+ * `unavailable` a source could not be reached now · `not_checked` no permitted source could be checked · `unverified` data exists but could not be verified.
+ */
+export type EnrichmentState = 'verified' | 'none_found' | 'not_reported' | 'unavailable' | 'not_checked' | 'unverified';
+export type EnrichmentField = 'revenue' | 'employees' | 'openPositions';
+
+export interface EnrichmentSource {
+  name: string;
+  state: 'checked' | 'unavailable' | 'not_checked';
+  url?: string;
+  retrievedAt?: ISODateTime;
+  note?: string;
+}
+
+export interface EnrichedFigure {
+  state: EnrichmentState;
+  /** Shown as the explanation (tooltip / screen-reader text). */
+  note: string;
+  sources: EnrichmentSource[];
+  value?: number;
+  currency?: string;
+  period?: string;
+  asOf?: string;
+  /** The filing's own line the value was read from (revenue). */
+  evidence?: string;
+  /** Openings: not every job source could be checked, so the count is "at least". */
+  lowerBound?: boolean;
+}
+
+export interface CompanyEnrichment {
+  orgNumber: string;
+  checkedAt: ISODateTime;
+  cached?: boolean;
+  fields: Partial<Record<EnrichmentField, EnrichedFigure>>;
+}
+
+export interface EnrichmentResult {
+  items: CompanyEnrichment[];
+  enabled: boolean;
+  checkedAt: ISODateTime;
+  note?: string;
 }
 
 /* -------------------------------------------------------------------------- */

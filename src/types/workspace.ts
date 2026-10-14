@@ -446,6 +446,8 @@ export interface SystemCapabilities {
   /** Export types the backend can produce. Older backends omit it: then only 'data' is offered (plus 'report' when `pdfReports` is true). */
   exportKinds?: ExportKind[];
   pdfReports: boolean;
+  /** Why PDF reports are off on this installation (e.g. a missing Python package), when they are. */
+  pdfReportsNote?: string;
   pauseResearch: boolean;
   cancelResearch: boolean;
   watchlist: boolean;
@@ -458,6 +460,15 @@ export interface SystemCapabilities {
 
 /** `alternative`: a free official source is used instead (e.g. Proff, Doffin's API) · `not_used`: deliberately not collected (e.g. LinkedIn). */
 export type SourceAvailability = 'available' | 'degraded' | 'unavailable' | 'alternative' | 'not_used';
+
+/** GET /health: the backend process answers. Says nothing about sources (see SystemStatus). */
+export interface BackendHealth {
+  status: 'ok';
+  version: string;
+  run_mode?: string;
+  schema_version?: number;
+  llm?: boolean;
+}
 
 export interface SystemStatus {
   mode: 'mock' | 'live';

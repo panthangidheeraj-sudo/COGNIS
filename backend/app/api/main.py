@@ -87,6 +87,11 @@ def create_app(services: Services | None = None) -> FastAPI:
     async def companies_discover(request: Request, body: dict[str, Any] = Body(default_factory=dict)) -> dict[str, Any]:  # noqa: B008
         return await discover.discover(S(request), body)
 
+    @r.post("/companies/enrich")
+    async def companies_enrich(request: Request, body: dict[str, Any] = Body(default_factory=dict)) -> dict[str, Any]:  # noqa: B008
+        # Targeted lookups for the figures Discover cards are missing (filed accounts, registered employees, NAV ads, verified careers page).
+        return await S(request).enricher.enrich(body)
+
     @r.post("/companies/interpret")
     async def companies_interpret(request: Request, body: dict[str, Any] = Body(default_factory=dict)) -> dict[str, Any]:  # noqa: B008
         return await discover.interpret(S(request), str(body.get("text") or ""))

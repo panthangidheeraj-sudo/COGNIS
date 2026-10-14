@@ -67,8 +67,8 @@
 .rail-logo {
   display: grid;
   place-items: center;
-  height: 52px;
-  margin-bottom: 10px;
+  height: 66px; /* the Atlas emblem is portrait: 56px tall, ~35px wide */
+  margin-bottom: 8px;
   border-radius: var(--r-md);
 }
 .rail-nav {
@@ -84,7 +84,8 @@
   gap: 5px;
   padding: 9px 2px 8px;
   border-radius: var(--r-md);
-  color: var(--text-3);
+  /* icons and labels are always bright (white/ivory on the dark rail); the selected item is told apart by its surface, border and bar */
+  color: var(--nav-fg);
   font-size: 10.5px;
   font-weight: 500;
   letter-spacing: 0.01em;
@@ -92,21 +93,28 @@
   line-height: 1.15;
   transition:
     color var(--motion-fast),
-    background var(--motion-fast);
+    background var(--motion-fast),
+    box-shadow var(--motion-fast);
 }
 .rail-link svg {
   width: 19px;
   height: 19px;
   stroke-width: 1.6;
+  color: currentColor;
 }
 .rail-link:hover {
-  color: var(--text-1);
-  background: var(--neutral-wash);
+  color: var(--nav-fg-strong);
+  background: var(--nav-hover-bg);
+}
+.rail-link:focus-visible {
+  outline: 2px solid var(--nav-fg-strong);
+  outline-offset: 1px;
+  border-radius: var(--r-md); /* the global focus rule would shrink the radius */
 }
 .rail-link.active {
-  color: var(--text-1);
-  background: linear-gradient(180deg, var(--accent-wash-2), var(--accent-wash));
-  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--accent-soft) 22%, transparent);
+  color: var(--nav-fg-strong);
+  background: var(--nav-active-bg);
+  box-shadow: inset 0 0 0 1px var(--nav-active-line);
 }
 .rail-link.active::before {
   content: '';
@@ -114,13 +122,15 @@
   left: -10px;
   top: 12px;
   bottom: 12px;
-  width: 2px;
-  border-radius: 0 2px 2px 0;
-  background: var(--accent-ice);
-  box-shadow: 0 0 12px var(--dot-glow);
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--nav-indicator);
 }
 .rail-link.active svg {
-  color: var(--accent-ice);
+  stroke-width: 2;
+}
+.rail-link.active .rail-label {
+  font-weight: 650;
 }
 .rail-badge {
   position: absolute;

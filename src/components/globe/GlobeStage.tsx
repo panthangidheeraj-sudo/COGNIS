@@ -35,7 +35,7 @@ function isLowPower() {
  * falls back to a static globe when WebGL is missing or fails.
  */
 export function GlobeStage({ className, variant = 'intel' }: { className?: string; variant?: GlobeVariant }) {
-  const { focus, points } = useGlobe();
+  const { focus, anchor, points } = useGlobe();
   const reduced = useReducedMotion();
   const spinPref = usePreferences((s) => s.globeSpin);
   const setPrefs = usePreferences((s) => s.set);
@@ -53,7 +53,8 @@ export function GlobeStage({ className, variant = 'intel' }: { className?: strin
     return () => window.clearTimeout(id);
   }, []);
   const Globe = variant === 'earth' ? EarthGlobe : IntelGlobe;
-  const fallback = <GlobeFallback variant={variant} theme={theme} lat={focus?.lat ?? 25} lon={focus?.lon ?? 14} />;
+  const view = focus ?? anchor;
+  const fallback = <GlobeFallback variant={variant} theme={theme} lat={view?.lat ?? 25} lon={view?.lon ?? 14} />;
   // keep the static globe until the WebGL globe has faded in (globe.css: 700 ms)
   const onGlReady = () => window.setTimeout(() => setGlReady(true), 760);
   return (
@@ -64,7 +65,7 @@ export function GlobeStage({ className, variant = 'intel' }: { className?: strin
         // On failure the static globe simply stays (it is already shown until the globe is ready).
         <ErrorBoundary label="Globe" fallback={glReady ? fallback : <></>}>
           <Suspense fallback={<></>}>
-            <Globe focus={focus} points={points} reducedMotion={reduced} spin={spin} lowPower={lowPower} theme={theme} onReady={onGlReady} />
+            <Globe focus={focus} anchor={anchor} points={points} reducedMotion={reduced} spin={spin} lowPower={lowPower} theme={theme} onReady={onGlReady} />
           </Suspense>
         </ErrorBoundary>
       )}

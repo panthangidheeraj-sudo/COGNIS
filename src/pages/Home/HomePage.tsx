@@ -71,7 +71,7 @@ export default function HomePage() {
       <div className="page home-body">
         <section aria-label="Start" className="action-grid">
           {ACTIONS.map(({ to, icon: Icon, title, text }, i) => (
-            <Link key={to} to={to} className="action-card" style={{ animationDelay: `${80 + i * 50}ms` }}>
+            <Link key={to} to={to} className="action-card on-ivory" style={{ animationDelay: `${80 + i * 50}ms` }}>
               <span className="action-icon">
                 <Icon aria-hidden />
               </span>

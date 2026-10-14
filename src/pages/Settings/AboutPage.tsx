@@ -30,6 +30,7 @@ import { API_MODE } from '@/api/http';
 import { useGlobe } from '@/stores/ui';
 import { useReducedMotion } from '@/hooks/useMediaQuery';
 import { useScrollStory } from '@/hooks/useScrollStory';
+import { useRevealOnScroll } from '@/hooks/useRevealOnScroll';
 import { GlobeStage } from '@/components/globe/GlobeStage';
 import { Motif } from '@/components/common/Motif';
 import { cn } from '@/utils/cn';
@@ -38,7 +39,8 @@ import './about.css';
 /**
  * About COGNIS as a scroll story. Each act is a tall section whose stage pins while the visual
  * progresses with scroll (`--p`, see useScrollStory); acts hand over to one another with short
- * cross-fades. Reduced motion shows the same content as a calm, static page.
+ * cross-fades. Headings, copy and illustrations also reveal once as they arrive (`data-reveal`, useRevealOnScroll).
+ * Reduced motion shows the same content as a calm, static page, with nothing hidden or animated.
  * Everything stated here describes what the product actually does — no figures, no invented data.
  */
 const CHAPTERS = [
@@ -59,6 +61,8 @@ export default function AboutPage() {
   const reduced = useReducedMotion();
   const root = useRef<HTMLDivElement>(null);
   const active = useScrollStory(root, !reduced);
+  // Text and illustrations fade in and rise once, the first time they reach the viewport. Reduced motion shows everything immediately.
+  useRevealOnScroll(root, !reduced);
 
   // Act 1 → 2: the Earth turns towards Norway, where COGNIS researches companies.
   const setFocus = useGlobe((g) => g.setFocus);
@@ -128,7 +132,7 @@ export default function AboutPage() {
               stays visibly empty.
             </Copy>
           </div>
-          <div className="act-visual dossier" aria-hidden>
+          <div className="act-visual dossier" data-reveal-group aria-hidden>
             {[
               [Building2, 'Identity', 'Enhetsregisteret', 'Legal name, form, status, industry, registered address'],
               [Banknote, 'Financials', 'Regnskapsregisteret', 'Filed annual accounts, by reporting period, in their own currency'],
@@ -139,7 +143,7 @@ export default function AboutPage() {
             ].map(([Icon, title, source, text], i) => {
               const I = Icon as typeof Building2;
               return (
-                <div key={title as string} className="dossier-layer paper" style={{ '--i': i } as CSSProperties}>
+                <div key={title as string} className="dossier-layer paper" data-reveal style={{ '--i': i } as CSSProperties}>
                   <span className="dossier-icon">
                     <I />
                   </span>
@@ -167,7 +171,7 @@ export default function AboutPage() {
               <path className="ring-ray" d="M212 192 L 318 122" />
               <circle className="ring-tip" cx="326" cy="117" r="6" />
             </svg>
-            <ul className="labels">
+            <ul className="labels" data-reveal-group>
               {[
                 [ShieldCheck, 'ok', 'Verified by 2 primary sources'],
                 [Shield, 'ok', 'Verified by 1 primary source'],
@@ -177,7 +181,7 @@ export default function AboutPage() {
               ].map(([Icon, tone, text], i) => {
                 const I = Icon as typeof Shield;
                 return (
-                  <li key={text as string} className={`label label--${tone}`} style={{ '--i': i } as CSSProperties}>
+                  <li key={text as string} className={`label label--${tone}`} data-reveal style={{ '--i': i } as CSSProperties}>
                     <I /> {text as string}
                   </li>
                 );
@@ -202,7 +206,7 @@ export default function AboutPage() {
               where to look — but nothing it returns is ever published as a fact.
             </Copy>
           </div>
-          <div className="act-visual tiers" aria-hidden>
+          <div className="act-visual tiers" data-reveal-group aria-hidden>
             {[
               [Landmark, 'Official registers', 'Primary', 'Enhetsregisteret · Regnskapsregisteret · roles · establishments · group structure'],
               [ShieldCheck, 'Company-owned, identity-verified', 'Primary when verified', 'The company website, careers pages and linked job boards'],
@@ -211,7 +215,7 @@ export default function AboutPage() {
             ].map(([Icon, title, rank, text], i) => {
               const I = Icon as typeof Landmark;
               return (
-                <div key={title as string} className={cn('tier', i === 3 && 'tier--discovery')} style={{ '--i': i } as CSSProperties}>
+                <div key={title as string} className={cn('tier', i === 3 && 'tier--discovery')} data-reveal style={{ '--i': i } as CSSProperties}>
                   <span className="tier-icon">
                     <I />
                   </span>
@@ -247,11 +251,11 @@ export default function AboutPage() {
             ].map(([Icon, title, text], i) => {
               const I = Icon as typeof Route;
               return (
-                <li key={title as string} className="flow-step" style={{ '--i': i } as CSSProperties}>
-                  <span className="flow-dot">
+                <li key={title as string} className="flow-step" data-reveal-group style={{ '--i': i } as CSSProperties}>
+                  <span className="flow-dot" data-reveal>
                     <I />
                   </span>
-                  <span className="flow-text">
+                  <span className="flow-text" data-reveal>
                     <strong>{title as string}</strong>
                     <span className="t-xs t-muted">{text as string}</span>
                   </span>
@@ -264,17 +268,21 @@ export default function AboutPage() {
 
       {/* ---------------- 07: Positioning ---------------- */}
       <section id="act-precision" className="act act--precision" data-act aria-labelledby="h-precision">
-        <div className="final">
-          <Motif size={64} className="final-motif" />
-          <span className="eyebrow">07 · Precision</span>
-          <h2 id="h-precision" className="final-title">
+        <div className="final" data-reveal-group>
+          <span className="final-motif-wrap" data-reveal>
+            <Motif size={64} className="final-motif" />
+          </span>
+          <span className="eyebrow" data-reveal>
+            07 · Precision
+          </span>
+          <h2 id="h-precision" className="final-title" data-reveal>
             Precision over recall. <em className="t-serif">Evidence over guesswork.</em>
           </h2>
-          <p className="final-lead">
+          <p className="final-lead" data-reveal>
             When something cannot be verified, COGNIS says so — <span className="t-nowrap">“Not available”</span>, <span className="t-nowrap">“Source blocked”</span> or <span className="t-nowrap">“Ambiguous”</span> — instead of
             filling the gap.
           </p>
-          <div className="final-actions">
+          <div className="final-actions" data-reveal>
             <Link to="/research" className="btn btn--primary btn--lg">
               Start research <ArrowRight aria-hidden />
             </Link>
@@ -282,7 +290,7 @@ export default function AboutPage() {
               Discover companies
             </Link>
           </div>
-          <div className="final-notes paper">
+          <div className="final-notes paper" data-reveal>
             <section>
               <h3>Freshness</h3>
               <p>
@@ -304,8 +312,8 @@ export default function AboutPage() {
               </p>
             </section>
           </div>
-          {API_MODE === 'mock' && <p className="notice notice--info">This build runs on the mock backend. All companies, people and figures are fictional demo data.</p>}
-          <p className="t-xs t-muted final-meta">
+          {API_MODE === 'mock' && <p className="notice notice--info" data-reveal>This build runs on the mock backend. All companies, people and figures are fictional demo data.</p>}
+          <p className="t-xs t-muted final-meta" data-reveal>
             Version 0.1.0 · Builderr Signalpost Hackathon ·{' '}
             <Link to="/settings" className="link-btn" style={{ fontSize: 12 }}>
               System status
@@ -319,22 +327,24 @@ export default function AboutPage() {
 
 function Copy({ id, num, kicker, title, children, className, lead }: { id?: string; num: string; kicker: string; title: ReactNode; children: ReactNode; className?: string; lead?: boolean }) {
   return (
-    <div className={cn('copy', className)}>
-      <span className="copy-kicker">
+    <div className={cn('copy', className)} data-reveal-group>
+      <span className="copy-kicker" data-reveal>
         <span className="t-mono">{num}</span>
         <span className="copy-rule" />
         {kicker}
       </span>
       {lead ? (
-        <h1 id={id} className="copy-title copy-title--lead">
+        <h1 id={id} className="copy-title copy-title--lead" data-reveal>
           {title}
         </h1>
       ) : (
-        <h2 id={id} className="copy-title">
+        <h2 id={id} className="copy-title" data-reveal>
           {title}
         </h2>
       )}
-      <div className="copy-body">{children}</div>
+      <div className="copy-body" data-reveal>
+        {children}
+      </div>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import type { CompaniesApi, SearchApi } from './contract';
 import { http } from './http';
-import type { ChangeExplanation, CompanyProfile, CompanySummary, DiscoverQuery, DiscoverResult, ExecutiveBrief, QueryInterpretation, SearchResult } from '@/types';
+import type { ChangeExplanation, CompanyProfile, CompanySummary, DiscoverQuery, DiscoverResult, EnrichmentResult, ExecutiveBrief, QueryInterpretation, SearchResult } from '@/types';
 
 /** Live company endpoints. */
 export const liveCompanies: CompaniesApi = {
@@ -16,6 +16,8 @@ export const liveCompanies: CompaniesApi = {
   brief: (orgNumber: string) => http.get<ExecutiveBrief>(`/companies/${encodeURIComponent(orgNumber)}/brief`),
   // POST /companies/:orgNumber/explain  body: { subject, fresh? } → ChangeExplanation
   explain: (orgNumber, subject, opts) => http.post<ChangeExplanation>(`/companies/${encodeURIComponent(orgNumber)}/explain`, { subject, fresh: !!opts?.fresh }),
+  // POST /companies/enrich  body: { orgNumbers, fields? } → EnrichmentResult (targeted lookups for missing card figures; nothing is saved)
+  enrich: (orgNumbers, opts) => http.post<EnrichmentResult>('/companies/enrich', { orgNumbers, fields: opts?.fields }, opts?.signal),
 };
 
 /** Live global search. */

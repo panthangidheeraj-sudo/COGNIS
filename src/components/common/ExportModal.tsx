@@ -57,7 +57,7 @@ export function ExportModal({ open, onClose, target, title }: { open: boolean; o
     evidence: !!caps?.exportKinds?.includes('evidence'),
   };
   const unsupportedNote: Record<ExportKind, string> = {
-    report: 'PDF reports are not available from this backend yet.',
+    report: caps?.pdfReportsNote ?? 'PDF reports are not available from this backend yet.',
     data: 'No data formats are available from this backend.',
     evidence: 'The evidence export is not available from this backend yet.',
   };

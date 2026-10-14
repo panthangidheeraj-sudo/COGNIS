@@ -267,7 +267,7 @@ function Composer({ orgParam, initialQuery, initialPrompt, mode, setMode, onStar
           </div>
         ) : (
           <div className="composer-search">
-            <div className="input-wrap">
+            <div className="input-wrap on-ivory">
               <Building2 aria-hidden />
               <input
                 ref={inputRef}
@@ -325,7 +325,7 @@ function Composer({ orgParam, initialQuery, initialPrompt, mode, setMode, onStar
         <label className="field-label" htmlFor="rc-q" style={{ marginTop: 16 }}>
           Or ask your own question
         </label>
-        <textarea id="rc-q" className="textarea" rows={2} value={question} onChange={(e) => setQuestion(e.target.value)} placeholder="e.g. Has the company opened offices outside Norway in the last year?" />
+        <textarea id="rc-q" className="textarea on-ivory" rows={2} value={question} onChange={(e) => setQuestion(e.target.value)} placeholder="e.g. Has the company opened offices outside Norway in the last year?" />
         <div className="composer-foot">
           <Segmented
             label="Research depth"
@@ -349,7 +349,7 @@ function Composer({ orgParam, initialQuery, initialPrompt, mode, setMode, onStar
         )}
       </div>
 
-      <div className="composer-explain">
+      <div className="composer-explain on-ivory">
         <SourceStack steps={null} compact />
         <div className="stack" style={{ gap: 10 }}>
           <h2 className="t-h3">How research works</h2>

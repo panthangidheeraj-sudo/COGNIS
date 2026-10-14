@@ -45,9 +45,25 @@ export function Tabs({ tabs, value, onChange, label, className }: { tabs: TabDef
   );
 }
 
-export function Segmented<T extends string>({ options, value, onChange, label }: { options: { value: T; label: ReactNode; icon?: ReactNode; title?: string }[]; value: T; onChange: (v: T) => void; label: string }) {
+/**
+ * A small group of mutually exclusive options. `tone="ivory"` draws the control on a light ivory surface with navy ink
+ * (for toggles that sit on a dark card, such as the Settings options); the behaviour is identical.
+ */
+export function Segmented<T extends string>({
+  options,
+  value,
+  onChange,
+  label,
+  tone = 'default',
+}: {
+  options: { value: T; label: ReactNode; icon?: ReactNode; title?: string }[];
+  value: T;
+  onChange: (v: T) => void;
+  label: string;
+  tone?: 'default' | 'ivory';
+}) {
   return (
-    <div className="segmented" role="group" aria-label={label}>
+    <div className={tone === 'ivory' ? 'segmented on-ivory' : 'segmented'} role="group" aria-label={label}>
       {options.map((o) => (
         <button key={o.value} aria-pressed={o.value === value} onClick={() => onChange(o.value)} title={o.title}>
           {o.icon}

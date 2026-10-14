@@ -188,7 +188,7 @@ class Builder:
             "industry": {"code": ident.get("industry_code"), "description": ident.get("industry_label") or ""} if ident.get("industry_code") else None,
             "status": status, "statusLabel": ident.get("status_label") or status.replace("_", " ").title(),
             "employees": emp_claim["value"] if emp_claim else None, "revenue": {"value": latest_rev["fact"]["value"], "currency": latest_rev["fact"].get("currency") or "", "period": latest_rev["period"]} if latest_rev else None,
-            "openPositions": hiring["totalCurrent"], "coverage": coverage, "lastResearchedAt": self.researched_at if self.researched else None,
+            "openPositions": hiring["totalCurrent"], "openPositionsStatus": hiring.get("outcome"), "coverage": coverage, "lastResearchedAt": self.researched_at if self.researched else None,
             "researchState": "researched" if self.researched else "not_researched", "website": self.domain or None,
             "geo": {"lat": geo["lat"], "lon": geo["lon"]} if geo else None, "changeCount": len([c for c in changes["changes"] if c["material"]]), "tags": self.tags,
         }

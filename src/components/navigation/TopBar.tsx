@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { Search } from 'lucide-react';
 import { useUi } from '@/stores/ui';
 import { modKeyLabel } from '@/hooks/useHotkey';
-import { CognisLogo } from '@/components/common/Motif';
+import { CognisLogo } from '@/components/common/CognisLogo';
 import { StatusCenter } from './StatusCenter';
 import { ThemeToggle } from './ThemeToggle';
 import { DensityToggle } from './DensityToggle';
@@ -21,7 +21,7 @@ export function TopBar() {
   return (
     <header className={`topbar ${scrolled ? 'is-scrolled' : ''}`}>
       <Link to="/" className="topbar-logo" aria-label="COGNIS home">
-        <CognisLogo />
+        <CognisLogo decorative height={34} />
       </Link>
       <button className={`search-trigger ${onHome && !scrolled ? 'search-trigger--hidden' : ''}`} onClick={() => openPalette()} aria-label="Search companies, research and data sheets">
         <Search aria-hidden />

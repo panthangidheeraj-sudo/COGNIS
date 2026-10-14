@@ -1,0 +1,13 @@
+{
+  "name": "COGNIS",
+  "short_name": "COGNIS",
+  "description": "Company intelligence, built from evidence.",
+  "start_url": "/",
+  "display": "browser",
+  "background_color": "#06111C",
+  "theme_color": "#06111C",
+  "icons": [
+    { "src": "/brand/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/brand/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

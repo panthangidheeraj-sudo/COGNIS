@@ -1,0 +1,217 @@
+/* ==========================================================================
+   IVORY SURFACES — light, ink-on-ivory controls and panels on the dark workspace
+   --------------------------------------------------------------------------
+   `.on-ivory` is a token scope. Put it on a field, chip, toggle, card or panel and everything inside
+   (and the element itself) reads navy ink on warm ivory: text, icons, hairlines, wells, status colours
+   and the primary button are remapped to their light-theme values. The page around it stays dark navy.
+
+   Use it for the few surfaces that should read as paper: Home action cards, the Discover search and
+   query chips, Research inputs and the "How research works" panel, the Library search bar and the
+   Settings toggles. Components keep their own layout and sizing; only colour comes from here.
+
+   Focus: a two-step ring (an ivory gap, then --ivory-ring) is visible on ivory and on navy alike.
+   In the light theme the page is ivory too, so the same scope keeps a hairline and a shadow.
+   ========================================================================== */
+.on-ivory {
+  color-scheme: light;
+  color: var(--ivory-ink);
+
+  /* surfaces */
+  --surface-1: var(--ivory-panel);
+  --surface-2: var(--ivory-field);
+  --surface-3: var(--ivory-well);
+  --frost-sheen: linear-gradient(transparent, transparent);
+  --frost-edge: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  --shadow-1: var(--ivory-shadow);
+  --shadow-2: var(--ivory-shadow-lift);
+
+  /* ink */
+  --text-1: var(--ivory-ink);
+  --text-2: var(--ivory-ink-2);
+  --text-3: var(--ivory-ink-3);
+  --text-4: var(--ivory-ink-4);
+  --text-on-accent: #ffffff;
+
+  /* hairlines and focus */
+  --line: var(--ivory-line);
+  --line-strong: var(--ivory-line-strong);
+  --line-focus: var(--ivory-ring);
+  --glass-border: var(--ivory-line-strong);
+
+  /* accents, washes and states (the light theme's values) */
+  --accent: #3f72d8;
+  --accent-strong: #2c5fc4;
+  --accent-soft: #34507a;
+  --accent-ice: #1f3656;
+  --accent-wash: rgba(16, 42, 67, 0.05);
+  --accent-wash-2: rgba(16, 42, 67, 0.09);
+  --neutral-wash: rgba(16, 42, 67, 0.05);
+  --pressed-bg: #ffffff;
+  --dot-glow: rgba(16, 42, 67, 0.25);
+  --link: #2a5bbf;
+  --live: #2f66d0;
+  --ok: #13836f;
+  --ok-wash: rgba(19, 131, 111, 0.09);
+  --warn: #9a6a12;
+  --warn-wash: rgba(176, 122, 26, 0.1);
+  --err: #b4473c;
+  --err-wash: rgba(180, 71, 60, 0.08);
+  --info: #2a5bbf;
+  --info-wash: rgba(42, 91, 191, 0.07);
+
+  /* the primary action is navy on ivory (it is white on the dark page) */
+  --primary-bg: #0f1b2a;
+  --primary-bg-hover: #1a2a3f;
+  --primary-fg: #ffffff;
+  --primary-border: #0f1b2a;
+  --primary-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 10px 22px -14px rgba(15, 27, 42, 0.6);
+}
+
+/* ---------------------------------------------------------------- fields ---- */
+:is(.input, .textarea, .select).on-ivory,
+.on-ivory :is(.input, .textarea, .select) {
+  background-color: var(--ivory-field);
+  color: var(--ivory-ink);
+  border-color: var(--ivory-line-strong);
+  box-shadow: inset 0 1px 2px rgba(16, 42, 67, 0.06);
+}
+:is(.input, .textarea, .select).on-ivory:hover:not(:disabled):not(:focus-visible),
+.on-ivory :is(.input, .textarea, .select):hover:not(:disabled):not(:focus-visible) {
+  border-color: var(--ivory-ink-3);
+}
+:is(.input, .textarea, .select).on-ivory:focus-visible,
+.on-ivory :is(.input, .textarea, .select):focus-visible {
+  outline: none;
+  border-color: var(--ivory-ink);
+  box-shadow:
+    0 0 0 2px var(--ivory-field),
+    0 0 0 4px var(--ivory-ring);
+}
+:is(.input, .textarea).on-ivory::placeholder,
+.on-ivory :is(.input, .textarea)::placeholder {
+  color: var(--ivory-ink-4);
+  opacity: 1;
+}
+:is(.input, .textarea, .select).on-ivory:disabled,
+.on-ivory :is(.input, .textarea, .select):disabled {
+  background-color: var(--ivory-well);
+  color: var(--ivory-ink-3);
+  cursor: not-allowed;
+}
+:is(.input, .textarea, .select).on-ivory[aria-invalid='true'],
+.on-ivory :is(.input, .textarea, .select)[aria-invalid='true'] {
+  border-color: var(--err);
+}
+/* browser autofill would otherwise repaint the field with the dark theme's colours */
+:is(.input, .textarea).on-ivory:-webkit-autofill,
+.on-ivory :is(.input, .textarea):-webkit-autofill {
+  -webkit-text-fill-color: var(--ivory-ink);
+  -webkit-box-shadow: 0 0 0 100px var(--ivory-field) inset;
+}
+/* a field drawn as a bar: an icon, a transparent input and an action (Discover search) */
+.on-ivory.is-bar {
+  background: var(--ivory-field);
+  border-color: var(--ivory-line-strong);
+  box-shadow: var(--ivory-shadow);
+}
+.on-ivory.is-bar:focus-within {
+  border-color: var(--ivory-ink);
+  box-shadow:
+    0 0 0 2px var(--ivory-field),
+    0 0 0 4px var(--ivory-ring);
+}
+.on-ivory.is-bar input {
+  color: var(--ivory-ink);
+  caret-color: var(--ivory-ink);
+}
+.on-ivory.is-bar input::placeholder {
+  color: var(--ivory-ink-4);
+  opacity: 1;
+}
+
+/* ----------------------------------------------------------------- chips ---- */
+.chip.on-ivory {
+  background: var(--ivory-field);
+  color: var(--ivory-ink-2);
+  border-color: var(--ivory-line-strong);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.6) inset, 0 1px 2px rgba(0, 4, 12, 0.14);
+}
+.chip.on-ivory:hover:not(:disabled):not([aria-disabled='true']) {
+  background: #ffffff;
+  color: var(--ivory-ink);
+  border-color: var(--ivory-ink-3);
+}
+.chip.on-ivory:active:not(:disabled):not([aria-disabled='true']) {
+  background: var(--ivory-well);
+}
+.chip.on-ivory[aria-pressed='true'],
+.chip.on-ivory.is-active {
+  background: var(--ivory-ink);
+  color: var(--ivory-field);
+  border-color: var(--ivory-ink);
+}
+.chip.on-ivory:disabled,
+.chip.on-ivory[aria-disabled='true'] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.chip.on-ivory:focus-visible {
+  outline: none;
+  border-radius: var(--r-pill); /* the global focus rule would square a pill off */
+  box-shadow:
+    0 0 0 2px var(--ivory-field),
+    0 0 0 4px var(--ivory-ring);
+}
+.chip.on-ivory svg {
+  color: var(--ivory-ink-3);
+}
+.chip.on-ivory[aria-pressed='true'] svg,
+.chip.on-ivory.is-active svg {
+  color: inherit;
+}
+
+/* ------------------------------------------------ segmented toggles (Settings) ---- */
+.segmented.on-ivory {
+  background: var(--ivory-well);
+  border-color: var(--ivory-line-strong);
+  box-shadow: inset 0 1px 2px rgba(16, 42, 67, 0.08);
+}
+.segmented.on-ivory button {
+  color: var(--ivory-ink-2);
+}
+.segmented.on-ivory button:hover {
+  color: var(--ivory-ink);
+  background: rgba(16, 42, 67, 0.07);
+}
+/* selected = inverted (navy fill, ivory text): clear without relying on hue, and no width change between states */
+.segmented.on-ivory button[aria-pressed='true'] {
+  background: var(--ivory-ink);
+  color: var(--ivory-field);
+  box-shadow: 0 1px 2px rgba(0, 4, 12, 0.35);
+}
+.segmented.on-ivory button[aria-pressed='true']:hover {
+  background: var(--ivory-ink);
+  color: #ffffff;
+}
+.segmented.on-ivory button:focus-visible {
+  outline: none;
+  border-radius: 6px;
+  box-shadow:
+    0 0 0 2px var(--ivory-field),
+    0 0 0 4px var(--ivory-ring);
+}
+.segmented.on-ivory button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Windows high-contrast / forced colours: keep selection and focus visible with system colours */
+@media (forced-colors: active) {
+  .segmented.on-ivory button[aria-pressed='true'],
+  .chip.on-ivory[aria-pressed='true'],
+  .chip.on-ivory.is-active {
+    forced-color-adjust: none;
+    background: Highlight;
+    color: HighlightText;
+  }
+}

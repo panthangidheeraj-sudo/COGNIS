@@ -9,6 +9,7 @@ import type {
   Artifact,
   ArtifactCapabilities,
   ArtifactSummary,
+  BackendHealth,
   BatchStatus,
   ChangeExplanation,
   ColumnPreview,
@@ -22,6 +23,8 @@ import type {
   DataSheetSummary,
   DiscoverQuery,
   DiscoverResult,
+  EnrichmentField,
+  EnrichmentResult,
   ExecutiveBrief,
   ExplainSubject,
   ExportRequest,
@@ -47,6 +50,8 @@ import type { StreamHandlers, Unsubscribe } from './http';
 
 export interface SystemApi {
   status(): Promise<SystemStatus>;
+  /** Liveness only (GET /health): is the backend process up? Used to tell "offline" apart from "the status report failed". */
+  health(): Promise<BackendHealth>;
 }
 
 export interface SearchApi {
@@ -62,6 +67,8 @@ export interface CompaniesApi {
   brief(orgNumber: string): Promise<ExecutiveBrief>;
   /** Backend-researched explanation, with observed / reported / synthesis kept apart. */
   explain(orgNumber: string, subject: ExplainSubject, opts?: { fresh?: boolean }): Promise<ChangeExplanation>;
+  /** Targeted, bounded lookups for the figures Discover cards are missing (at most 12 companies per call). Not research: nothing is saved. */
+  enrich(orgNumbers: string[], opts?: { fields?: EnrichmentField[]; signal?: AbortSignal }): Promise<EnrichmentResult>;
 }
 
 export interface ResearchApi {

@@ -42,11 +42,11 @@ from reportlab.platypus import (
 from reportlab.platypus.tableofcontents import TableOfContents
 
 from ..core.util import format_money
+from .pdf_support import FONT_DIR
+from .pdf_support import FONT_FILES as _FONT_FILES
+from .pdf_support import pdf_available as pdf_available  # noqa: F401 - re-exported: callers that already imported this module keep working
 from .report_data import EVIDENCE_STATE_LABEL, MODULE_LABELS, MODULE_STATES, SECTION_TITLES, SavedResearch, display_value, verification_of
 
-FONT_DIR = Path(__file__).resolve().parent.parent / "assets" / "fonts"
-_FONT_FILES = {"Cognis": "LiberationSans-Regular.ttf", "Cognis-Bold": "LiberationSans-Bold.ttf", "Cognis-Italic": "LiberationSans-Italic.ttf",
-               "Cognis-BoldItalic": "LiberationSans-BoldItalic.ttf", "CognisSerif-Bold": "LiberationSerif-Bold.ttf"}
 REG, BOLD, ITAL, BOLDITAL, SERIF = "Cognis", "Cognis-Bold", "Cognis-Italic", "Cognis-BoldItalic", "CognisSerif-Bold"
 
 # Palette: restrained navy, ivory and blue. One muted ochre and one muted red are used only to mark claims that need caution.
@@ -71,10 +71,6 @@ class ReportUnavailable(RuntimeError):
 
 def fonts_available() -> bool:
     return all((FONT_DIR / f).is_file() for f in _FONT_FILES.values())
-
-
-def pdf_available() -> bool:
-    return fonts_available()
 
 
 def _register_fonts() -> None:

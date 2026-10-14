@@ -11,6 +11,7 @@ import type {
   BatchStatus,
   ColumnPreview,
   ColumnValueType,
+  CompanyEnrichment,
   CompanySummary,
   Comparison,
   ComparisonRow,
@@ -356,6 +357,10 @@ let colCounter = 0;
 
 export const mockApi: CognisApi = {
   system: {
+    async health() {
+      await latency(40);
+      return { status: 'ok' as const, version: '0.1.0 · mock backend' };
+    },
     async status(): Promise<SystemStatus> {
       await latency(120);
       return {
@@ -500,6 +505,34 @@ export const mockApi: CognisApi = {
       if (!spec) throw new ApiError('not_found', 'Company not found.', 404);
       const ex = explainFromProfile(profileFor(org), spec, subject);
       return clone(opts?.fresh ? { ...ex, origin: 'fresh_research' as const } : ex);
+    },
+    async enrich(orgNumbers, opts) {
+      // Mock: answers from the demo data only — a figure the demo company has is "verified", anything else says why it is missing.
+      await latency(380, opts?.signal);
+      const fields = opts?.fields ?? (['revenue', 'employees', 'openPositions'] as const);
+      const byOrg = new Map(allSummaries().map((c) => [c.orgNumber, c]));
+      const at = nowIso();
+      const items = orgNumbers.map((org) => {
+        const c = byOrg.get(org);
+        const out: CompanyEnrichment['fields'] = {};
+        for (const f of fields) {
+          if (f === 'revenue')
+            out.revenue = c?.revenue
+              ? { state: 'verified', note: `Latest filed annual accounts (${c.revenue.period}).`, value: c.revenue.value, currency: c.revenue.currency, period: c.revenue.period, sources: [{ name: 'Regnskapsregisteret', state: 'checked', retrievedAt: at }] }
+              : { state: 'not_reported', note: 'No annual accounts are filed for this company. This is not a revenue of zero.', sources: [{ name: 'Regnskapsregisteret', state: 'checked', retrievedAt: at }] };
+          if (f === 'employees')
+            out.employees =
+              c?.employees != null
+                ? { state: 'verified', note: 'Employee count registered in Enhetsregisteret.', value: c.employees, sources: [{ name: 'Enhetsregisteret', state: 'checked', retrievedAt: at }] }
+                : { state: 'not_reported', note: 'Enhetsregisteret holds no employee count for this company. That is not a verified zero.', sources: [{ name: 'Enhetsregisteret', state: 'checked', retrievedAt: at }] };
+          if (f === 'openPositions')
+            out.openPositions = c?.openPositions
+              ? { state: 'verified', note: `${c.openPositions} verified current openings (Company careers page).`, value: c.openPositions, sources: [{ name: 'Company careers page', state: 'checked', retrievedAt: at }] }
+              : { state: 'none_found', note: 'No verified openings in Company careers page. This does not mean the company is not hiring.', sources: [{ name: 'Company careers page', state: 'checked', retrievedAt: at }] };
+        }
+        return { orgNumber: org, checkedAt: at, fields: out };
+      });
+      return clone({ items, enabled: true, checkedAt: at });
     },
   },
 

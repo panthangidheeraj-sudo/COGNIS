@@ -1,10 +1,11 @@
 import { Link } from 'react-router-dom';
 import { Check, Globe, Plus } from 'lucide-react';
-import type { CompanySummary } from '@/types';
+import type { CompanyEnrichment, CompanySummary } from '@/types';
 import { BrandMark } from '@/components/common/BrandMark';
 import { CoverageMeter } from './Coverage';
+import { FigureValue, figureView } from './CompanyFigure';
 import { MAX_COMPARE, useCompare } from '@/stores/ui';
-import { formatDate, formatInteger, formatMoneyCompact, formatOrgNumber } from '@/utils/format';
+import { formatDate, formatOrgNumber } from '@/utils/format';
 import { COMPANY_STATUS_TONE, toneClass } from '@/utils/status';
 import { cn } from '@/utils/cn';
 
@@ -39,9 +40,13 @@ export function CompareToggle({ c, small }: { c: CompanySummary; small?: boolean
 /**
  * Discovery result card, set editorially: a quiet place/org kicker, the company name as the headline,
  * the industry as a standfirst, the website domain, then three key figures and the research state.
+ * A figure without a verified value says why (see CompanyFigure); `lookup` carries what a Discover lookup established, `checking` that one is running.
  */
-export function CompanyCard({ c }: { c: CompanySummary }) {
+export function CompanyCard({ c, lookup, checking = false }: { c: CompanySummary; lookup?: CompanyEnrichment; checking?: boolean }) {
   const selected = useCompare((s) => s.selected.some((x) => x.orgNumber === c.orgNumber));
+  const revenue = figureView('revenue', c, lookup, checking);
+  const employees = figureView('employees', c, lookup, checking);
+  const openings = figureView('openPositions', c, lookup, checking);
   return (
     <article className={cn('co-card', selected && 'co-card--selected', c.researchState === 'not_researched' && 'co-card--registry')}>
       <Link to={`/company/${c.orgNumber}`} className="co-card-link" aria-label={`${c.legalName}, ${c.municipality}. Open research.`} />
@@ -65,16 +70,22 @@ export function CompanyCard({ c }: { c: CompanySummary }) {
       <dl className="co-card-metrics">
         <div>
           <dt>Revenue</dt>
-          <dd className="t-num">{c.revenue ? formatMoneyCompact(c.revenue.value, c.revenue.currency) : <span className="co-card-na">Not available</span>}</dd>
-          {c.revenue && <span className="freshness">{c.revenue.period}</span>}
+          <dd className="t-num">
+            <FigureValue view={revenue} />
+          </dd>
+          {revenue.detail && <span className="freshness">{revenue.detail}</span>}
         </div>
         <div>
           <dt>Employees</dt>
-          <dd className="t-num">{c.employees != null ? formatInteger(c.employees) : <span className="co-card-na">Not available</span>}</dd>
+          <dd className="t-num">
+            <FigureValue view={employees} />
+          </dd>
         </div>
         <div>
           <dt>Openings</dt>
-          <dd className="t-num">{c.openPositions != null ? c.openPositions : <span className="co-card-na" title="No verified hiring data">Not available</span>}</dd>
+          <dd className="t-num">
+            <FigureValue view={openings} />
+          </dd>
         </div>
       </dl>
       <div className="co-card-foot">

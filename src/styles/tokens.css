@@ -35,6 +35,20 @@
   --c-ivory-2: #f3eee3;
   --c-ivory-3: #ebe4d6;
 
+  /* Ivory surfaces: light, ink-on-ivory fields, chips, toggles and panels that sit on the dark workspace.
+     Used through the `.on-ivory` scope (styles/ivory.css), which remaps the semantic tokens below it.
+     Contrast (WCAG): ink 1/2/3 ≥ 6.5:1 on field and panel, ink 4 (placeholders) ≥ 4.8:1. */
+  --ivory-panel: #fbf8f1; /* panels and cards */
+  --ivory-field: #fffdf8; /* inputs, chips, option surfaces: the lightest step */
+  --ivory-well: #f3eee3; /* option tracks, hover */
+  --ivory-well-2: #ebe4d6;
+  --ivory-ink: #0f1b2a;
+  --ivory-ink-2: #34445a;
+  --ivory-ink-3: #4b5b70;
+  --ivory-ink-4: #5f6f84;
+  --ivory-line: rgba(16, 42, 67, 0.12);
+  --ivory-line-strong: rgba(16, 42, 67, 0.28);
+
   /* ---- Typography ---- */
   --font-sans: 'Geist Variable', 'Geist', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-serif: 'Instrument Serif', 'Iowan Old Style', Georgia, serif;
@@ -213,6 +227,19 @@
   --chart-axis: #7d8ca3;
 
   --grain-opacity: 0.03;
+
+  /* Ivory surfaces on the dark workspace */
+  --ivory-ring: #3f7be0; /* focus ring: ≥ 3.7:1 on ivory and on navy */
+  --ivory-shadow: 0 1px 0 rgba(255, 255, 255, 0.55) inset, 0 1px 2px rgba(0, 4, 12, 0.22), 0 14px 30px -20px rgba(0, 4, 12, 0.85);
+  --ivory-shadow-lift: 0 1px 0 rgba(255, 255, 255, 0.6) inset, 0 2px 4px rgba(0, 4, 12, 0.22), 0 24px 44px -24px rgba(0, 4, 12, 0.9);
+
+  /* Sidebar: icons and labels stay bright whether or not the item is selected */
+  --nav-fg: #f6f4ee;
+  --nav-fg-strong: #ffffff;
+  --nav-hover-bg: rgba(246, 244, 238, 0.08);
+  --nav-active-bg: rgba(246, 244, 238, 0.14);
+  --nav-active-line: rgba(246, 244, 238, 0.36);
+  --nav-indicator: #f6f4ee;
 }
 
 /* ==========================================================================
@@ -299,6 +326,19 @@
   --chart-axis: #66768a;
 
   --grain-opacity: 0.03;
+
+  /* Ivory surfaces on the ivory canvas: the same fills, with a hairline and a lighter shadow to stay distinct */
+  --ivory-ring: #2f66d0;
+  --ivory-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 1px 2px rgba(16, 42, 67, 0.06), 0 10px 26px -18px rgba(16, 42, 67, 0.3);
+  --ivory-shadow-lift: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 2px 4px rgba(16, 42, 67, 0.06), 0 22px 44px -26px rgba(16, 42, 67, 0.4);
+
+  /* Sidebar: the rail is ivory in light mode, so bright means dark ink here */
+  --nav-fg: #0f1b2a;
+  --nav-fg-strong: #0f1b2a;
+  --nav-hover-bg: rgba(16, 42, 67, 0.06);
+  --nav-active-bg: rgba(16, 42, 67, 0.1);
+  --nav-active-line: rgba(16, 42, 67, 0.3);
+  --nav-indicator: #0f1b2a;
 }
 
 /* ---- Density ---- */

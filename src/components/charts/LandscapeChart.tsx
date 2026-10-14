@@ -1,30 +1,19 @@
-/** Company landscape: two user-selected metrics, log scales, companies as nodes. */
+/**
+ * Company landscape: two user-selected metrics, log scales, companies as nodes. Only verified values are plotted (see ./landscapeData.ts);
+ * the page shows an explanation instead of this chart when fewer than two companies have both values.
+ */
 import { CartesianGrid, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis } from 'recharts';
 import type { CompanySummary } from '@/types';
 import { formatAxisMoney, formatInteger, formatMoneyCompact } from '@/utils/format';
 import { ChartTip } from './ChartTooltip';
+import { landscapeData, METRIC_LABEL, type LandscapeMetric } from './landscapeData';
 
-export type LandscapeMetric = 'revenue' | 'employees' | 'openPositions';
-const LABEL = (currency: string): Record<LandscapeMetric, string> => ({ revenue: `Revenue (${currency || 'as filed'}, latest FY)`, employees: 'Employees (registry)', openPositions: 'Open positions (verified)' });
-
-/** Revenue is only plotted for companies filing in the chart's currency: amounts in different currencies are never put on one axis (no conversion). */
-function val(c: CompanySummary, m: LandscapeMetric, currency: string) {
-  if (m === 'revenue') return c.revenue && c.revenue.currency === currency ? c.revenue.value : null;
-  if (m === 'employees') return c.employees ?? null;
-  return c.openPositions ?? null;
-}
+export type { LandscapeMetric } from './landscapeData';
 
 export default function LandscapeChart({ companies, x, y, onSelect }: { companies: CompanySummary[]; x: LandscapeMetric; y: LandscapeMetric; onSelect: (org: string) => void }) {
   // The plotted currency is the most common one among the companies' latest filings (NOK for most Norwegian companies).
-  const counts = new Map<string, number>();
-  for (const c of companies) if (c.revenue?.currency) counts.set(c.revenue.currency, (counts.get(c.revenue.currency) ?? 0) + 1);
-  const currency = [...counts.entries()].sort((a, b) => b[1] - a[1] || (a[0] === 'NOK' ? -1 : 1))[0]?.[0] ?? '';
-  const LABELS = LABEL(currency);
-  const otherCurrency = x === 'revenue' || y === 'revenue' ? companies.filter((c) => c.revenue && c.revenue.currency !== currency).length : 0;
-  const pts = companies
-    .map((c) => ({ c, x: val(c, x, currency), y: val(c, y, currency) }))
-    .filter((p): p is { c: CompanySummary; x: number; y: number } => p.x != null && p.y != null && p.x > 0 && p.y > 0)
-    .map((p) => ({ ...p, name: p.c.legalName, org: p.c.orgNumber }));
+  const { currency, points: pts, otherCurrency } = landscapeData(companies, x, y);
+  const LABELS = METRIC_LABEL(currency);
   const fmt = (m: LandscapeMetric) => (v: number) => (m === 'revenue' ? formatAxisMoney(v) : formatInteger(v));
   return (
     <div className="landscape">

@@ -11,6 +11,7 @@ import './styles/components.css';
 import './styles/app.css';
 import './styles/shell.css';
 import './styles/knowledge.css';
+import './styles/ivory.css';
 import './styles/density.css';
 import { Providers } from './app/providers';
 import { router } from './app/router';

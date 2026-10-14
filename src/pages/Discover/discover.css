@@ -244,6 +244,37 @@
   letter-spacing: 0;
   color: var(--text-4);
 }
+.co-card-na[data-checking] {
+  color: var(--text-3);
+}
+/* One quiet line while missing figures are looked up for the visible results */
+.disc-lookups {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: -6px 0 12px;
+}
+/* Landscape: an explanation instead of a blank chart when too few companies have verified values for both metrics */
+.landscape-empty {
+  display: grid;
+  gap: 10px;
+  min-height: 220px;
+  align-content: center;
+  padding: 24px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--r-lg);
+}
+.landscape-gaps {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 18px;
+}
+.landscape-more {
+  gap: 10px;
+  margin-top: 8px;
+  align-items: center;
+}
 .co-card-foot {
   display: flex;
   align-items: flex-end;

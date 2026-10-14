@@ -35,7 +35,7 @@ from ..providers.llm_base import LLMProvider
 from ..runtime.budgets import CompanyBudget, RunBudget
 from ..security.urls import canonical_url, host_of, normalize_website, registrable_domain
 from ..storage.db import Database
-from . import crosscheck, hiring, llm_tasks
+from . import crosscheck, hiring, llm_tasks, modes
 from .focus import focus_kinds
 from .record import build_record
 
@@ -112,6 +112,8 @@ class ResearchState:
     extract_count: int | None = None  # quote-verified statements the language model read from the site; None = not run
     crosscheck: dict[str, Any] | None = None
     effort: dict[str, Any] | None = None
+    policy: modes.ModePolicy | None = None  # the budget and discovery rules this run was held to (agent/modes.py)
+    job_search_skipped: bool = False  # search discovery of job pages was left out because the mode/focus did not call for it
 
 
 class Orchestrator:
@@ -139,13 +141,14 @@ class Orchestrator:
         org = normalize_org_number(org_number)
         state = ResearchState(org_number=org, run_id=run_id, started_at=now_iso(), options=opts)
         s = self.settings
-        budget = CompanyBudget(self.run_budget, max_requests=s.per_company_max_requests, max_seconds=s.per_company_max_seconds,
-                               max_llm_calls=0 if opts.mode == "registry" else (s.max_llm_calls_per_company if opts.mode != "quick" else 1), max_searches=s.max_searches_per_company)
+        policy = state.policy = modes.policy_for(s, opts.mode)  # Quick and Deep are held to different budgets (agent/modes.py)
+        budget = CompanyBudget(self.run_budget, max_requests=policy.max_requests, max_seconds=policy.max_seconds, max_llm_calls=policy.max_llm_calls,
+                               max_searches=policy.max_searches)
         runner = llm_tasks.LLMRunner(self.provider, budget)
         emit = _safe_sink(on_event)
         started = time.monotonic()
         try:
-            await asyncio.wait_for(self._run(state, budget, runner, bulk_row, bulk_meta, emit), timeout=s.per_company_max_seconds + 15)
+            await asyncio.wait_for(self._run(state, budget, runner, bulk_row, bulk_meta, emit), timeout=policy.max_seconds + 15)
         except TimeoutError:
             state.timed_out = True
             state.errors.append({"stage": "orchestrator", "error": "per-company time limit reached; partial results were finalised", "retryable": True})
@@ -365,6 +368,9 @@ class Orchestrator:
         if st.summary and st.summary.get("text"):
             emit("synthesis", {"text": st.summary["text"]})
 
+    def _policy(self, st: ResearchState) -> modes.ModePolicy:
+        return st.policy or modes.policy_for(self.settings, st.options.mode)
+
     # --------------------------------------------------------------- website --
     def _site_candidates(self, st: ResearchState) -> list[tuple[str, str]]:
         ident = st.identity
@@ -468,7 +474,7 @@ class Orchestrator:
         identity = st.identity
         assert identity is not None
         t = _step_start(emit, "website")
-        max_pages = s.max_pages_per_site if st.options.mode != "quick" else 3
+        max_pages = self._policy(st).max_site_pages
         best: SiteCrawl | None = None
         for url, origin in self._site_candidates(st)[:3]:
             _progress(emit, "website", f"Reading {host_of(url) or url}")
@@ -561,7 +567,11 @@ class Orchestrator:
         st.company_jobs = company
         st.extra_modules += company.modules
         items, note = company.jobs, company.note
-        if not any(j.state == "current" for j in items):
+        if not any(j.state == "current" for j in items) and not self._policy(st).allows_job_page_search(st.options.focus):
+            # Search-engine discovery of job pages is optional discovery: Deep does it, Quick only when the focus is about hiring. The company's own careers
+            # pages and NAV were still checked, and nothing here is read as "no openings".
+            st.job_search_skipped = True
+        elif not any(j.state == "current" for j in items):
             disc = await self._discover_jobs(st, ctx, items)
             if disc.jobs:
                 items = jobs_conn.dedupe_jobs([*items, *disc.jobs])[: self.settings.max_jobs_per_company]
@@ -660,7 +670,7 @@ class Orchestrator:
         reserve = 2 if deep else 0  # Deep keeps two model calls for reading the verified pages and writing the summary; planning must not use them up
         crawl = st.crawl
         assert crawl is not None and st.identity is not None
-        rounds = max(0, min(self.settings.max_research_rounds, 1 if st.options.mode == "quick" else self.settings.max_research_rounds))
+        rounds = self._policy(st).follow_up_rounds
         for round_no in range(rounds):
             if not budget.can_optional() or len(crawl.pages) >= self.settings.max_pages_per_site + 4:
                 break
@@ -740,6 +750,7 @@ def _effort_report(st: ResearchState, runner: llm_tasks.LLMRunner, operations: d
     Deep workflows it does not run, so two runs of the same company can be compared honestly."""
     mode = st.options.mode
     deep = mode == "deep"
+    policy = st.policy or modes.policy_for(s, mode)
     crawl = st.crawl
     verified = crawl is not None and crawl.verified
     wanted = set(st.options.step_keys) if st.options.step_keys is not None else None
@@ -764,7 +775,7 @@ def _effort_report(st: ResearchState, runner: llm_tasks.LLMRunner, operations: d
     follow = [t for t in st.trace if t.get("tool") == "fetch_page"]
     if crawl is not None:
         pages = len(crawl.docs())
-        limit = s.max_pages_per_site if mode != "quick" else 3
+        limit = policy.max_site_pages
         add("site_pages", "Company website pages", "ran" if crawl.verified else "skipped",
             f"Read {pages} page(s) on {crawl.domain} (up to {limit} in {mode} research)." if crawl.verified
             else (crawl.note or f"{crawl.domain} did not verify as this company's website, so none of its pages were used."))
@@ -782,6 +793,22 @@ def _effort_report(st: ResearchState, runner: llm_tasks.LLMRunner, operations: d
         add("site_search", "Web search for the website", "skipped", "Web search is not configured (TAVILY_API_KEY missing).")
     else:
         add("site_search", "Web search for the website", "skipped", "Not needed: the website was found through the register or its contact details.")
+
+    # Searching the web for job pages (only when the company's own careers pages and the linked boards showed no current opening)
+    job_searches = [t for t in st.trace if t.get("action") == "search_jobs"]
+    if job_searches:
+        t = job_searches[-1]
+        add("job_search", "Web search for job pages", "failed" if t.get("state") in ("failed", "blocked") else "ran",
+            f"{t.get('accepted', 0)} posting(s) verified as this company's; {t.get('considered', 0)} search result(s) considered.")
+    elif st.job_search_skipped:
+        add("job_search", "Web search for job pages", "skipped",
+            f"{mode.capitalize()} research does not search the web for job pages unless the focus is about hiring; the company's own careers pages and NAV were still checked.")
+    elif not st.hiring_wanted:
+        add("job_search", "Web search for job pages", "skipped", "The careers and hiring step was not part of this run.")
+    else:
+        job_mod = st.modules.get(job_discovery.MODULE)
+        add("job_search", "Web search for job pages", "skipped", (job_mod.note if job_mod is not None and job_mod.note else None)
+            or "Not needed: the company's own careers pages already showed a current opening, or there was no verified website to search from.")
 
     # Follow-up pages
     rounds = max((int(t.get("round") or 0) for t in follow), default=0)
@@ -825,7 +852,7 @@ def _effort_report(st: ResearchState, runner: llm_tasks.LLMRunner, operations: d
         add("crosscheck", "Cross-source check", "skipped", "Quick research does not cross-check facts across sources." if mode == "quick" else "Removed from the research plan.")
 
     return {"mode": mode, "requests": int(operations.get("requests") or 0), "llmCalls": runner.calls, "pagesRead": len(crawl.docs()) if crawl is not None else 0,
-            "timedOut": st.timed_out, "workflows": flows, "crosscheck": st.crosscheck, "focusKinds": focus}
+            "timedOut": st.timed_out, "workflows": flows, "crosscheck": st.crosscheck, "focusKinds": focus, "budget": policy.limits()}
 
 
 def _safe_sink(sink: EventSink | None) -> EventSink:

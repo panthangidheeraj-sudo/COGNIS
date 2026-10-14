@@ -87,6 +87,22 @@ One scene, two looks (`GlobeStage` → lazy `IntelGlobe` / `EarthGlobe` → shar
 
 A static dotted hemisphere centred on the headquarters (`AmbientGlobe`) is the quiet line-art motif on the Company header, Research Artifact cover and Data Sheet header. It is drawn once and never animates.
 
+## Logo
+
+The official COGNIS logo is **Atlas carrying the celestial letter C**: icon only, never with the name drawn into the image. The supplied artwork is `public/brand/cognis-atlas-reference.png`; it is the source and is never edited.
+
+| File (`public/brand/`) | What it is | Used for |
+| --- | --- | --- |
+| `cognis-atlas-reference.png` | The supplied artwork, navy ink on ivory | Source only |
+| `cognis-atlas-navy.png` / `-navy-sm.png` | Transparent, original ink colour | Light theme |
+| `cognis-atlas-ivory.png` / `-ivory-sm.png` | Same silhouette in the original paper colour | Dark theme |
+| `favicon-16/32/48.png`, `favicon.ico`, `apple-touch-icon.png`, `icon-192/512.png` | The artwork as supplied, on a rounded ivory tile | Browser tab, home screen, `manifest.webmanifest` |
+
+- **Component**: `<CognisLogo height={…} />` (`src/components/common/CognisLogo.tsx`). `variant="auto"` follows the resolved theme (ivory emblem on dark, navy on light); `navy` / `ivory` force one. The emblem is portrait (612 × 984), so give it a **height**; the width follows. `-sm` files are chosen automatically up to 64 px tall. `object-fit: contain`, never stretched or cropped.
+- **Placements**: the rail (56 px) and the mobile top bar (34 px, with the COGNIS name as live text beside it) are links that already carry `aria-label="COGNIS home"`, so the image is marked `decorative`. Anywhere else the emblem keeps its alt text, "COGNIS".
+- **How the transparent files are made**: `scripts/prepare-brand-assets.py`. The artwork is one ink on one paper colour, so each pixel's mix of the two is its opacity — no colour threshold, no flood fill, no feathering. Edges, the thin orbit line and the gap where the orbit passes in front of the C are exactly the supplied artwork; the ivory version is the same shape with the colours swapped. To change the logo, replace the reference PNG and re-run the script.
+- **Minimum size**: the emblem reads down to ~24 px tall; the favicon tiles are the smallest placement and keep the silhouette at 16 px.
+
 ## Component rules
 
 - **Facts** (`FactValue`, `MetricCard`): show the value, a source-count marker and the freshness line ("FY2025 · Verified 03 Oct 2026"). Clicking opens the evidence popover, then the drawer. Missing values say why.
@@ -95,4 +111,4 @@ A static dotted hemisphere centred on the headquarters (`AmbientGlobe`) is the q
 - **Evidence drawer**: ivory paper; on the right on desktop, a bottom sheet on mobile, with a focus trap and Esc to close (only the topmost overlay handles Esc). Executive-first order: the fact and exact value, verification, reporting period, last verified, source count, supporting evidence, source links; raw metadata sits behind "More technical details". Conflicts list each competing value with its source and period, mark the value shown as the headline, and give the backend's reason (or say none was given).
 - **Solid by default, glass by exception**: page backgrounds, hero sections, cards, company panels, financials, tables, research surfaces, the rail and the top bar are **solid** (`--surface-*`, `--chrome-bg`) with at most a faint top light. `backdrop-filter` is used only on small floating layers — command palette, search dropdowns (`.hero-suggest`, `.art-search-results`), menus/popovers, tooltips, toasts, drawers/modals, the compare tray, the hero search field, globe controls/labels and the small source-stack tiles. Analyst tables, data grids, sticky headers and frozen columns use the same solid tones (`--solid-*`, `--solid-card`). Nothing inside `.paper` is blurred.
 - **White is the action colour**: primary buttons, completed research steps, finished source tiles, the active tab underline and the rail indicator are white (navy in light mode). Blue only marks things that are live or clickable text.
-- **Motif**: concentric evidence rings + node + ray. It appears in the logo, empty states, the globe, the source stack, the network graph and the report cover.
+- **Motif**: concentric evidence rings + node + ray. A decorative illustration — empty states, the globe, the source stack, the network graph, the report cover. It is not the logo (see Logo).

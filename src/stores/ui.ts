@@ -84,14 +84,20 @@ export interface GlobePoint {
   label?: string;
 }
 interface GlobeState {
+  /** An explicit point (hovered result, search match, story chapter): the globe turns to it and holds it while it is set. */
   focus: GlobePoint | null;
+  /** Where the current results are. It never stops the rotation; a paused globe turns to a new anchor once. */
+  anchor: GlobePoint | null;
   points: GlobePoint[];
   setFocus: (p: GlobePoint | null) => void;
+  setAnchor: (p: GlobePoint | null) => void;
   setPoints: (p: GlobePoint[]) => void;
 }
 export const useGlobe = create<GlobeState>((set) => ({
   focus: null,
+  anchor: null,
   points: [],
   setFocus: (focus) => set({ focus }),
+  setAnchor: (anchor) => set({ anchor }),
   setPoints: (points) => set({ points }),
 }));

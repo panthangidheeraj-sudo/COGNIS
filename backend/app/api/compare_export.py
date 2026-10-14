@@ -219,7 +219,7 @@ async def _research_export(s: Any, kind: str, fmt: str, target: dict[str, Any]) 
     """The Full Research Report (PDF) and the Evidence & Sources export. Both read the *saved* research record only — they never start new research."""
     import asyncio
 
-    from . import report_data, report_pdf
+    from . import pdf_support, report_data
 
     ttype, tid = target.get("type"), str(target.get("id") or "")
     if ttype == "artifact" and tid.startswith("sheet-") or ttype not in ("company", "artifact"):
@@ -239,8 +239,15 @@ async def _research_export(s: Any, kind: str, fmt: str, target: dict[str, Any]) 
     eid = "exp-" + stable_id(stem, fmt, time.time_ns(), length=12)
     path = folder / f"{eid}.{fmt}"
     if kind == "report":
-        if not report_pdf.pdf_available():
-            return _failed("PDF reports cannot be produced on this installation (the report fonts are missing). Re-install the backend files.")
+        # Only the PDF needs ReportLab. It is imported here, after the availability check, so a missing optional package turns this one export off
+        # with its real reason — and never takes the Evidence & Sources export (or the status endpoint) down with it.
+        pdf = pdf_support.pdf_status()
+        if not pdf["available"]:
+            return _failed(str(pdf["reason"]))
+        try:
+            from . import report_pdf
+        except ImportError as exc:  # installed but unusable (e.g. a broken dependency): say so instead of failing with a server error
+            return _failed(f"PDF reports cannot be produced on this installation ({exc}). {pdf_support.INSTALL_HINT}")
         await asyncio.to_thread(report_pdf.render_report, sr, path)
         return _register_export(s, path, f"{stem}.pdf", "application/pdf", eid)
     if fmt == "json":
@@ -338,10 +345,11 @@ def _failing(recent: list[Any], prefix: str) -> bool:
 def system_status(s: Any) -> dict[str, Any]:
     """Source availability as it really is. Sources COGNIS deliberately does not use are reported as ``not_used`` or
     ``alternative`` (a free source covers them) — never as "unavailable"."""
-    from .report_pdf import pdf_available
+    from .pdf_support import pdf_status  # never imports ReportLab: a missing export package must not make the backend look offline
 
     st = s.settings
-    pdf_ok = pdf_available()
+    pdf = pdf_status()
+    pdf_ok = bool(pdf["available"])
     recent = s.db.all("SELECT connector, classification FROM tool_calls ORDER BY id DESC LIMIT 200")
     brreg_failing = _failing(recent, "brreg")
     llm = describe(st)
@@ -384,7 +392,7 @@ def system_status(s: Any) -> dict[str, Any]:
         {"name": "LinkedIn", "kind": "people", "status": "not_used", "note": "Not used — automated collection is not permitted. Only company pages linked from verified websites are shown."},
     ]
     return {"mode": "live", "backend": "degraded" if brreg_failing else "connected", "research": "online", "version": st.version, "sources": sources,
-            "capabilities": {"exports": ["csv", "xlsx", "json"] + (["pdf"] if pdf_ok else []), "exportKinds": ["data"] + (["report"] if pdf_ok else []) + ["evidence"], "pdfReports": pdf_ok, "pauseResearch": False, "cancelResearch": True, "watchlist": True, "versions": True,
+            "capabilities": {"exports": ["csv", "xlsx", "json"] + (["pdf"] if pdf_ok else []), "exportKinds": ["data"] + (["report"] if pdf_ok else []) + ["evidence"], "pdfReports": pdf_ok, **({} if pdf_ok else {"pdfReportsNote": pdf["reason"]}), "pauseResearch": False, "cancelResearch": True, "watchlist": True, "versions": True,
                              "archive": True, "tags": True, "share": False, "discoverFilters": FILTER_CAPABILITIES},
             "checkedAt": now_iso()}
 

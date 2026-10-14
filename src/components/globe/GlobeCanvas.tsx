@@ -2,25 +2,30 @@
  * WebGL globe scene, shared by both looks (see ./surface.ts): the monochrome `intel` globe and the natural `earth`.
  * Lazy-loaded through IntelGlobe / EarthGlobe, so three.js and any imagery are only fetched where a globe is shown.
  *
- * Motion: a slow, continuous eastward rotation that never waits for input. The pointer adds a small
- * orientation/parallax offset; the wheel and page scroll add a decaying spin impulse (down = faster
- * forward, up = eases into reverse). Every response is smoothed and capped, then settles back to the
- * normal rotation. Reduced motion or the pause button holds the globe still and the scene stops rendering;
- * pressing play under reduced motion brings back only the slow rotation (no parallax, scroll or pulses).
- * Each look sets its own speeds and caps (`surface.motion`); the intel globe is the quieter of the two.
+ * Motion (see ./globeMotion.ts, which is pure and tested): a slow, continuous eastward rotation in real time —
+ * slow frames do not turn it into slow motion. The pointer adds a small orientation/parallax offset; the wheel
+ * and page scroll add a decaying spin impulse (down = faster forward, up = eases into reverse). Every response is
+ * smoothed and capped, then settles back to the normal rotation. Reduced motion or the pause button holds the
+ * globe still and the scene stops rendering; pressing play under reduced motion brings back only the slow
+ * rotation (no parallax, scroll or pulses). Each look sets its own speeds and caps (`surface.motion`).
  *
- * Data: `focus` and `points` come from backend data; the globe turns towards the focus and keeps a slight
- * sway so it never looks frozen. The decorative arcs are faint and carry no data meaning.
+ * Data: `focus`, `anchor` and `points` come from backend data. A focus (an explicit point) turns the globe to it
+ * and holds it; an anchor (where results are) never stops the rotation — a paused globe turns to a new anchor
+ * once. The decorative arcs are faint and carry no data meaning.
  */
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import type { GlobePoint } from '@/stores/ui';
 import type { SurfaceFactory } from './surface';
-import { clamp, targetRotation, wrap } from './globeMath';
+import { clamp } from './globeMath';
+import { frameSeconds, initialMotion, needsRender, stepMotion } from './globeMotion';
 import { latLonToVec } from './globeVec';
 
 export interface GlobeCanvasProps {
+  /** An explicit point (hovered result, search match): the globe turns to it and holds it while it is set. */
   focus: GlobePoint | null;
+  /** Where the results are (passive): never stops the rotation; a paused globe turns to a new anchor once. */
+  anchor?: GlobePoint | null;
   points: GlobePoint[];
   reducedMotion: boolean;
   /** Idle rotation. Separate from reducedMotion so the viewer can start or stop it explicitly. */
@@ -32,14 +37,13 @@ export interface GlobeCanvasProps {
 }
 
 const HOME = { lat: 58, lon: 14 }; // Northern Europe in view first
-const REST_PITCH = 0.36; // ~21°: a classic three-quarter view while spinning freely
 const POINTER_IDLE_MS = 2500;
 const ORIGIN: [number, number] = [59.91, 10.75];
 
-export function GlobeCanvas({ focus, points, reducedMotion, spin, lowPower, theme, onReady, surface: createSurface }: GlobeCanvasProps & { surface: SurfaceFactory }) {
+export function GlobeCanvas({ focus, anchor = null, points, reducedMotion, spin, lowPower, theme, onReady, surface: createSurface }: GlobeCanvasProps & { surface: SurfaceFactory }) {
   const mountRef = useRef<HTMLDivElement>(null);
-  const stateRef = useRef({ focus, points, reducedMotion, spin, theme, onReady });
-  stateRef.current = { focus, points, reducedMotion, spin, theme, onReady };
+  const stateRef = useRef({ focus, anchor, points, reducedMotion, spin, theme, onReady });
+  stateRef.current = { focus, anchor, points, reducedMotion, spin, theme, onReady };
   const pointsVersion = useRef(0);
   const lastPointsKey = useRef('');
   const key = points.map((p) => p.id).join('|');
@@ -67,10 +71,8 @@ export function GlobeCanvas({ focus, points, reducedMotion, spin, lowPower, them
 
     const globe = new THREE.Group();
     scene.add(globe);
-    const home = targetRotation(HOME.lat, HOME.lon);
-    let yaw = home.y;
-    let pitch = REST_PITCH;
-    globe.rotation.set(pitch, yaw, 0);
+    let mo = initialMotion(HOME); // orientation, spin speed, offsets and the animation clock (globeMotion.ts)
+    globe.rotation.set(mo.pitch, mo.yaw, 0);
 
     let dirty = true;
     let readySent = false;
@@ -168,10 +170,10 @@ export function GlobeCanvas({ focus, points, reducedMotion, spin, lowPower, them
       pointer.y = (e.clientY / window.innerHeight - 0.5) * 2;
       pointer.at = performance.now();
     };
-    let impulse = 0; // rad/s from wheel/scroll, decays to 0
     let lastWheel = -Infinity;
     const addImpulse = (px: number) => {
-      impulse = clamp(impulse + clamp(px, -240, 240) * motion.impulsePerPx, -motion.maxImpulse, motion.maxImpulse);
+      // a spin impulse from wheel/scroll (rad/s); the motion step decays it, and drops it entirely without full motion
+      mo.impulse = clamp(mo.impulse + clamp(px, -240, 240) * motion.impulsePerPx, -motion.maxImpulse, motion.maxImpulse);
     };
     const onWheel = (e: WheelEvent) => {
       const px = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaMode === 2 ? e.deltaY * window.innerHeight : e.deltaY;
@@ -209,11 +211,6 @@ export function GlobeCanvas({ focus, points, reducedMotion, spin, lowPower, them
     const frameMs = lowPower ? 1000 / 30 : 1000 / 60;
     let raf = 0;
     let last = performance.now();
-    let time = 0;
-    let vel = 0; // current spin speed (rad/s), eased towards its target so it never jerks
-    let offX = 0; // pointer orientation offsets (rad)
-    let offY = 0;
-    let tilt = 0; // scroll orientation nudge (rad)
     const loop = (now: number) => {
       raf = requestAnimationFrame(loop);
       if (!visible || document.hidden) {
@@ -221,12 +218,11 @@ export function GlobeCanvas({ focus, points, reducedMotion, spin, lowPower, them
         return;
       }
       if (now - last < frameMs - 1.5) return;
-      const dt = Math.min(0.05, (now - last) / 1000);
+      const dt = frameSeconds(now - last);
       last = now;
-      const { focus: f, reducedMotion: rm, spin: sp } = stateRef.current;
+      const { focus: f, anchor: a, reducedMotion: rm, spin: sp } = stateRef.current;
       // `sp` is the resolved spin choice (auto = on unless reduced motion; play/pause is explicit), so an explicit
       // play still rotates under reduced motion. Everything else (pointer, scroll, pulses) needs full motion.
-      const rotating = sp;
       const lively = sp && !rm;
       const ease = (rate: number) => 1 - Math.exp(-dt * rate);
 
@@ -234,57 +230,32 @@ export function GlobeCanvas({ focus, points, reducedMotion, spin, lowPower, them
         markerVersion = pointsVersion.current;
         rebuildMarkers();
       }
-      const prev = { yaw, pitch, offX, offY, tilt, cx: camera.position.x, cy: camera.position.y, cz: camera.position.z };
-
-      // spin impulse from wheel/scroll decays smoothly back to the normal rotation
-      impulse = lively ? impulse * Math.exp(-dt / motion.impulseDecayS) : 0;
-      if (Math.abs(impulse) < 1e-4) impulse = 0;
-
-      if (f) {
-        // turn towards the backend-provided location, then sway gently around it
-        const t = targetRotation(f.lat, f.lon);
-        const sway = lively ? Math.sin(time * 0.22) * 0.05 : 0;
-        const k = rm ? 1 : ease(2.4);
-        yaw += wrap(t.y + sway - yaw) * k;
-        pitch += (t.x - pitch) * k;
-        vel += (0 - vel) * ease(3);
-      } else {
-        const target = (rotating ? motion.baseSpeed : 0) + impulse;
-        vel = rm && !rotating ? 0 : vel + (target - vel) * ease(3);
-        yaw += vel * dt;
-        pitch += (REST_PITCH - pitch) * (rm ? 1 : ease(1.2));
-      }
-      yaw = wrap(yaw);
-
-      // pointer: small orientation offset, relaxes to centre once the pointer rests
       const pointerLive = lively && now - pointer.at < POINTER_IDLE_MS;
-      offX += ((pointerLive ? pointer.x * motion.pointerYaw : 0) - offX) * ease(1.8);
-      offY += ((pointerLive ? pointer.y * motion.pointerPitch : 0) - offY) * ease(1.8);
-      tilt += ((lively ? -impulse * 0.25 : 0) - tilt) * ease(2.5);
-      globe.rotation.set(pitch + offY + tilt, yaw + offX, 0);
+      const step = stepMotion(mo, { spin: sp, reducedMotion: rm, focus: f, anchor: a, pointer: { x: pointer.x, y: pointer.y, live: pointerLive } }, dt, motion);
+      mo = step.state;
+      globe.rotation.set(mo.pitch + mo.offY + mo.tilt, mo.yaw + mo.offX, 0);
 
-      // camera parallax + scroll depth
+      // camera parallax + scroll depth (tiny remainders are settled so a still globe really stops rendering)
+      const cam = { x: camera.position.x, y: camera.position.y, z: camera.position.z };
       const scroll = Math.min(1, window.scrollY / 600);
       camera.position.x += ((pointerLive ? pointer.x * motion.pointerCam : 0) - camera.position.x) * ease(3);
       camera.position.y += ((pointerLive ? -pointer.y * motion.pointerCam * 0.56 : 0) - camera.position.y) * ease(3);
+      if (!pointerLive && Math.abs(camera.position.x) < 1e-5) camera.position.x = 0;
+      if (!pointerLive && Math.abs(camera.position.y) < 1e-5) camera.position.y = 0;
       camera.position.z = 5.1 + (rm ? 0 : scroll * 0.5);
       camera.lookAt(0, 0, 0);
+      const camMoved = Math.abs(camera.position.x - cam.x) + Math.abs(camera.position.y - cam.y) + Math.abs(camera.position.z - cam.z) > 1e-6;
 
-      if (lively) time += dt;
-      surface.update(time, lively);
-      arcMat.uniforms.uTime.value = time;
+      surface.update(mo.time, lively);
+      arcMat.uniforms.uTime.value = mo.time;
       arcMat.uniforms.uMotion.value = lively ? 1 : 0;
       for (const r of rings) {
-        const p = lively ? (time * 0.6 + r.phase) % 1 : 0.5;
+        const p = lively ? (mo.time * 0.6 + r.phase) % 1 : 0.5;
         r.mesh.scale.setScalar((r.focus ? mk.focusRingBase : mk.ringBase) + p * (r.focus ? mk.focusRingSpan : mk.ringSpan));
         (r.mesh.material as THREE.MeshBasicMaterial).opacity = (1 - p) * (r.focus ? mk.focusRingOpacity : mk.ringOpacity);
       }
 
-      const changed =
-        Math.abs(yaw - prev.yaw) + Math.abs(pitch - prev.pitch) + Math.abs(offX - prev.offX) + Math.abs(offY - prev.offY) + Math.abs(tilt - prev.tilt) +
-          Math.abs(camera.position.x - prev.cx) + Math.abs(camera.position.y - prev.cy) + Math.abs(camera.position.z - prev.cz) >
-        1e-6;
-      if (!(rotating || lively || changed || dirty)) return; // still scene: no GPU work at all
+      if (!needsRender({ lively, moved: step.moved || camMoved, dirty })) return; // still scene: no GPU work at all
       dirty = false;
       renderer.render(scene, camera);
       if (!readySent && surface.ready()) {
@@ -313,7 +284,7 @@ export function GlobeCanvas({ focus, points, reducedMotion, spin, lowPower, them
       renderer.dispose();
       renderer.domElement.remove();
     };
-    // theme/lowPower changes rebuild the scene; focus/points/motion are read live.
+    // theme/lowPower changes rebuild the scene; focus/anchor/points/motion are read live.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lowPower, theme, createSurface]);
 

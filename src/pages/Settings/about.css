@@ -542,9 +542,9 @@
 }
 
 /* ==================== Choreography (full motion only) ====================
-   --in: entrance as the stage arrives (p 0 → 0.18) · --out: hand-over at the end (p 0.88 → 1) */
+   --out: hand-over at the end of an act (p 0.88 → 1). Entrances are not scrubbed with scroll: each heading, paragraph and
+   illustration item fades in and rises once, the first time it is seen (see "Scroll reveals" below). */
 .story:not(.story--static) .pin {
-  --in: clamp(0, calc(var(--p) * 5.5), 1);
   --out: clamp(0, calc((var(--p) - 0.88) * 8.3), 1);
 }
 .story:not(.story--static) .pin > * {
@@ -552,19 +552,9 @@
   transform: translate3d(0, calc(var(--out) * -36px), 0);
   will-change: opacity, transform;
 }
-.story:not(.story--static) .copy-kicker,
-.story:not(.story--static) .copy-title,
-.story:not(.story--static) .copy-body {
-  opacity: calc(0.3 + var(--in) * 0.7);
-  transform: translate3d(0, calc((1 - var(--in)) * 26px), 0);
-}
-.story:not(.story--static) .copy-title {
-  transform: translate3d(0, calc((1 - var(--in)) * 40px), 0);
-}
 
 /* Earth act: two chapters cross-fade over one pinned Earth */
 .story:not(.story--static) .act--earth .pin {
-  --in: 1;
   --out: clamp(0, calc((var(--p) - 0.9) * 10), 1);
   --a: clamp(0, calc((var(--p) - 0.36) * 7), 1);
   --b: clamp(0, calc((var(--p) - 0.5) * 7), 1);
@@ -574,15 +564,6 @@
   transform: translate3d(0, calc(var(--a) * -40px), 0);
   pointer-events: none;
 }
-.story:not(.story--static) .act--earth .copy--a .copy-kicker,
-.story:not(.story--static) .act--earth .copy--a .copy-title,
-.story:not(.story--static) .act--earth .copy--a .copy-body,
-.story:not(.story--static) .act--earth .copy--b .copy-kicker,
-.story:not(.story--static) .act--earth .copy--b .copy-title,
-.story:not(.story--static) .act--earth .copy--b .copy-body {
-  opacity: 1;
-  transform: none;
-}
 .story:not(.story--static) .act--earth .copy--b {
   opacity: var(--b);
   transform: translate3d(0, calc((1 - var(--b)) * 40px), 0);
@@ -591,39 +572,15 @@
   transform: translate3d(calc(var(--p) * -3%), 0, 0) scale(calc(0.94 + var(--p) * 0.14));
 }
 
-/* dossier layers assemble one by one */
-.story:not(.story--static) .dossier {
-  transform: rotateY(calc((1 - var(--in)) * -10deg)) rotateX(4deg);
-  transform-style: preserve-3d;
-}
-.story:not(.story--static) .dossier-layer {
-  --lp: clamp(0, calc((var(--p) - 0.06 - var(--i) * 0.09) * 6), 1);
-  opacity: calc(0.1 + var(--lp) * 0.9);
-  transform: translate3d(calc((1 - var(--lp)) * 70px), 0, calc((1 - var(--lp)) * -60px));
-}
+/* the dossier layers, verification labels and source tiers arrive one after another through the one-shot reveals below */
 
-/* rings tighten and turn; labels arrive in order */
+/* the rings tighten and turn with scroll */
 .story:not(.story--static) .rings-svg {
   transform: scale(calc(0.84 + var(--p) * 0.2)) rotate(calc(var(--p) * 24deg));
 }
 .story:not(.story--static) .ring--outer {
   transform-origin: 200px 200px;
   transform: rotate(calc(var(--p) * -60deg));
-}
-.story:not(.story--static) .label {
-  --lp: clamp(0, calc((var(--p) - 0.12 - var(--i) * 0.1) * 6), 1);
-  opacity: var(--lp);
-  transform: translate3d(calc((1 - var(--lp)) * 30px), 0, 0);
-}
-
-/* source tiers separate and light up in rank order */
-.story:not(.story--static) .tiers {
-  transform: rotateX(calc((1 - var(--in)) * 12deg));
-}
-.story:not(.story--static) .tier {
-  --lp: clamp(0, calc((var(--p) - 0.08 - var(--i) * 0.13) * 6), 1);
-  opacity: calc(0.18 + var(--lp) * 0.82);
-  transform: translate3d(0, calc((1 - var(--lp)) * 24px), 0) scale(calc(0.97 + var(--lp) * 0.03));
 }
 
 /* workflow: the track fills and each step switches on as it is reached */
@@ -644,6 +601,39 @@
 .story--static .flow-dot {
   color: var(--primary-fg);
   background: var(--primary-bg);
+}
+
+/* ==================== Scroll reveals (full motion only) ====================
+   `[data-reveal]` items start slightly low and transparent and settle once, the first time they are seen
+   (useRevealOnScroll sets `data-revealed="true"` and never removes it, so nothing replays on scroll-back).
+   Items of one `[data-reveal-group]` are staggered by `--reveal-i` (set by the hook); illustrations start a beat
+   after the copy through `--reveal-base`. Reduced motion (the Motion setting or the OS) renders `.story--static`,
+   which hides nothing. */
+.story:not(.story--static) [data-reveal] {
+  --reveal-step: 90ms;
+  opacity: 0;
+  transform: translate3d(0, 18px, 0);
+  transition:
+    opacity 720ms var(--ease-out) calc(var(--reveal-base, 0ms) + var(--reveal-i, 0) * var(--reveal-step)),
+    transform 820ms var(--ease-out) calc(var(--reveal-base, 0ms) + var(--reveal-i, 0) * var(--reveal-step));
+}
+.story:not(.story--static) [data-reveal][data-revealed='true'] {
+  opacity: 1;
+  transform: none;
+}
+.story:not(.story--static) .act-visual [data-reveal] {
+  --reveal-base: 140ms;
+}
+.story:not(.story--static) .flow [data-reveal] {
+  --reveal-base: calc(140ms + var(--i, 0) * 70ms);
+}
+/* belt and braces: the OS asks for reduced motion and the viewer has not chosen "Full" motion */
+@media (prefers-reduced-motion: reduce) {
+  :root:not([data-motion='full']) .story [data-reveal] {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
 }
 
 /* ==================== Reduced motion: a calm static page ==================== */

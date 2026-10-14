@@ -14,15 +14,8 @@
   overflow: hidden;
   isolation: isolate;
 }
-.hero::after {
-  content: '';
-  position: absolute;
-  inset: auto 0 0 0;
-  height: 160px;
-  background: linear-gradient(180deg, transparent, var(--bg-canvas));
-  pointer-events: none;
-  z-index: -2; /* below the globe, so the white sphere isn't banded */
-}
+/* No bottom fade here. A fade to the solid canvas colour ended on a hard horizontal line, because the page
+   behind the hero is a fixed gradient that is slightly lighter; the globe already dissolves into the page. */
 .hero-inner {
   position: relative;
   width: 100%;
@@ -178,17 +171,16 @@
   min-height: 150px;
   padding: 20px;
   border-radius: var(--r-lg);
-  background:
-    linear-gradient(160deg, rgba(190, 215, 255, 0.05), transparent 45%),
-    var(--frost-sheen),
-    var(--surface-1);
-  border: var(--bw) solid var(--line);
+  /* ivory paper on the dark page (the `.on-ivory` scope supplies surface, ink, hairline and shadow) */
+  background: var(--surface-1);
+  border: var(--bw) solid var(--ivory-line-strong);
   box-shadow: var(--shadow-1);
   animation: cg-fade-up var(--motion-slow) var(--ease-out) both;
   transition:
     transform var(--motion-base) var(--ease-out),
     border-color var(--motion-base) var(--ease-out),
-    box-shadow var(--motion-base) var(--ease-out);
+    box-shadow var(--motion-base) var(--ease-out),
+    background var(--motion-base) var(--ease-out);
   overflow: hidden;
 }
 .action-card::before {
@@ -198,17 +190,26 @@
   width: 180px;
   height: 180px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(226, 235, 248, 0.14), transparent 70%);
+  background: radial-gradient(circle, rgba(16, 42, 67, 0.07), transparent 70%);
   opacity: 0;
   transition: opacity var(--motion-slow);
 }
 .action-card:hover {
   transform: translateY(-3px);
-  border-color: color-mix(in oklab, var(--accent-soft) 40%, var(--line));
+  background: var(--ivory-field);
+  border-color: var(--ivory-ink-3);
   box-shadow: var(--shadow-2);
 }
 .action-card:hover::before {
   opacity: 1;
+}
+/* the global keyboard ring is invisible on a dark page for a navy-ink element; use the two-step ivory ring */
+.action-card:focus-visible {
+  outline: none;
+  border-radius: var(--r-lg);
+  box-shadow:
+    0 0 0 2px var(--ivory-field),
+    0 0 0 4px var(--ivory-ring);
 }
 .action-icon {
   display: grid;
@@ -218,8 +219,8 @@
   margin-bottom: auto;
   border-radius: var(--r-md);
   color: var(--accent-ice);
-  background: linear-gradient(160deg, var(--accent-wash-2), transparent);
-  border: var(--bw) solid color-mix(in oklab, var(--accent-soft) 25%, transparent);
+  background: var(--ivory-well);
+  border: var(--bw) solid var(--ivory-line);
 }
 .action-icon svg {
   width: 19px;
@@ -227,9 +228,10 @@
 }
 .action-title {
   margin-top: 18px;
-  font-weight: 500;
+  font-weight: 550;
   font-size: 16px;
   letter-spacing: -0.015em;
+  color: var(--text-1);
 }
 .action-text {
   font-size: var(--fs-sm);
@@ -241,13 +243,14 @@
   right: 18px;
   width: 16px;
   height: 16px;
-  color: var(--text-4);
+  color: var(--text-3);
   transition:
     transform var(--motion-base) var(--ease-out),
     color var(--motion-base);
 }
-.action-card:hover .action-arrow {
-  color: var(--accent-ice);
+.action-card:hover .action-arrow,
+.action-card:focus-visible .action-arrow {
+  color: var(--text-1);
   transform: translate(2px, -2px);
 }
 

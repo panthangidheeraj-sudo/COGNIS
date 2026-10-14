@@ -24,28 +24,31 @@ function RunRow({ run, artifactId, viewingVersionId }: { run: ResearchRunSnapsho
   const answer = run.answer?.blocks?.[0]?.text;
   return (
     <li className={cn('run', run.isLatestReport && 'is-latest', viewing && 'is-viewing')} data-testid={`run-${run.id}`} data-status={run.status}>
+      <span className="run-dot" aria-hidden />
       <div className="run-top">
         <span className="t-sm run-mode">{run.mode === 'deep' ? 'Deep research' : 'Quick research'}</span>
-        <Pill tone={st.tone} small>
+        <Pill tone={st.tone} small className="run-status">
           {st.label}
         </Pill>
+        <time className="t-xs run-time" dateTime={run.startedAt} title={run.startedAt}>
+          {formatDateTime(run.startedAt)}
+        </time>
+      </div>
+      <div className="run-kinds">
         {run.isLatestReport ? (
-          <Pill tone="info" small>
+          <Pill tone="info" small className="run-kind">
             Latest report
           </Pill>
         ) : run.hasReport ? (
-          <Pill tone="neutral" small>
+          <Pill tone="neutral" small className="run-kind">
             Earlier run
           </Pill>
         ) : (
-          <Pill tone="neutral" small>
+          <Pill tone="neutral" small className="run-kind">
             No report saved
           </Pill>
         )}
       </div>
-      <span className="t-xs t-muted" title={run.startedAt}>
-        {formatDateTime(run.startedAt)}
-      </span>
       <span className="t-xs run-focus">
         <span className="t-muted">Focus:</span> {focusOf(run)}
       </span>

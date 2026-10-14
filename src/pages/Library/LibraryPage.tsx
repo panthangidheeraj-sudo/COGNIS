@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Archive, Columns3, Download, Ellipsis, LayoutGrid, List, Pencil, Pin, PinOff, RefreshCw, Search, Table, Tag } from 'lucide-react';
+import { Archive, Columns3, Download, Ellipsis, LayoutGrid, List, Pencil, Pin, PinOff, RefreshCw, Search, Table, Tag, Clock } from 'lucide-react';
 import { api } from '@/api';
 import type { ArtifactSummary, ArtifactType, LibrarySort } from '@/types';
 import { usePreferences } from '@/stores/preferences';
@@ -83,7 +83,7 @@ export default function LibraryPage() {
         </div>
       </div>
 
-      <div className="lib-search input-wrap">
+      <div className="lib-search input-wrap on-ivory">
         <Search aria-hidden />
         <label htmlFor="lib-q" className="sr-only">
           Search your research
@@ -302,9 +302,12 @@ function LibItem({ a, compact, caps }: { a: ArtifactSummary; compact?: boolean; 
     ) : (
       (a.subtitle ?? '')
     );
+  const whenIso = a.researchedAt ?? a.updatedAt;
   const when = (
-    <span className="t-xs t-muted" title={formatDate(a.updatedAt)}>
-      {a.type === 'company' ? 'Researched' : 'Updated'} {formatRelative(a.researchedAt ?? a.updatedAt)}
+    <span className="t-xs lib-when" title={formatDate(a.updatedAt)}>
+      <Clock aria-hidden />
+      <span className="lib-when-label">{a.type === 'company' ? 'Researched' : 'Updated'}</span>
+      <time dateTime={whenIso}>{formatRelative(whenIso)}</time>
     </span>
   );
   const menu = (
@@ -354,7 +357,6 @@ function LibItem({ a, compact, caps }: { a: ArtifactSummary; compact?: boolean; 
         <div className="lib-foot">
           {a.coverage && <CoverageMeter coverage={a.coverage} size="sm" />}
           {a.type === 'company' && a.openPositions != null && <span className="t-xs t-muted">{a.openPositions} openings</span>}
-          <span className="spacer" />
           {when}
         </div>
         {a.tags.length > 0 && (

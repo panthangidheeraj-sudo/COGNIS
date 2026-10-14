@@ -28,6 +28,7 @@ export default function SettingsPage() {
               <p>Dark is the primary COGNIS design. Light uses an ivory canvas with the same hierarchy.</p>
             </div>
             <Segmented
+              tone="ivory"
               label="Theme"
               value={p.theme}
               onChange={(theme) => p.set({ theme })}
@@ -44,6 +45,7 @@ export default function SettingsPage() {
               <p>Reduced motion stops globe rotation, parallax and floating layers and shortens transitions. All features keep working. The globe's play button on Home can still start the rotation.</p>
             </div>
             <Segmented
+              tone="ivory"
               label="Motion"
               value={p.motion}
               onChange={(motion) => p.set({ motion })}
@@ -60,6 +62,7 @@ export default function SettingsPage() {
               <p>Compact tightens rows, cards and charts so more fits on screen — most useful in Data Sheets, Compare, Financials and research views. Shortcut: command menu → Toggle compact mode.</p>
             </div>
             <Segmented
+              tone="ivory"
               label="Data density"
               value={p.density}
               onChange={(density) => p.set({ density })}
@@ -79,6 +82,7 @@ export default function SettingsPage() {
               <p>Quick starts immediately with core sources. Deep shows the plan for review first.</p>
             </div>
             <Segmented
+              tone="ivory"
               label="Default research mode"
               value={p.researchMode}
               onChange={(researchMode) => p.set({ researchMode })}

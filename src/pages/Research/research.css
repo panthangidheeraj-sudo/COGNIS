@@ -564,7 +564,7 @@
   display: grid;
   place-items: center;
 }
-:root[data-theme='light'] .sstack-tile {
+:is(:root[data-theme='light'], .on-ivory) .sstack-tile {
   border-color: rgba(16, 42, 67, 0.16);
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.85), rgba(239, 233, 220, 0.75));
   box-shadow: 0 10px 24px -14px rgba(16, 42, 67, 0.4);
@@ -597,12 +597,12 @@
   color: #ffffff;
   opacity: 1;
 }
-:root[data-theme='light'] .sstack-tile--verified {
+:is(:root[data-theme='light'], .on-ivory) .sstack-tile--verified {
   border-color: rgba(15, 27, 42, 0.8);
   background: linear-gradient(135deg, rgba(26, 42, 63, 0.92), rgba(15, 27, 42, 0.84));
   box-shadow: 0 12px 26px -14px rgba(15, 27, 42, 0.6);
 }
-:root[data-theme='light'] .sstack-tile--researching {
+:is(:root[data-theme='light'], .on-ivory) .sstack-tile--researching {
   background: linear-gradient(135deg, rgba(63, 114, 216, 0.2), rgba(255, 255, 255, 0.8));
 }
 .sstack-tile--failed,
@@ -674,6 +674,31 @@
 }
 .sstack-leg--verified .sstack-leg-state {
   color: var(--text-2);
+}
+
+/* On an ivory panel the idle layers are dimmed by colour, not by opacity: fading dark text on ivory drops it below readable contrast */
+.on-ivory .sstack-tile.sstack-tile--idle {
+  opacity: 1;
+  border-color: rgba(16, 42, 67, 0.2);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(236, 229, 214, 0.8));
+}
+.on-ivory .sstack-tile--idle .sstack-tile-icon {
+  color: var(--ivory-ink-4);
+  opacity: 0.9;
+}
+.on-ivory .sstack-tag--idle {
+  opacity: 1;
+  color: var(--ivory-ink-3);
+}
+.on-ivory .sstack-leg--idle {
+  opacity: 1;
+  color: var(--ivory-ink-2);
+}
+.on-ivory .sstack-leg--idle .sstack-leg-dot {
+  background: var(--ivory-ink-4);
+}
+.on-ivory .sstack-leg-state {
+  color: var(--ivory-ink-3);
 }
 
 /* Searched, but the source family had nothing to verify */

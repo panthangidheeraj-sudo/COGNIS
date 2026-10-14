@@ -72,12 +72,38 @@
   font-weight: 500;
   letter-spacing: -0.015em;
 }
+/* Activity footer: coverage and counts on the left, when it was researched on the right, set off by a hairline */
 .lib-foot {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px 12px;
-  margin-top: 4px;
+  margin-top: 6px;
+  padding-top: 10px;
+  border-top: var(--bw) solid var(--line);
+}
+.lib-foot .lib-when {
+  margin-left: auto; /* right-aligned on the first line, or on its own line when the footer wraps */
+}
+.lib-when {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+.lib-when svg {
+  width: 12px;
+  height: 12px;
+  color: var(--text-4);
+}
+.lib-when-label {
+  color: var(--text-3);
+}
+.lib-when time {
+  color: var(--text-2);
+  font-weight: 500;
 }
 
 /* Thumbnails */

@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { ArrowRight, ChartScatter, LayoutGrid, LoaderCircle, Search, SlidersHorizontal, Sparkle, Table, X } from 'lucide-react';
 import { api } from '@/api';
-import type { CompanySummary, DiscoverFilters, DiscoverSort, InterpretedFilter } from '@/types';
+import type { CompanyEnrichment, CompanySummary, DiscoverFilters, DiscoverSort, InterpretedFilter } from '@/types';
 import { usePreferences } from '@/stores/preferences';
 import { CompanyCard, CompareToggle, ResearchStateLabel } from '@/components/company/CompanyCard';
 import { CoverageMeter } from '@/components/company/Coverage';
@@ -15,12 +15,14 @@ import { EmptyState } from '@/components/common/EmptyState';
 import { ErrorState } from '@/components/common/ErrorState';
 import { Drawer } from '@/components/common/Overlay';
 import { LandscapeChart } from '@/components/charts/LazyCharts';
-import type { LandscapeMetric } from '@/components/charts/LandscapeChart';
+import { landscapeData, METRIC_NAME, METRIC_SOURCE, MIN_POINTS, type LandscapeMetric } from '@/components/charts/landscapeData';
+import { FigureValue, figureView } from '@/components/company/CompanyFigure';
+import { missingFigures, useDiscoverEnrichment, withVerifiedFigures, type EnrichmentProgress } from '@/hooks/useDiscoverEnrichment';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { useGlobe } from '@/stores/ui';
 import { GlobeStage } from '@/components/globe/GlobeStage';
 import { chipsToFilters, filtersToChips, filtersToParams, paramsToFilters } from '@/utils/filters';
-import { formatInteger, formatMoneyCompact, formatOrgNumber } from '@/utils/format';
+import { formatInteger, formatOrgNumber } from '@/utils/format';
 import './discover.css';
 
 const EXAMPLES = [
@@ -55,6 +57,8 @@ export default function DiscoverPage() {
     placeholderData: keepPreviousData,
   });
   const res = query.data;
+  // Cards and table: look up the figures the visible, unresearched results are missing (the landscape asks first; see Landscape below).
+  const lookups = useDiscoverEnrichment(view !== 'landscape' ? res?.items : undefined, { limit: PAGE_SIZE });
 
   const update = (mut: (p: URLSearchParams) => void) => {
     const p = new URLSearchParams(params);
@@ -88,9 +92,11 @@ export default function DiscoverPage() {
   const activeCount = Object.values(activeFilters).filter((v) => v !== undefined && v !== null && v !== '' && v !== false).length;
   const clearFilters = () => applyFilters({});
 
-  // Globe: one node per result with a backend geo point; it turns toward the results.
+  // Globe: one node per result with a backend geo point. The results' centre is an anchor, not a focus: a playing globe keeps turning (a paused one
+  // shows the results); hovering a result turns the globe to that company while the pointer is on it.
   const setPoints = useGlobe((g) => g.setPoints);
   const setFocus = useGlobe((g) => g.setFocus);
+  const setAnchor = useGlobe((g) => g.setAnchor);
   const geoItems = useMemo(() => (res?.items ?? []).filter((c) => c.geo), [res?.items]);
   const centroid = useMemo(
     () => (geoItems.length ? { id: 'disc-centroid', lat: geoItems.reduce((a, c) => a + c.geo!.lat, 0) / geoItems.length, lon: geoItems.reduce((a, c) => a + c.geo!.lon, 0) / geoItems.length } : null),
@@ -98,22 +104,23 @@ export default function DiscoverPage() {
   );
   useEffect(() => {
     setPoints(geoItems.map((c) => ({ id: c.orgNumber, lat: c.geo!.lat, lon: c.geo!.lon })));
-    setFocus(centroid);
-  }, [geoItems, centroid, setPoints, setFocus]);
+    setAnchor(centroid);
+  }, [geoItems, centroid, setPoints, setAnchor]);
   useEffect(
     () => () => {
       setPoints([]);
       setFocus(null);
+      setAnchor(null);
     },
-    [setPoints, setFocus],
+    [setPoints, setFocus, setAnchor],
   );
-  const hoverCompany = (c: CompanySummary | null) => setFocus(c?.geo ? { id: c.orgNumber, lat: c.geo.lat, lon: c.geo.lon, label: `${c.legalName} · ${c.municipality}` } : centroid);
+  const hoverCompany = (c: CompanySummary | null) => setFocus(c?.geo ? { id: c.orgNumber, lat: c.geo.lat, lon: c.geo.lon, label: `${c.legalName} · ${c.municipality}` } : null);
 
   return (
     <div className="page page--wide discover">
       <div className="disc-top">
       {!mobile && (
-        <div className="disc-globe" aria-hidden>
+        <div className="disc-globe">
           <GlobeStage className="disc-globe-stage" />
           {res && <span className="disc-globe-cap t-xs t-muted">{geoItems.length ? `${geoItems.length} of ${res.items.length} results on this page have a verified location` : 'No mapped locations for these results'}</span>}
         </div>
@@ -126,7 +133,7 @@ export default function DiscoverPage() {
       </div>
 
       <form
-        className="disc-search surface"
+        className="disc-search surface on-ivory is-bar"
         role="search"
         onSubmit={(e) => {
           e.preventDefault();
@@ -153,7 +160,7 @@ export default function DiscoverPage() {
           <span className="t-xs t-muted">Try a natural-language query</span>
           <div className="row-wrap">
             {EXAMPLES.map((e) => (
-              <button key={e} className="chip" onClick={() => (setText(e), submit(e))}>
+              <button key={e} className="chip on-ivory" onClick={() => (setText(e), submit(e))}>
                 <Sparkle aria-hidden /> {e}
               </button>
             ))}
@@ -247,6 +254,8 @@ export default function DiscoverPage() {
             />
           </div>
 
+          {res && view !== 'landscape' && <LookupStatus progress={lookups.progress} />}
+
           {query.isError ? (
             <ErrorState error={query.error} onRetry={() => query.refetch()} />
           ) : !res ? (
@@ -260,12 +269,12 @@ export default function DiscoverPage() {
           ) : view === 'landscape' ? (
             <Landscape companies={res.items} onSelect={(org) => nav(`/company/${org}`)} />
           ) : view === 'table' && !mobile ? (
-            <ResultsTable items={res.items} />
+            <ResultsTable items={res.items} lookups={lookups.byOrg} pending={lookups.pending} />
           ) : (
             <div className="co-grid" onMouseLeave={() => hoverCompany(null)}>
               {res.items.map((c) => (
                 <div key={c.orgNumber} className="disc-card" onMouseEnter={() => hoverCompany(c)} onFocusCapture={() => hoverCompany(c)}>
-                  <CompanyCard c={c} />
+                  <CompanyCard c={c} lookup={lookups.byOrg[c.orgNumber]} checking={lookups.pending.has(c.orgNumber)} />
                 </div>
               ))}
             </div>
@@ -315,9 +324,28 @@ export default function DiscoverPage() {
   );
 }
 
-const NotAvailable = () => <span className="t-xs t-muted">Not available</span>;
+/** What the Discover lookups are doing, in one quiet line (announced politely to screen readers). */
+function LookupStatus({ progress }: { progress: EnrichmentProgress }) {
+  if (!progress.total) return null;
+  const n = `${progress.total} ${progress.total === 1 ? 'result' : 'results'}`;
+  return (
+    <p className="t-xs t-muted disc-lookups" aria-live="polite" data-testid="discover-lookups" data-running={progress.running || undefined}>
+      {progress.running ? (
+        <>
+          <LoaderCircle className="spin" width={12} height={12} aria-hidden /> Looking up missing figures for {n} in the official registers, filed accounts and authorised job
+          sources… {progress.done} of {progress.total} done.
+        </>
+      ) : (
+        <>Missing figures for {n} were looked up. Values shown are verified; the others say why they are missing.</>
+      )}
+    </p>
+  );
+}
 
-function ResultsTable({ items }: { items: CompanySummary[] }) {
+function ResultsTable({ items, lookups, pending }: { items: CompanySummary[]; lookups: Record<string, CompanyEnrichment>; pending: Set<string> }) {
+  const cell = (field: 'revenue' | 'employees' | 'openPositions', c: CompanySummary) => (
+    <FigureValue view={figureView(field, c, lookups[c.orgNumber], pending.has(c.orgNumber))} naClass="t-xs t-muted" />
+  );
   return (
     <div className="table-wrap">
       <table className="table">
@@ -358,9 +386,9 @@ function ResultsTable({ items }: { items: CompanySummary[] }) {
               <td className="truncate" style={{ maxWidth: 220 }}>
                 {c.industry?.description}
               </td>
-              <td className="num">{c.revenue ? formatMoneyCompact(c.revenue.value, c.revenue.currency) : <NotAvailable />}</td>
-              <td className="num">{c.employees != null ? formatInteger(c.employees) : <NotAvailable />}</td>
-              <td className="num">{c.openPositions ?? <NotAvailable />}</td>
+              <td className="num">{cell('revenue', c)}</td>
+              <td className="num">{cell('employees', c)}</td>
+              <td className="num">{cell('openPositions', c)}</td>
               <td>
                 <CoverageMeter coverage={c.coverage} size="sm" interactive={false} />
               </td>
@@ -378,14 +406,28 @@ function ResultsTable({ items }: { items: CompanySummary[] }) {
   );
 }
 
+/** Most companies the landscape looks figures up for at once (one results page is up to 100). */
+const LANDSCAPE_LOOKUP_LIMIT = 100;
+
 function Landscape({ companies, onSelect }: { companies: CompanySummary[]; onSelect: (org: string) => void }) {
   const [x, setX] = useState<LandscapeMetric>('employees');
   const [y, setY] = useState<LandscapeMetric>('revenue');
+  const [lookupOn, setLookupOn] = useState(false);
+  // Lookups already made in the cards view are reused; new ones run only after the user asks (up to 100 companies, in small batches).
+  const lookups = useDiscoverEnrichment(companies, { enabled: lookupOn, limit: LANDSCAPE_LOOKUP_LIMIT });
+  const merged = useMemo(() => companies.map((c) => withVerifiedFigures(c, lookups.byOrg[c.orgNumber])), [companies, lookups.byOrg]);
+  const data = landscapeData(merged, x, y);
+  const lookable = companies.slice(0, LANDSCAPE_LOOKUP_LIMIT).filter((c) => missingFigures(c).length > 0 && !lookups.byOrg[c.orgNumber]).length;
   const opts: { value: LandscapeMetric; label: string }[] = [
     { value: 'revenue', label: 'Revenue' },
     { value: 'employees', label: 'Employees' },
     { value: 'openPositions', label: 'Open positions' },
   ];
+  const lookupButton = lookable > 0 && !lookups.progress.running && (
+    <button className="btn btn--sm" onClick={() => setLookupOn(true)}>
+      Look up verified figures for {lookable} {lookable === 1 ? 'company' : 'companies'}
+    </button>
+  );
   return (
     <div className="card">
       <div className="row-wrap" style={{ gap: 12, marginBottom: 12 }}>
@@ -412,7 +454,39 @@ function Landscape({ companies, onSelect }: { companies: CompanySummary[]; onSel
           </select>
         </label>
       </div>
-      <LandscapeChart companies={companies} x={x} y={y} onSelect={onSelect} />
+      {lookupOn && <LookupStatus progress={lookups.progress} />}
+      {data.points.length >= MIN_POINTS ? (
+        <>
+          <LandscapeChart companies={merged} x={x} y={y} onSelect={onSelect} />
+          {lookupButton && <div className="row-wrap landscape-more">{lookupButton}<span className="t-xs t-muted">Only verified values are plotted.</span></div>}
+        </>
+      ) : (
+        <div className="landscape-empty" role="note" data-testid="landscape-empty">
+          <strong className="t-sm">
+            Not enough verified values to plot {METRIC_NAME[x]} against {METRIC_NAME[y]}
+          </strong>
+          <p className="t-xs t-muted">
+            {data.points.length === 0 ? 'No company' : 'Only one company'} in these results has verified values for both. Nothing is estimated to fill the gaps.
+          </p>
+          <ul className="landscape-gaps">
+            {[...new Set([x, y])].map((m) => (
+              <li key={m} className="t-xs">
+                <strong>{METRIC_NAME[m]}</strong>: verified for {m === x ? data.withX : data.withY} of {data.total} {data.total === 1 ? 'company' : 'companies'}. <span className="t-muted">{METRIC_SOURCE[m]}</span>
+              </li>
+            ))}
+          </ul>
+          <div className="row-wrap" style={{ gap: 10 }}>
+            {lookupButton}
+            {lookupOn && !lookups.progress.running && lookable === 0 && (
+              <span className="t-xs t-muted">The lookups found no further verified values for these companies.</span>
+            )}
+          </div>
+          <p className="t-xs t-muted">
+            For a full check of one company — its accounts, website and hiring — open it and run Quick research. Try other metrics, such as Employees, which the register reports for most
+            companies.
+          </p>
+        </div>
+      )}
       <p className="t-xs t-muted" style={{ marginTop: 6 }}>
         Positions show reported values only — no scores or rankings. <ArrowRight width={12} height={12} style={{ display: 'inline' }} aria-hidden /> Use Compare for side-by-side facts.
       </p>

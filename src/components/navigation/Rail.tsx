@@ -1,7 +1,7 @@
 import { NavLink, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/api';
-import { CognisLogo } from '@/components/common/Motif';
+import { CognisLogo } from '@/components/common/CognisLogo';
 import { PRIMARY_NAV, SECONDARY_NAV } from './navItems';
 
 /** Compact desktop/tablet rail. */
@@ -10,7 +10,7 @@ export function Rail() {
   return (
     <nav className="rail" aria-label="Primary">
       <Link to="/" className="rail-logo" aria-label="COGNIS home">
-        <CognisLogo compact />
+        <CognisLogo compact decorative height={56} />
       </Link>
       <div className="rail-nav">
         {PRIMARY_NAV.map(({ to, label, icon: Icon, ...rest }) => (
