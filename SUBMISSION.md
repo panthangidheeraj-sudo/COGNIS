@@ -2,23 +2,73 @@
 
 **Company intelligence, built from evidence.** A React/TypeScript workspace plus a Python/FastAPI backend that finds, verifies and compares Norwegian companies. Every published fact carries its source, retrieval time and period. Missing, blocked, ambiguous and conflicting data each have their own label; a failed source is never shown as "no data".
 
-**How to read the numbers.** *Measured* = taken from a report or log produced by a real run (file named). *Estimate* = computed, not observed. *PENDING* = not yet verified. **Status as of 2026-10-17.** The live runs below (live check, 100-company smoke test, re-run) were made on the author's PC on **2026-10-15** against the real public sources. They **predate the latest code** (AI chat, Groq-powered answers, source and metric-label changes) and were not repeated on it; see "Live validation of Ask AI" and "Remaining limitations". The offline test and build results are from 2026-10-17 on the latest code.
+**How to read the numbers.** *Measured* = taken from a report or log produced by a real run (file named). *Estimate* = computed, not observed. *PENDING* = not yet verified. **Three kinds of results are kept apart.** (1) *Historical live runs* of 2026-10-15 (live check, 100-company smoke test, cached re-run): real public sources, made on the author's PC, and they **predate the latest code**. (2) *Local offline test and build results* of 2026-10-17: mocked/fixture tests, not live evaluation. (3) *A 1,000-company exercise* run as ten separate batches of 100 against the bundled fixture (own section below): author-reported aggregates, not one run under the challenge limits. Nothing here is a provider invoice. See "Remaining limitations" for what is not verified.
 
 ## Repository and commit
 
 | Item | Value |
 | --- | --- |
 | Repository | https://github.com/panthangidheeraj-sudo/COGNIS (`origin` in `.git/config`). **The repository is public** (author's statement, 2026-10-17) |
-| Last commit on `main` recorded in this report | `ce8f1a1d498ce9314c6fa6d2f9aa3d00e9cdcc61`, 2026-10-14 22:20 +0530, "Integrate Atlas logo and polish dark mode UI". `origin/main` pointed at the same commit when this was checked (2026-10-15 audit); **not re-checked on 2026-10-17** |
-| Submission commit | **PENDING** — at the 2026-10-15 audit roughly 75 tracked files were modified and 50 were new and uncommitted (intro redesign, AI chat, regulatory sources, backend chat API, diagnostics), and further changes have been made since. Fill in `git rev-parse HEAD` after committing and pushing; until then the public repository may not contain the code that the test results below describe |
+| Version 1 submission commit | `4ea5b3650d51fff0b428230e18a9d0f775aae711` — https://github.com/panthangidheeraj-sudo/COGNIS/commit/4ea5b3650d51fff0b428230e18a9d0f775aae711 |
+| This document | A **later revision** of `SUBMISSION.md` (documentation correction only; no application code, tests, configuration or benchmark output changed). Its commit hash is **not stated here**; it will be supplied separately after the revision is pushed |
 
-## Quick start
+The Version 1 commit above is the submitted version. Evaluators who want the submitted code should check it out as shown below; the later revision changes this document only.
+
+## Evaluator run (one command)
+
+Prerequisites: **Python 3.11+ and internet access.** Node is not needed for this path. The evaluator supplies its own organisation numbers; no fixed internal company list is used.
+
+From a clean clone:
+
+```bash
+git clone https://github.com/panthangidheeraj-sudo/COGNIS.git
+cd COGNIS
+git checkout 4ea5b3650d51fff0b428230e18a9d0f775aae711
+cd backend
+python -m venv .venv
+```
+
+Activate `.venv` for your operating system:
+
+```bash
+source .venv/bin/activate          # macOS / Linux
+.venv\Scripts\Activate.ps1         # Windows PowerShell
+.venv\Scripts\activate.bat         # Windows cmd
+```
+
+Install the pinned runtime dependencies (`backend/requirements.txt`):
+
+```bash
+python -m pip install -r requirements.txt
+```
+
+Put the evaluator-supplied organisation numbers in `backend/orgs.txt`, **one number per line** (`.json` and `.jsonl` lists are also accepted). Then run, from `backend` with the environment activated:
+
+```bash
+python scripts/run_agent.py --input orgs.txt --output out/envelopes.jsonl
+```
+
+`scripts/run_agent.py` is the primary evaluator interface. The `--input` and `--output` paths can be changed. The run writes:
+
+- `out/envelopes.jsonl` — one terminal envelope per organisation number;
+- `out/envelopes-profiles.jsonl` — profiles (default location next to `--output`; override with `--profiles-output`);
+- `out/envelopes-report.json` — the run report, including validation (default next to `--output`; override with `--report`).
+
+It prints a short JSON summary and exits 0 when validation passed, 1 when it did not, and 2 on an input error. Optional flags: `--bulk <Brreg snapshot>`, `--workers`, `--run-id`, `--resume`, `--fresh` (bypass the response cache), `--quiet`. `scripts/run_competition_batch.py` (more budget options, `--expected-count`) remains available for advanced use but is not needed.
+
+No API keys are required: without them the system uses the official registers and registry-listed websites, and falls back to deterministic text where a model would be used. To use Groq and Tavily, the evaluator supplies **its own** credentials through its local environment or an untracked `backend/.env` (see "AI model and provider"). No personal API keys are in the repository.
+
+**Not yet verified:** these exact commands have not been followed on a fresh clone (see "Remaining limitations").
+
+Limits enforced by the run budget (`backend/app/config.py`): 2,700 s, 2,000 requests, $10, headroom 0.9, 8 parallel companies. Per company (Deep): 30 requests, 120 s, 3 searches, 4 LLM calls.
+
+## Developer quick start (UI and API)
 
 Prerequisites: Node 20+, Python 3.11+ (3.13 tested), Windows PowerShell (macOS/Linux notes in `backend/RUNBOOK.md`).
 
 Frontend with the built-in mock backend (fictional demo data): `npm install && npm run dev` → http://localhost:5173
 
-Real backend (two terminals; there is no single-command launcher):
+Real backend with the UI (two terminals):
 
 ```powershell
 # terminal 1
@@ -29,23 +79,13 @@ uvicorn app.api.main:app --port 8000
 npm run dev:live
 ```
 
-Backend `.env` (git-ignored; never commit): `LLM_PROVIDER=groq`, `GROQ_API_KEY`, `GROQ_MODEL`, `TAVILY_API_KEY`, `DATA_DIR` (a local folder if the project is in OneDrive), optional `NAV_FEED_TOKEN`, `LLM_MIN_INTERVAL_SECONDS` (see the Groq finding below). Without keys the system runs on the official registers and registry-listed websites. Never put keys in `VITE_*` variables.
-
-Evaluator command (100 companies):
-
-```powershell
-cd backend
-python scripts/run_competition_batch.py --organisations orgs.jsonl --bulk enheter.csv `
-  --output out\envelopes.jsonl --profiles-output out\profiles.jsonl --report out\run-report.json `
-  --run-id final-1 --expected-count 100
-```
-
-Limits enforced by the run budget (`backend/app/config.py`): 2,700 s, 2,000 requests, $10, headroom 0.9, 8 parallel companies. Per company (Deep): 30 requests, 120 s, 3 searches, 4 LLM calls.
+Backend `.env` (git-ignored; never commit): `LLM_PROVIDER=groq`, `GROQ_API_KEY`, `GROQ_MODEL` (required when a key is set, e.g. `openai/gpt-oss-120b`), `TAVILY_API_KEY`, `DATA_DIR` (a local folder if the project is in OneDrive), optional `NAV_FEED_TOKEN`, `LLM_MIN_INTERVAL_SECONDS` (see the Groq finding below). Without keys the system runs on the official registers and registry-listed websites. Never put keys in `VITE_*` variables.
 
 ## AI model and provider
 
 - LLM: Groq `openai/gpt-oss-120b` (as configured in the 2026-10-15 live check). Planning, reading verified pages, summaries and Ask AI. A model answer is shown only if each claim is supported by saved evidence; otherwise a deterministic, evidence-only text is used and labelled (`synthesis.method`).
-- Search: Tavily, basic depth, candidates only, never evidence. Everything else is free public data.
+- Search: Tavily Basic Search, used only to discover candidate websites, never as evidence. Everything else is free public data.
+- **Credentials:** no personal API keys belong in the repository, and none are committed. The evaluator can supply its own Groq and Tavily credentials through its local environment or an untracked `backend/.env`; without them the run still completes on free public data with deterministic summaries.
 - **Groq free tier throttled the run (measured 2026-10-15, `smoke-1-envelopes.jsonl`; predates the latest code).** Groq answered 429 "tokens per minute: limit 8000" on 56 final LLM failures (47 summaries, 9 website extractions) spread over 47 of the 100 companies. The rejected calls asked for 691–2,380 tokens each (median 1,374), so the free tier sustains roughly 5–6 such calls a minute (arithmetic from those figures, an estimate). Summaries: 37 LLM-grounded, 63 deterministic template (47 rate-limited, 16 rejected by the grounding check). Only 57 LLM calls succeeded out of 193 attempts. The live check ran with `LLM_MIN_INTERVAL_SECONDS=0` and 8 parallel companies. The behaviour is safe (fallback, labelled) but the summaries in that run were mostly not AI-written. **PENDING:** a run with pacing. By the arithmetic above, call starts need to be at least about 11 s apart (`LLM_MIN_INTERVAL_SECONDS=11`), not 2–7 s; untested.
 
 ## Cost and request accounting
@@ -56,7 +96,9 @@ Limits enforced by the run budget (`backend/app/config.py`): 2,700 s, 2,000 requ
 
 ## Verified results
 
-Latest local results on the author's Windows PC, as reported by the author for **2026-10-17** (latest code, mocked/offline tests, no live sources):
+### Local offline test and build results (2026-10-17)
+
+Run on the author's Windows PC and reported by the author for **2026-10-17** (mocked/fixture tests, no live sources). The commit hash of the working tree they ran on is not recorded in this report:
 
 | Check | Result |
 | --- | --- |
@@ -64,15 +106,15 @@ Latest local results on the author's Windows PC, as reported by the author for *
 | Frontend tests (`npm test`) | **479 passed across 38 test files** |
 | Production build (`npm run build`) | **succeeded in 4.52 seconds** |
 
-These are offline results. They show the code behaves as specified against fixtures; they are not live validation (see below).
+These are **local offline test and build results, not live evaluation results**. They show the code behaves as specified against fixtures; they say nothing about live source coverage, speed or cost (see the live sections below and "Remaining limitations").
 
 ### Live check, 3 companies (2026-10-15, `backend/out/live-check.md`, measured; predates the latest code)
 
 Brønnøysund, Groq (structured JSON in 632 ms), Tavily, NAV and TED reachable. Equinor ASA (923609016), Autobjørn A/S (810359862) and Arkitektfirma Jon Vikøren AS (985589003) all completed with valid envelopes and websites verified by identity signals. 22–30 requests and 2–3 LLM calls each. The API (company, research run, brief, `/research/ask`, interpret, discover) returned real data. Revenue was labelled company-only and in the filing currency (Equinor: USD).
 
-### 100-company live smoke test (2026-10-15, `backend/out/smoke-live/`, measured)
+### 100-company live smoke test (15 October 2026, `backend/out/smoke-live/`, measured) — historical benchmark
 
-**Historical benchmark: these figures were measured on 2026-10-15 and predate the latest code. They have not been re-measured on it.** `python scripts/smoke_test.py --live`: 100 organisations sampled with `random.Random(2026)` from the 1,000-row `backend/tests/fixtures/entry-companies.jsonl`.
+**This is a single 100-company run measured on 2026-10-15. It predates the latest code, has not been re-measured on it, and is not merged with the ten-batch totals below.** Recorded: 100 envelopes, 1,569 requests, 288.9 s, $0.0607 cost estimate. `python scripts/smoke_test.py --live`: 100 organisations sampled with `random.Random(2026)` from the 1,000-row `backend/tests/fixtures/entry-companies.jsonl`.
 
 | Target | Limit | Measured |
 | --- | --- | --- |
@@ -91,25 +133,49 @@ Not reproduced offline (two runs of 100 companies against the offline fixtures w
 
 ### 1,000-company input list (verified)
 
-`backend/tests/fixtures/entry-companies.jsonl`: 1,000 rows, 1,000 unique 9-digit organisation numbers, all pass the modulus-11 check, none bankrupt or in liquidation, all with 2025 accounts submitted. Mix: 926 AS, 204 in Oslo, 893 without a registered website. **Not verified:** that the list was selected from the official 411,160-company universe (that file is not in the repository). **No live run over the 1,000 companies exists**, and none was started.
+`backend/tests/fixtures/entry-companies.jsonl`: 1,000 rows, 1,000 unique 9-digit organisation numbers, all pass the modulus-11 check, none bankrupt or in liquidation, all with 2025 accounts submitted. Mix: 926 AS, 204 in Oslo, 893 without a registered website. **Not verified:** that the list was selected from the official 411,160-company universe (that file is not in the repository). The ten-batch exercise below ran on this list; it is not a single run, and it does not show that the list represents the full universe.
+
+### 1,000-company exercise: ten separate batches of 100 (author-reported aggregates)
+
+The bundled 1,000-row fixture was processed as **ten separately executed batches of 100 companies**, not as one run. The fixture is a bundled list, **not a random sample of the full official company universe** (see above), so the results do not show how the full universe would behave. The figures below are the aggregates reported by the author; per-batch figures are not tabulated here.
+
+| Aggregate over the ten batches | Reported |
+| --- | --- |
+| Input organisation numbers | 1,000, all unique |
+| Output envelopes / profiles | 1,000 / 1,000 |
+| Structural validation | Passed in every batch |
+| Companies with at least one available claim | All 1,000 |
+| Envelopes with one or more error entries | 808 of 1,000 |
+| Summaries | 201 grounded LLM synthesis; 799 deterministic template |
+| Requests (sum of the ten batches) | 13,462 |
+| Runtime (sum of the ten batch runtimes) | 3,000.67 s (about 50.01 minutes) |
+| Cost (sum of the program's cost estimates) | $0.324243 — an **estimate**, not a provider invoice |
+
+How to read this:
+
+- **These are ten separate runs.** The sums are **not** one run under the challenge's 2,000-request / 45-minute limits: 13,462 requests and 3,000.67 s exceed those limits when added up, because they are ten runs added together. This document does not claim a single 1,000-company run met them, and does not claim each batch individually did.
+- "At least one available claim" is the weakest coverage test. It does not mean a profile is fully researched; 808 envelopes carry error entries (failed, blocked or timed-out source calls or rejected steps), and the field-level coverage of these batches is not reported here. Compare the field-level coverage of the 100-company run above.
+- Only 201 of 1,000 summaries are AI-written. The 799 deterministic summaries are labelled as such; the split reflects provider limits and grounding rejections, not a quality ranking.
+- **Provider limitations met in these runs:** Groq hit its rate limits, including its **daily token limit during the later batches**; **Tavily exhausted its free search credits**, so candidate website discovery was limited accordingly; some summaries were rejected by the grounding check; and some sources failed or timed out. Failures degrade to labelled deterministic or "unavailable" results, never to invented values.
+- The cost figure uses the program's configurable price placeholders (see "Cost and request accounting"); actual token usage and provider invoices were not recorded or verified.
 
 ## Requirement status
 
-The measured figures below are from the 2026-10-15 run and predate the latest code.
+Single-run measurements are from the 2026-10-15 100-company run (historical, predates the latest code). The ten-batch figures are sums of separate runs and are shown separately.
 
 | Target | Status |
 | --- | --- |
-| 1,000 company profiles | List verified; **1,000-company live run PENDING** (needs approval, see plan) |
-| Daily 100 random companies | One seed (2026, from the 1,000-row list) run. Independent random-seed coverage (other seeds, the full universe) **PENDING**. The 1,000 list is mostly small AS companies; coverage elsewhere may differ |
-| Within 45 minutes | Measured 288.9 s (one seed) |
-| At most 2,000 requests | Measured 1,569 (one seed); hard cap enforced by the run budget |
-| At most $10 | Estimate $0.06; provider invoice not verified |
+| 1,000 company profiles | List verified. Ten separate batches of 100 produced 1,000 envelopes and 1,000 profiles (author-reported; see the ten-batch section). **Not** one 1,000-company run, and not evidence about the full universe |
+| Daily 100 random companies | One seed (2026, from the 1,000-row list) run live on 2026-10-15. Independent random-seed coverage (other seeds, the full universe) **PENDING**. The 1,000 list is mostly small AS companies; coverage elsewhere may differ |
+| Within 45 minutes | Measured 288.9 s for one 100-company run (2026-10-15). The ten-batch sum of 3,000.67 s is ten runs added together, not one run |
+| At most 2,000 requests | Measured 1,569 for one 100-company run; hard cap enforced by the run budget. The ten-batch sum of 13,462 is ten runs added together |
+| At most $10 | Estimates only: $0.0607 (one 100-company run), $0.324243 (sum over the ten batches). Provider invoice not verified |
 
 ## Data sources and limits
 
 Table and access rules: `backend/docs/SOURCES.md`, `backend/sources.yaml`, `backend/docs/SOURCE_ACCESS_AUDIT.md`.
 
-Used (free/public): Enhetsregisteret (units, roles, group structure), Regnskapsregisteret (company and consolidated accounts), Norid RDAP, Geonorge, company websites and linked job boards (robots.txt respected), NAV Arbeidsplassen job-ad feed, TED (EU above-threshold notices only), DFØ Doffin open data (importable; not imported in the live checks), Tavily free search (candidates only).
+Used (free/public): Enhetsregisteret (units, roles, group structure), Regnskapsregisteret (company and consolidated accounts), Norid RDAP, Geonorge, company websites and linked job boards (robots.txt respected), NAV Arbeidsplassen job-ad feed, TED (EU above-threshold notices only), DFØ Doffin open data (importable; not imported in the live checks), Tavily Basic Search (candidate discovery only; free credits can run out, see the ten-batch section). The full table and access rules are in `backend/sources.yaml` and `backend/docs/SOURCE_ACCESS_AUDIT.md`.
 
 Not used or unavailable: Proff, paid Doffin API, Fakt.no, LinkedIn, Meta, Glassdoor, Indeed. Patentstyret is `not_configured`; the shareholder register is `not_applicable`. Patents, trademarks and designs are never reported as "none" when the source is unavailable.
 
@@ -127,6 +193,7 @@ The AI-chat work (`/companies/{org}/chat`, chat threads, company switching, regu
 
 ```powershell
 cd backend
+python scripts/run_agent.py --input orgs.txt --output out/envelopes.jsonl   # evaluator run (see "Evaluator run")
 python -m pytest -q                                              # offline tests
 python scripts/live_check.py                                     # real sources, writes out/live-check.md
 python scripts/smoke_test.py --live                              # 100 companies (seed 2026), writes out/smoke-live/smoke-report.md
@@ -145,10 +212,11 @@ python scripts/benchmark.py --live --count 20                    # runtime / req
 
 Outstanding (not verified or not done; none of these is claimed):
 
-- **No verified clean-clone installation**: the Quick start has not been followed on a fresh clone of the public repository.
-- **No verified Groq invoice**: the cost figures are estimates.
-- **Pacing run pending**: a 100-company run with `LLM_MIN_INTERVAL_SECONDS` set has not been made.
-- **Independent random-seed coverage pending**: only seed 2026 has been run live.
-- **1,000-company live run pending**: none has been started.
-- **Ask AI** has had one manual smoke check, not comprehensive live validation.
+- **Clean-clone installation not verified**: the "Evaluator run" commands have not been followed on a fresh clone of the public repository at the Version 1 commit.
+- **No verified Groq invoice**: all cost figures are estimates; actual token usage was not recorded.
+- **Paced-run verification pending**: a run with `LLM_MIN_INTERVAL_SECONDS` set (about 11 s by the arithmetic above) has not been made.
+- **Independent random-seed coverage pending**: only seed 2026 has been run live as a single 100-company run; the ten batches covered the bundled fixture and are not presented as independent random samples.
+- **Full-universe representation not shown**: the bundled 1,000-row fixture is not shown to represent the official company universe. There is no single 1,000-company run under the 2,000-request / 45-minute limits; the exercise was ten separate batches.
+- **Ten-batch results are author-reported aggregates**: the batches were rate-limited by Groq (including its daily token limit) and Tavily (free credits exhausted), so most summaries are deterministic and many envelopes carry error entries.
+- **Comprehensive live Ask AI validation pending**: there has been one manual smoke check only.
 - The 100-company benchmark figures (2026-10-15) predate the latest code and have not been re-measured.
