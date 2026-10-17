@@ -133,7 +133,7 @@ export default function DiscoverPage() {
       </div>
 
       <form
-        className="disc-search surface on-ivory is-bar"
+        className="disc-search surface on-inverse is-bar"
         role="search"
         onSubmit={(e) => {
           e.preventDefault();
@@ -160,7 +160,7 @@ export default function DiscoverPage() {
           <span className="t-xs t-muted">Try a natural-language query</span>
           <div className="row-wrap">
             {EXAMPLES.map((e) => (
-              <button key={e} className="chip on-ivory" onClick={() => (setText(e), submit(e))}>
+              <button key={e} className="chip on-inverse" onClick={() => (setText(e), submit(e))}>
                 <Sparkle aria-hidden /> {e}
               </button>
             ))}

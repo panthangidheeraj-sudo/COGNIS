@@ -180,7 +180,7 @@ def test_report_contains_every_applicable_section_of_the_saved_research(research
     # executive summary and key metrics
     assert not pdf.missing("Compiled from verified facts", "The register reports 12 employees", "12 people", "Registered establishments", "Open positions")
     # financials: every period, currency, raw filed value, ratios, trend charts
-    assert not pdf.missing("FY2023", "FY2024", "FY2025", "NOK 21.8M", "21,789,260", "Operating result", "Annual result", "Total assets", "Equity", "Total debt",
+    assert not pdf.missing("FY2023", "FY2024", "FY2025", "NOK 21.8M", "21,789,260", "Operating result", "Annual result", "Total assets", "Equity", "Total liabilities",
                            "Operating margin", "Equity ratio", "as filed (no conversion)", "Historical trend")
     # people, locations, digital presence, hiring, activity
     assert not pdf.missing("Kristin Johannessen", "Bjørn Inge Johannessen", "Chair of the board", "INTRA REVISJON DA", "AUTOBJØRN AS AVD SALG", "AUTOBJØRN AS AVD VERKSTED",

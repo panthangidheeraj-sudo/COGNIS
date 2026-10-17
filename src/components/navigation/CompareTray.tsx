@@ -1,13 +1,21 @@
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
+import { useRouteHandle } from '@/app/routeHandle';
 import { Columns3, X } from 'lucide-react';
 import { MAX_COMPARE, useCompare } from '@/stores/ui';
 
-/** Floating selection tray. Appears when companies are selected for comparison. */
+/** Whether the tray is on screen: the active route opted in (`handle.compareTray`) and there is a selection. The selection itself lives in the store. */
+export function useCompareTrayVisible(): boolean {
+  const on = !!useRouteHandle().compareTray;
+  const count = useCompare((s) => s.selected.length);
+  return on && count > 0;
+}
+
+/** Floating selection tray for the comparison workflow. Routes opt in with `handle: { compareTray: true }`; everywhere else it is not rendered. */
 export function CompareTray() {
   const { selected, remove, clear } = useCompare();
   const nav = useNavigate();
-  const loc = useLocation();
-  if (!selected.length || loc.pathname.startsWith('/compare')) return null;
+  const visible = useCompareTrayVisible();
+  if (!visible) return null;
   return (
     <div className="compare-tray glass" role="region" aria-label="Companies selected for comparison">
       <span className="t-xs t-muted nowrap">

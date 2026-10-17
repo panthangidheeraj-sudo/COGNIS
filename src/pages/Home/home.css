@@ -5,13 +5,20 @@
 }
 .hero {
   position: relative;
-  min-height: min(760px, calc(100dvh - var(--topbar-h)));
+  /* the Earth is the centrepiece, so the hero takes most of the first viewport; the top of the first row of action cards still peeks in below it */
+  --hero-h: clamp(460px, calc(100dvh - var(--topbar-h) - 100px), 920px);
+  min-height: var(--hero-h);
+  /* the globe is sized from the hero's own width (the space beside the persistent sidebar), never from the viewport */
+  container: hero / inline-size;
   display: flex;
   align-items: center;
   padding: 40px 32px 56px;
   margin-top: calc(var(--topbar-h) * -1);
   padding-top: calc(var(--topbar-h) + 40px);
+  /* clipped sideways (the Earth deliberately runs past the right edge, never into a horizontal scroll), open downwards so the Earth can sink behind
+     the action cards and dissolve there instead of ending on a hard line (browsers without `clip` keep the plain `hidden`) */
   overflow: hidden;
+  overflow: clip visible;
   isolation: isolate;
 }
 /* No bottom fade here. A fade to the solid canvas colour ended on a hard horizontal line, because the page
@@ -39,6 +46,15 @@
 .hero-title .t-gradient {
   display: inline;
 }
+.hero-title .pressure-word {
+  display: inline-block;
+  white-space: nowrap;
+}
+.hero-title .pressure-char {
+  display: inline-block;
+  text-align: center;
+  white-space: pre;
+}
 .hero-accent {
   font-style: italic;
   font-size: 1.08em;
@@ -52,13 +68,36 @@
   max-width: 44ch;
 }
 .hero .hero-globe {
+  /* The Earth is the hero's dominant visual: a sphere of --globe-s (about 1.7-1.9x the earlier size on desktop) that starts just right of the
+     headline and search column and runs past the right edge on purpose (at least 60% of it stays visible, so it always reads as a globe).
+     --globe-left: where the text column ends (it is 640 px wide from the hero's 32 px padding, centred once the hero is wider than the 1360 px
+     content width) plus a 16 px gap. Size: the smallest of 1.5x the hero's height below the top bar, what keeps 60% visible, and 1250 px.
+     The canvas box is 4/3 of the sphere (the sphere leaves about 1/8 of transparent margin on each side inside its own canvas). The top of the
+     sphere sits just under the top bar; below the hero it sinks behind the action cards and fades out (mask), so nothing is cut by a hard
+     edge, and the hero clips sideways, so the page never scrolls horizontally. */
+  --globe-left: max(688px, calc((100cqw - 1360px) / 2 + 688px));
+  --globe-s: clamp(300px, min(calc((var(--hero-h) - var(--topbar-h)) * 1.5), calc((100cqw + 64px - var(--globe-left)) / 0.6)), 1250px); /* cqw is the content box: +64px = the hero's side padding */
+  --globe-d: calc(var(--globe-s) * 4 / 3);
+  --globe-top: calc(var(--topbar-h) + 16px - var(--globe-s) / 6);
   position: absolute;
   z-index: -1;
-  right: max(-120px, calc((100vw - 1440px) / 2 - 80px));
-  top: 50%;
-  width: min(820px, 64vw);
+  left: calc(var(--globe-left) - var(--globe-s) / 6);
+  top: var(--globe-top);
+  width: var(--globe-d);
   aspect-ratio: 1;
-  transform: translateY(-46%);
+  /* the lowest part of the sphere dissolves (eased, so no band shows where the fade starts); on desktop that part is already below the hero,
+     behind the action cards. Percentages of the canvas box: the sphere spans 12.5%-87.5% of it. */
+  --globe-mask: linear-gradient(to bottom, #fff 62%, rgb(255 255 255 / 0.94) 66%, rgb(255 255 255 / 0.78) 70%, rgb(255 255 255 / 0.5) 75%, rgb(255 255 255 / 0.22) 80%,
+    rgb(255 255 255 / 0.06) 85%, transparent 90%);
+  -webkit-mask-image: var(--globe-mask);
+  mask-image: var(--globe-mask);
+}
+/* The rotation control sits on the right of the VISIBLE Earth: 52 px in from the hero's right edge (the Earth runs past that edge), or 60 px inside the
+   sphere's own right edge when that comes first. Measured from the canvas box: the hero's padding box ends at 100cqw + 64px, the box starts at
+   --globe-left − S/6, and the sphere's right edge is at 7/6·S inside the box. (left is the button's centre: the base rule translates it by −50%.) */
+.hero .hero-globe .globe-toggle {
+  left: min(calc(100cqw + 64px - var(--globe-left) + var(--globe-s) / 6 - 52px), calc(var(--globe-s) * 7 / 6 - 60px));
+  top: 56%;
 }
 /* Hero search */
 .hero-search {
@@ -86,7 +125,7 @@
   box-shadow:
     var(--shadow-2),
     0 0 0 4px var(--accent-wash),
-    0 0 50px -12px rgba(226, 235, 248, 0.4);
+    0 0 50px -12px var(--glow-focus);
   transform: translateY(-1px);
 }
 .hero-search-field.is-open {
@@ -171,11 +210,10 @@
   min-height: 150px;
   padding: 20px;
   border-radius: var(--r-lg);
-  /* ivory paper on the dark page (the `.on-ivory` scope supplies surface, ink, hairline and shadow) */
+  /* the inverse of the page: ivory paper on the dark page, navy on the light page (the `.on-inverse` scope supplies surface, ink, hairline and shadow) */
   background: var(--surface-1);
-  border: var(--bw) solid var(--ivory-line-strong);
+  border: var(--bw) solid var(--line-strong);
   box-shadow: var(--shadow-1);
-  animation: cg-fade-up var(--motion-slow) var(--ease-out) both;
   transition:
     transform var(--motion-base) var(--ease-out),
     border-color var(--motion-base) var(--ease-out),
@@ -196,20 +234,20 @@
 }
 .action-card:hover {
   transform: translateY(-3px);
-  background: var(--ivory-field);
-  border-color: var(--ivory-ink-3);
+  background: var(--surface-2);
+  border-color: var(--text-3);
   box-shadow: var(--shadow-2);
 }
 .action-card:hover::before {
   opacity: 1;
 }
-/* the global keyboard ring is invisible on a dark page for a navy-ink element; use the two-step ivory ring */
+/* the global keyboard ring is invisible against an inverse surface; use the two-step ring */
 .action-card:focus-visible {
   outline: none;
   border-radius: var(--r-lg);
   box-shadow:
-    0 0 0 2px var(--ivory-field),
-    0 0 0 4px var(--ivory-ring);
+    0 0 0 2px var(--surface-2),
+    0 0 0 4px var(--line-focus);
 }
 .action-icon {
   display: grid;
@@ -219,8 +257,8 @@
   margin-bottom: auto;
   border-radius: var(--r-md);
   color: var(--accent-ice);
-  background: var(--ivory-well);
-  border: var(--bw) solid var(--ivory-line);
+  background: var(--surface-3);
+  border: var(--bw) solid var(--line);
 }
 .action-icon svg {
   width: 19px;
@@ -263,6 +301,7 @@
 }
 .recent-list {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
 }
 .recent-row {
   display: flex;
@@ -288,6 +327,11 @@
 .artifact-mini-list,
 .signal-mini-list {
   display: grid;
+  grid-template-columns: minmax(0, 1fr); /* an auto track grows to the longest title and pushes the page sideways on narrow screens */
+}
+.artifact-mini > .truncate,
+.signal-mini > .truncate {
+  min-width: 0;
 }
 .artifact-mini,
 .signal-mini {
@@ -321,15 +365,35 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
-@media (max-width: 960px) {
-  .hero .hero-globe {
-    width: 90vw;
-    right: -30vw;
-    opacity: 0.8;
+/* short laptop windows: a smaller headline and tighter stack, so the first row of action cards is reachable without a long scroll */
+@media (min-width: 641px) and (max-height: 760px) {
+  .hero {
+    padding-top: calc(var(--topbar-h) + 12px);
+    padding-bottom: 28px;
   }
-  .globe-toggle {
-    left: 36%;
-    top: 84%;
+  .hero-inner {
+    gap: 14px;
+  }
+  .hero .hero-title {
+    font-size: clamp(48px, 13dvh, 84px);
+    max-width: 9.5ch;
+  }
+}
+/* a narrow hero (small laptop window, tablet): the Earth sits in the top-right corner, above the search, fully inside */
+@container hero (max-width: 860px) {
+  .hero .hero-globe {
+    --globe-d: clamp(240px, min(54cqw, calc(var(--hero-h) - var(--topbar-h) - 16px)), 540px);
+    left: auto;
+    right: clamp(8px, 2cqw, 40px);
+    top: calc(var(--topbar-h) + 8px);
+    width: var(--globe-d);
+    opacity: 0.92;
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+  .hero .hero-globe .globe-toggle {
+    left: 80%;
+    top: 77%;
   }
 }
 @media (max-width: 640px) {
@@ -344,12 +408,14 @@
     right: auto;
     top: auto;
     transform: none;
-    width: 300px;
-    margin: -10px auto -40px;
+    width: clamp(260px, 88cqw, 440px);
+    margin: -10px auto -48px;
     opacity: 1;
     order: -1;
+    -webkit-mask-image: none;
+    mask-image: none;
   }
-  .globe-toggle {
+  .hero .hero-globe .globe-toggle {
     left: 88%;
     top: 84%;
   }

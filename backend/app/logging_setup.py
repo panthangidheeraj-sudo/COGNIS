@@ -8,12 +8,25 @@ from __future__ import annotations
 import json
 import logging
 import sys
+import traceback
+from types import TracebackType
 from typing import Any
 
 from .core.util import now_iso
 from .security.redaction import redact
 
 _CONFIGURED = False
+
+
+def _where(tb: TracebackType | None, *, depth: int = 8) -> list[str]:
+    """The last frames of a traceback as ``app/api/chat_threads.py:161 _pick_company``. Only locations: no source lines, no variable values, no exception text."""
+    out: list[str] = []
+    for frame in traceback.extract_tb(tb)[-depth:]:
+        path = frame.filename.replace("\\", "/")
+        marker = None if "site-packages" in path else next((m for m in ("/app/", "/tests/", "/scripts/") if m in path), None)
+        short = path[path.rindex(marker) + 1:] if marker else path.rsplit("/", 1)[-1]  # third-party frames: file name only, never a home-directory path
+        out.append(f"{short}:{frame.lineno} {frame.name}")
+    return out
 
 
 class JsonFormatter(logging.Formatter):
@@ -30,6 +43,7 @@ class JsonFormatter(logging.Formatter):
                 payload[key] = redact(value) if isinstance(value, str) else value
         if record.exc_info:
             payload["error"] = redact(self.formatException(record.exc_info).splitlines()[-1])
+            payload["where"] = _where(record.exc_info[2])
         return json.dumps(payload, ensure_ascii=False, default=str)
 
 

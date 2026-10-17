@@ -116,3 +116,9 @@ Open http://localhost:5173. The top bar shows **Connected** when the frontend ta
 * One terminal envelope per input — also under timeouts, budget exhaustion and source failures.
 * A failed or blocked source is reported as such, never as "no data".
 * Keys never appear in logs, records, envelopes or the database (tested in `tests/test_security.py`).
+
+## G. Ask AI chat and regulatory sources (free allowances only)
+- Endpoints: `GET /companies/{org}/chat/context`, `POST /companies/{org}/chat`, `GET /companies/{org}/regulatory`.
+- Existing variables: `TAVILY_API_KEY` (free plan, no card), `GROQ_API_KEY`, `GROQ_MODEL`, `LLM_PROVIDER`. New: `ENABLE_REGULATORY_DISCOVERY`, `REGULATORY_MAX_PAGES`, `REGULATORY_DOMAINS`, `ENABLE_CHAT`, `CHAT_MAX_QUESTION_CHARS`, `CHAT_MAX_HISTORY_MESSAGES`, `CHAT_MAX_SEARCHES`, `CHAT_FRESH_TIMEOUT_SECONDS`, `CHAT_LOOKUP_TIMEOUT_SECONDS`, `CHAT_LOOKUP_PAGE_TIMEOUT_SECONDS`, `CHAT_LOOKUP_MAX_PAGES`, `CHAT_LOOKUP_CACHE_SECONDS`, `CHAT_FRESH_MAX_AGE_HOURS`, `CHAT_MAX_EVIDENCE_ITEMS` (see `.env.example`).
+- Without a Groq key the chat still answers, from saved evidence only, and says so. Without a Tavily key (or when its free allowance is used up) fresh research is reported as unavailable; nothing paid is started.
+- Source rules and limits: `docs/SOURCE_ACCESS_AUDIT.md`.

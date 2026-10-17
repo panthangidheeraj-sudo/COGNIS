@@ -114,7 +114,7 @@ button.note-ref:hover {
   border-color: rgba(16, 42, 67, 0.14);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.8),
-    0 40px 120px -30px rgba(0, 0, 0, 0.75);
+    0 40px 120px -30px rgb(var(--shadow-rgb) / calc(0.75 * var(--shadow-k)));
 }
 .drawer--paper .drawer-head {
   border-bottom-color: var(--paper-rule);
@@ -297,7 +297,7 @@ button.note-ref:hover {
   border-color: rgba(16, 42, 67, 0.14);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.8),
-    0 50px 140px -30px rgba(0, 0, 0, 0.8);
+    0 50px 140px -30px rgb(var(--shadow-rgb) / calc(0.8 * var(--shadow-k)));
 }
 .modal--paper .modal-head,
 .modal--paper .modal-foot {

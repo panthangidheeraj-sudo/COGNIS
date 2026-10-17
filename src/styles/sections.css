@@ -377,7 +377,7 @@
   stroke-opacity: 0.35;
 }
 .cnet-core circle:first-child {
-  filter: drop-shadow(0 0 16px rgba(226, 235, 248, 0.45));
+  filter: drop-shadow(0 0 16px var(--glow-focus));
 }
 .cnet-stop-a {
   stop-color: #ffffff;
@@ -412,6 +412,11 @@
 .cnet-node--person circle {
   fill: color-mix(in oklab, var(--c-ivory) 85%, transparent);
   stroke: var(--c-ivory);
+}
+:root[data-theme='light'] .cnet-node--person circle {
+  /* ivory person nodes would vanish on a white card: the mirror is navy */
+  fill: color-mix(in oklab, var(--c-navy) 88%, transparent);
+  stroke: var(--c-navy);
 }
 .cnet-node.is-active circle,
 .cnet-node.is-active rect,
@@ -527,6 +532,10 @@
 .nmap-key--main {
   background: var(--c-ivory);
   box-shadow: 0 0 0 2px var(--accent);
+}
+:root[data-theme='light'] .nmap-key--main {
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--surface-1), 0 0 0 3px var(--accent);
 }
 .nmap-key--unverified {
   background: transparent;
@@ -810,7 +819,7 @@ a.page-tile:hover {
   padding: 24px 26px 22px;
   background: var(--surface-ivory);
   border-color: transparent;
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.6) inset, 0 34px 70px -42px rgba(0, 0, 0, 0.75);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.6) inset, 0 34px 70px -42px rgb(var(--shadow-rgb) / calc(0.75 * var(--shadow-k)));
 }
 .fin-paper .card-head {
   gap: 10px 16px;

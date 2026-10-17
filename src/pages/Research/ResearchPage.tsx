@@ -16,6 +16,7 @@ import { PlanEditor, ResearchPlanView } from '@/components/research/ResearchPlan
 import { SourceStack } from '@/components/research/SourceStack';
 import { SourceActivity } from '@/components/research/SourceActivity';
 import { CompletionSummary } from '@/components/research/CompletionSummary';
+import { AskAiHost, useAskAiHost } from '@/components/chat/AskAiHost';
 import { EventTimeline } from '@/components/research/EventTimeline';
 import { AnswerView } from '@/components/research/AnswerView';
 import { AmbiguousCandidates } from '@/components/research/AmbiguousCandidates';
@@ -267,7 +268,7 @@ function Composer({ orgParam, initialQuery, initialPrompt, mode, setMode, onStar
           </div>
         ) : (
           <div className="composer-search">
-            <div className="input-wrap on-ivory">
+            <div className="input-wrap on-inverse">
               <Building2 aria-hidden />
               <input
                 ref={inputRef}
@@ -325,7 +326,7 @@ function Composer({ orgParam, initialQuery, initialPrompt, mode, setMode, onStar
         <label className="field-label" htmlFor="rc-q" style={{ marginTop: 16 }}>
           Or ask your own question
         </label>
-        <textarea id="rc-q" className="textarea on-ivory" rows={2} value={question} onChange={(e) => setQuestion(e.target.value)} placeholder="e.g. Has the company opened offices outside Norway in the last year?" />
+        <textarea id="rc-q" className="textarea on-inverse" rows={2} value={question} onChange={(e) => setQuestion(e.target.value)} placeholder="e.g. Has the company opened offices outside Norway in the last year?" />
         <div className="composer-foot">
           <Segmented
             label="Research depth"
@@ -349,7 +350,7 @@ function Composer({ orgParam, initialQuery, initialPrompt, mode, setMode, onStar
         )}
       </div>
 
-      <div className="composer-explain on-ivory">
+      <div className="composer-explain on-inverse">
         <SourceStack steps={null} compact />
         <div className="stack" style={{ gap: 10 }}>
           <h2 className="t-h3">How research works</h2>
@@ -412,6 +413,10 @@ function Workspace({ run, setRun, onNew }: { run: ResearchRun; setRun: (r: Resea
     setRun({ ...r, plan: live.plan });
   };
 
+  // Ask AI about this run's company; the conversation survives closing the panel.
+  const ask = useAskAiHost();
+  const askStarters = ['What was verified in this research, and from which sources?', 'Are there any identity or value conflicts, and what do they mean?', 'What changed since the previous research?', 'What is missing or could not be checked, and why?'];
+
   const facts = state.facts;
   const failed = live.status === 'failed' || live.status === 'cancelled' || state.connection === 'error';
 
@@ -453,7 +458,7 @@ function Workspace({ run, setRun, onNew }: { run: ResearchRun; setRun: (r: Resea
 
       <StageTrack stage={live.stage} done={live.status === 'completed'} />
 
-      {live.status === 'completed' && <CompletionSummary run={live} />}
+      {live.status === 'completed' && <CompletionSummary run={live} onAsk={ask.toggle} askOpen={ask.open} />}
 
       {failed && (
         <div className="notice notice--warn" role="alert" style={{ marginTop: 16 }}>
@@ -532,6 +537,7 @@ function Workspace({ run, setRun, onNew }: { run: ResearchRun; setRun: (r: Resea
           </div>
         </aside>
       </div>
+      {company && <AskAiHost host={ask} orgNumber={company.orgNumber} legalName={company.legalName} origin="the research run that just finished" suggestions={askStarters} />}
     </div>
   );
 }

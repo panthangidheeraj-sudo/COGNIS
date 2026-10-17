@@ -1,20 +1,35 @@
 /* ==========================================================================
-   IVORY SURFACES — light, ink-on-ivory controls and panels on the dark workspace
+   INVERSE SURFACES — the opposite theme's surface, set into the current page
    --------------------------------------------------------------------------
-   `.on-ivory` is a token scope. Put it on a field, chip, toggle, card or panel and everything inside
-   (and the element itself) reads navy ink on warm ivory: text, icons, hairlines, wells, status colours
-   and the primary button are remapped to their light-theme values. The page around it stays dark navy.
+   `.on-inverse` is a token scope. Put it on a field, chip, toggle, card or panel and everything inside
+   (and the element itself) is drawn with the OPPOSITE theme's tokens:
 
-   Use it for the few surfaces that should read as paper: Home action cards, the Discover search and
+     dark page   →  warm ivory surface, navy ink      (the "ivory knowledge" surfaces of the dark workspace)
+     light page  →  deep navy surface, ivory ink      (the same surfaces, mirrored)
+
+   Light mode is therefore the intentional inverse of dark mode, not a separate design: whatever stands out
+   as ivory-on-navy in dark stands out as navy-on-ivory in light, with the same role, layout and hierarchy.
+
+   How it works
+   - Dark page: the scope below remaps the semantic tokens to the light theme's values (hard-coded here
+     because the light palette is not otherwise present while the page is dark).
+   - Light page: tokens.css applies the DARK token set to `:root[data-theme='light'] .on-inverse`, so the
+     scope receives the real dark palette with no duplicated values. The few extras are set at the end of
+     this block.
+   - `.flip-in-light` is the same mirror for a surface that is already the right colour on the dark page (the
+     About chapters): it does nothing in dark and takes the dark token set in light.
+   - Every rule below reads SEMANTIC tokens (--surface-*, --text-*, --line*), never colours, so one rule
+     serves both directions.
+
+   Use it for the few surfaces that should read as the inverse: Home action cards, the Discover search and
    query chips, Research inputs and the "How research works" panel, the Library search bar and the
    Settings toggles. Components keep their own layout and sizing; only colour comes from here.
 
-   Focus: a two-step ring (an ivory gap, then --ivory-ring) is visible on ivory and on navy alike.
-   In the light theme the page is ivory too, so the same scope keeps a hairline and a shadow.
+   Focus: a two-step ring (a surface-coloured gap, then --line-focus, a saturated blue) stays visible on
+   the inverse surface and on the page around it, in both themes.
    ========================================================================== */
-.on-ivory {
+:root:not([data-theme='light']) .on-inverse {
   color-scheme: light;
-  color: var(--ivory-ink);
 
   /* surfaces */
   --surface-1: var(--ivory-panel);
@@ -35,7 +50,7 @@
   /* hairlines and focus */
   --line: var(--ivory-line);
   --line-strong: var(--ivory-line-strong);
-  --line-focus: var(--ivory-ring);
+  --line-focus: var(--inverse-ring);
   --glass-border: var(--ivory-line-strong);
 
   /* accents, washes and states (the light theme's values) */
@@ -65,151 +80,188 @@
   --primary-fg: #ffffff;
   --primary-border: #0f1b2a;
   --primary-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 10px 22px -14px rgba(15, 27, 42, 0.6);
+
+  /* scope-only helpers used by the rules below */
+  --inverse-hover-bg: #ffffff;
+  --inverse-hover-wash: rgba(16, 42, 67, 0.07);
+  --inverse-field-inset: inset 0 1px 2px rgba(16, 42, 67, 0.06);
+  --inverse-track-inset: inset 0 1px 2px rgba(16, 42, 67, 0.08);
+  --inverse-chip-shadow: 0 1px 0 rgba(255, 255, 255, 0.6) inset, 0 1px 2px rgba(0, 4, 12, 0.14);
+  --inverse-thumb-shadow: 0 1px 2px rgba(0, 4, 12, 0.35);
+  --inverse-selected-hover-fg: #ffffff;
+}
+
+/* Light page: the dark token set arrives from tokens.css; only the scope-only helpers and the focus ring differ. */
+:root[data-theme='light'] :is(.on-inverse, .flip-in-light) {
+  --line-focus: var(--inverse-ring);
+  /* a navy surface on the ivory canvas casts a soft navy shadow, not the dark theme's near-black one */
+  --shadow-rgb: 16 42 67;
+  --shadow-k: 0.6;
+  --shadow-1: inset 0 1px 0 rgba(226, 232, 244, 0.06), 0 1px 2px rgba(16, 42, 67, 0.12), 0 14px 30px -18px rgba(16, 42, 67, 0.55);
+  --shadow-2: inset 0 1px 0 rgba(226, 232, 244, 0.07), 0 2px 4px rgba(16, 42, 67, 0.12), 0 24px 44px -24px rgba(16, 42, 67, 0.6);
+  /* the knowledge-layer ink and rules follow the mirrored tokens (knowledge.css reads these inside `.paper`) */
+  --paper-ink: var(--text-1);
+  --paper-ink-2: var(--text-2);
+  --paper-rule: var(--line-strong);
+  --paper-rule-soft: var(--line);
+  --inverse-hover-bg: var(--c-navy-750);
+  --inverse-hover-wash: rgba(226, 232, 244, 0.08);
+  --inverse-field-inset: inset 0 1px 2px rgba(0, 2, 8, 0.45);
+  --inverse-track-inset: inset 0 1px 2px rgba(0, 2, 8, 0.5);
+  --inverse-chip-shadow: 0 1px 0 rgba(226, 232, 244, 0.06) inset, 0 1px 2px rgba(15, 27, 42, 0.28);
+  --inverse-thumb-shadow: 0 1px 2px rgba(15, 27, 42, 0.3);
+  --inverse-selected-hover-fg: var(--surface-2);
+}
+
+.on-inverse,
+:root[data-theme='light'] .flip-in-light {
+  color: var(--text-1);
 }
 
 /* ---------------------------------------------------------------- fields ---- */
-:is(.input, .textarea, .select).on-ivory,
-.on-ivory :is(.input, .textarea, .select) {
-  background-color: var(--ivory-field);
-  color: var(--ivory-ink);
-  border-color: var(--ivory-line-strong);
-  box-shadow: inset 0 1px 2px rgba(16, 42, 67, 0.06);
+:is(.input, .textarea, .select).on-inverse,
+.on-inverse :is(.input, .textarea, .select) {
+  background-color: var(--surface-2);
+  color: var(--text-1);
+  border-color: var(--line-strong);
+  box-shadow: var(--inverse-field-inset);
 }
-:is(.input, .textarea, .select).on-ivory:hover:not(:disabled):not(:focus-visible),
-.on-ivory :is(.input, .textarea, .select):hover:not(:disabled):not(:focus-visible) {
-  border-color: var(--ivory-ink-3);
+:is(.input, .textarea, .select).on-inverse:hover:not(:disabled):not(:focus-visible),
+.on-inverse :is(.input, .textarea, .select):hover:not(:disabled):not(:focus-visible) {
+  border-color: var(--text-3);
 }
-:is(.input, .textarea, .select).on-ivory:focus-visible,
-.on-ivory :is(.input, .textarea, .select):focus-visible {
+:is(.input, .textarea, .select).on-inverse:focus-visible,
+.on-inverse :is(.input, .textarea, .select):focus-visible {
   outline: none;
-  border-color: var(--ivory-ink);
+  border-color: var(--text-1);
   box-shadow:
-    0 0 0 2px var(--ivory-field),
-    0 0 0 4px var(--ivory-ring);
+    0 0 0 2px var(--surface-2),
+    0 0 0 4px var(--line-focus);
 }
-:is(.input, .textarea).on-ivory::placeholder,
-.on-ivory :is(.input, .textarea)::placeholder {
-  color: var(--ivory-ink-4);
+:is(.input, .textarea).on-inverse::placeholder,
+.on-inverse :is(.input, .textarea)::placeholder {
+  color: var(--text-4);
   opacity: 1;
 }
-:is(.input, .textarea, .select).on-ivory:disabled,
-.on-ivory :is(.input, .textarea, .select):disabled {
-  background-color: var(--ivory-well);
-  color: var(--ivory-ink-3);
+:is(.input, .textarea, .select).on-inverse:disabled,
+.on-inverse :is(.input, .textarea, .select):disabled {
+  background-color: var(--surface-3);
+  color: var(--text-3);
   cursor: not-allowed;
 }
-:is(.input, .textarea, .select).on-ivory[aria-invalid='true'],
-.on-ivory :is(.input, .textarea, .select)[aria-invalid='true'] {
+:is(.input, .textarea, .select).on-inverse[aria-invalid='true'],
+.on-inverse :is(.input, .textarea, .select)[aria-invalid='true'] {
   border-color: var(--err);
 }
-/* browser autofill would otherwise repaint the field with the dark theme's colours */
-:is(.input, .textarea).on-ivory:-webkit-autofill,
-.on-ivory :is(.input, .textarea):-webkit-autofill {
-  -webkit-text-fill-color: var(--ivory-ink);
-  -webkit-box-shadow: 0 0 0 100px var(--ivory-field) inset;
+/* browser autofill would otherwise repaint the field with the page theme's colours */
+:is(.input, .textarea).on-inverse:-webkit-autofill,
+.on-inverse :is(.input, .textarea):-webkit-autofill {
+  -webkit-text-fill-color: var(--text-1);
+  -webkit-box-shadow: 0 0 0 100px var(--surface-2) inset;
 }
 /* a field drawn as a bar: an icon, a transparent input and an action (Discover search) */
-.on-ivory.is-bar {
-  background: var(--ivory-field);
-  border-color: var(--ivory-line-strong);
-  box-shadow: var(--ivory-shadow);
+.on-inverse.is-bar {
+  background: var(--surface-2);
+  border-color: var(--line-strong);
+  box-shadow: var(--shadow-1);
 }
-.on-ivory.is-bar:focus-within {
-  border-color: var(--ivory-ink);
+.on-inverse.is-bar:focus-within {
+  border-color: var(--text-1);
   box-shadow:
-    0 0 0 2px var(--ivory-field),
-    0 0 0 4px var(--ivory-ring);
+    0 0 0 2px var(--surface-2),
+    0 0 0 4px var(--line-focus);
 }
-.on-ivory.is-bar input {
-  color: var(--ivory-ink);
-  caret-color: var(--ivory-ink);
+.on-inverse.is-bar input {
+  color: var(--text-1);
+  caret-color: var(--text-1);
 }
-.on-ivory.is-bar input::placeholder {
-  color: var(--ivory-ink-4);
+.on-inverse.is-bar input::placeholder {
+  color: var(--text-4);
   opacity: 1;
 }
 
 /* ----------------------------------------------------------------- chips ---- */
-.chip.on-ivory {
-  background: var(--ivory-field);
-  color: var(--ivory-ink-2);
-  border-color: var(--ivory-line-strong);
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.6) inset, 0 1px 2px rgba(0, 4, 12, 0.14);
+.chip.on-inverse {
+  background: var(--surface-2);
+  color: var(--text-2);
+  border-color: var(--line-strong);
+  box-shadow: var(--inverse-chip-shadow);
 }
-.chip.on-ivory:hover:not(:disabled):not([aria-disabled='true']) {
-  background: #ffffff;
-  color: var(--ivory-ink);
-  border-color: var(--ivory-ink-3);
+.chip.on-inverse:hover:not(:disabled):not([aria-disabled='true']) {
+  background: var(--inverse-hover-bg);
+  color: var(--text-1);
+  border-color: var(--text-3);
 }
-.chip.on-ivory:active:not(:disabled):not([aria-disabled='true']) {
-  background: var(--ivory-well);
+.chip.on-inverse:active:not(:disabled):not([aria-disabled='true']) {
+  background: var(--surface-3);
 }
-.chip.on-ivory[aria-pressed='true'],
-.chip.on-ivory.is-active {
-  background: var(--ivory-ink);
-  color: var(--ivory-field);
-  border-color: var(--ivory-ink);
+/* selected = inverted (the opposite of the chip's resting fill): clear without relying on hue */
+.chip.on-inverse[aria-pressed='true'],
+.chip.on-inverse.is-active {
+  background: var(--text-1);
+  color: var(--surface-2);
+  border-color: var(--text-1);
 }
-.chip.on-ivory:disabled,
-.chip.on-ivory[aria-disabled='true'] {
+.chip.on-inverse:disabled,
+.chip.on-inverse[aria-disabled='true'] {
   opacity: 0.55;
   cursor: not-allowed;
 }
-.chip.on-ivory:focus-visible {
+.chip.on-inverse:focus-visible {
   outline: none;
   border-radius: var(--r-pill); /* the global focus rule would square a pill off */
   box-shadow:
-    0 0 0 2px var(--ivory-field),
-    0 0 0 4px var(--ivory-ring);
+    0 0 0 2px var(--surface-2),
+    0 0 0 4px var(--line-focus);
 }
-.chip.on-ivory svg {
-  color: var(--ivory-ink-3);
+.chip.on-inverse svg {
+  color: var(--text-3);
 }
-.chip.on-ivory[aria-pressed='true'] svg,
-.chip.on-ivory.is-active svg {
+.chip.on-inverse[aria-pressed='true'] svg,
+.chip.on-inverse.is-active svg {
   color: inherit;
 }
 
 /* ------------------------------------------------ segmented toggles (Settings) ---- */
-.segmented.on-ivory {
-  background: var(--ivory-well);
-  border-color: var(--ivory-line-strong);
-  box-shadow: inset 0 1px 2px rgba(16, 42, 67, 0.08);
+.segmented.on-inverse {
+  background: var(--surface-3);
+  border-color: var(--line-strong);
+  box-shadow: var(--inverse-track-inset);
 }
-.segmented.on-ivory button {
-  color: var(--ivory-ink-2);
+.segmented.on-inverse button {
+  color: var(--text-2);
 }
-.segmented.on-ivory button:hover {
-  color: var(--ivory-ink);
-  background: rgba(16, 42, 67, 0.07);
+.segmented.on-inverse button:hover {
+  color: var(--text-1);
+  background: var(--inverse-hover-wash);
 }
-/* selected = inverted (navy fill, ivory text): clear without relying on hue, and no width change between states */
-.segmented.on-ivory button[aria-pressed='true'] {
-  background: var(--ivory-ink);
-  color: var(--ivory-field);
-  box-shadow: 0 1px 2px rgba(0, 4, 12, 0.35);
+/* selected = inverted: clear without relying on hue, and no width change between states */
+.segmented.on-inverse button[aria-pressed='true'] {
+  background: var(--text-1);
+  color: var(--surface-2);
+  box-shadow: var(--inverse-thumb-shadow);
 }
-.segmented.on-ivory button[aria-pressed='true']:hover {
-  background: var(--ivory-ink);
-  color: #ffffff;
+.segmented.on-inverse button[aria-pressed='true']:hover {
+  background: var(--text-1);
+  color: var(--inverse-selected-hover-fg);
 }
-.segmented.on-ivory button:focus-visible {
+.segmented.on-inverse button:focus-visible {
   outline: none;
   border-radius: 6px;
   box-shadow:
-    0 0 0 2px var(--ivory-field),
-    0 0 0 4px var(--ivory-ring);
+    0 0 0 2px var(--surface-2),
+    0 0 0 4px var(--line-focus);
 }
-.segmented.on-ivory button:disabled {
+.segmented.on-inverse button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
 /* Windows high-contrast / forced colours: keep selection and focus visible with system colours */
 @media (forced-colors: active) {
-  .segmented.on-ivory button[aria-pressed='true'],
-  .chip.on-ivory[aria-pressed='true'],
-  .chip.on-ivory.is-active {
+  .segmented.on-inverse button[aria-pressed='true'],
+  .chip.on-inverse[aria-pressed='true'],
+  .chip.on-inverse.is-active {
     forced-color-adjust: none;
     background: Highlight;
     color: HighlightText;

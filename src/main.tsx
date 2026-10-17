@@ -13,13 +13,19 @@ import './styles/shell.css';
 import './styles/knowledge.css';
 import './styles/ivory.css';
 import './styles/density.css';
+import './styles/reveal.css';
 import { Providers } from './app/providers';
 import { router } from './app/router';
+import { LaunchGate } from './components/intro/LaunchGate';
+import { DotCursor } from './components/common/DotCursor';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <Providers>
-      <RouterProvider router={router} />
+      <DotCursor />
+      <LaunchGate>
+        <RouterProvider router={router} />
+      </LaunchGate>
     </Providers>
   </StrictMode>,
 );

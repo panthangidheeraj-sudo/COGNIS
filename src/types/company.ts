@@ -143,7 +143,7 @@ export type FinancialMetricKey =
   | 'annual_result'
   | 'total_assets'
   | 'equity'
-  | 'debt'
+  | 'total_liabilities'
   | 'cash'
   | 'employees';
 

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Download, Plus, Search, X } from 'lucide-react';
+import { Download, Plus, RotateCw, Search, X } from 'lucide-react';
 import { api } from '@/api';
 import type { Comparison, CompanySummary } from '@/types';
 import { MAX_COMPARE, useCompare } from '@/stores/ui';
@@ -13,6 +13,8 @@ import { ErrorState } from '@/components/common/ErrorState';
 import { Skeleton } from '@/components/common/Skeleton';
 import { ExportModal } from '@/components/common/ExportModal';
 import { useCommand } from '@/hooks/useCommand';
+import { useCompareEnrichment, ROW_FIELD, type CompareEnrichment } from '@/hooks/useCompareEnrichment';
+import { FigureValue } from '@/components/company/CompanyFigure';
 import { FactValue } from '@/components/evidence/FactValue';
 import { CoverageMeter } from '@/components/company/Coverage';
 import { CompareChart } from '@/components/charts/LazyCharts';
@@ -38,6 +40,9 @@ export default function ComparePage() {
   useEffect(() => {
     if (cmp.data) setAll(cmp.data.companies.map((c) => ({ orgNumber: c.orgNumber, legalName: c.legalName })));
   }, [cmp.data, setAll]);
+
+  // fill the cells the saved profiles leave empty, as the lookups answer (shared cache, bounded concurrency)
+  const enrich = useCompareEnrichment(cmp.data);
 
   const setOrgs = (list: string[]) => setParams(list.length ? { orgs: list.join(',') } : {});
   const names = cmp.data?.companies ?? [];
@@ -67,7 +72,7 @@ export default function ComparePage() {
       ) : cmp.isError ? (
         <ErrorState error={cmp.error} onRetry={() => cmp.refetch()} />
       ) : (
-        <CompareBody cmp={cmp.data!} />
+        <CompareBody cmp={cmp.data!} enrich={enrich} />
       )}
 
       {cmp.data && <ExportModal open={exportOpen} onClose={() => setExportOpen(false)} target={{ type: 'comparison', id: orgs.join(',') }} title={`${names.length} companies`} />}
@@ -168,7 +173,7 @@ function Suggestions({ orgs, onAdd }: { orgs: string[]; onAdd: (o: string) => vo
  * stays pinned on the left while the company columns scroll horizontally on narrow screens — companies are
  * never stacked vertically. Values only: no winner badges, rankings or "better/worse" colour.
  */
-function CompareBody({ cmp }: { cmp: Comparison }) {
+function CompareBody({ cmp, enrich }: { cmp: Comparison; enrich: CompareEnrichment }) {
   const theme = usePreferences((s) => s.theme);
   const light = theme === 'light' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: light)').matches);
   const colors = light ? COMPARE_COLORS_LIGHT : COMPARE_COLORS;
@@ -228,7 +233,7 @@ function CompareBody({ cmp }: { cmp: Comparison }) {
                 <span className="t-xs t-muted">Values as filed, each with its own evidence</span>
               </th>
               {cs.map((c, i) => (
-                <th key={c.orgNumber} scope="col" className="cmp-head paper" style={{ ['--co' as string]: colors[i] }}>
+                <th key={c.orgNumber} scope="col" className="cmp-head paper flip-in-light" style={{ ['--co' as string]: colors[i] }}>
                   <CompanyHead c={c} />
                 </th>
               ))}
@@ -242,7 +247,7 @@ function CompareBody({ cmp }: { cmp: Comparison }) {
                   {g.label}
                 </th>
                 {cs.map((c, i) => (
-                  <td key={c.orgNumber} className={gi === 0 ? 'cmp-sec-co paper' : 'cmp-sec-co'} aria-hidden>
+                  <td key={c.orgNumber} className={gi === 0 ? 'cmp-sec-co paper flip-in-light' : 'cmp-sec-co'} aria-hidden>
                     {gi > 0 && (
                       <>
                         <i style={{ background: colors[i] }} />
@@ -259,9 +264,8 @@ function CompareBody({ cmp }: { cmp: Comparison }) {
                     {r.unit && !isCurrencyUnit(r.unit) && <span className="cmp-unit"> {r.unit}</span>}
                   </th>
                   {r.values.map((v, i) => (
-                    <td key={cs[i].orgNumber} className={gi === 0 ? 'cmp-cell paper' : 'cmp-cell'}>
-                      {v ? <FactValue fact={v} sourceIndex={sourceIndex} context={cs[i].legalName} /> : <span className="fact--missing">Not available</span>}
-                      {v?.reportingPeriod && <span className="freshness">{v.reportingPeriod}</span>}
+                    <td key={cs[i].orgNumber} className={gi === 0 ? 'cmp-cell paper flip-in-light' : 'cmp-cell'}>
+                      <CellBody row={r.key} fact={v} company={cs[i]} sourceIndex={sourceIndex} enrich={enrich} />
                     </td>
                   ))}
                 </tr>
@@ -319,6 +323,49 @@ function CompareBody({ cmp }: { cmp: Comparison }) {
         </section>
       </div>
     </div>
+  );
+}
+
+/**
+ * One comparison cell. A verified fact keeps its evidence popover. Anything else is either a figure the lookups can fill (it shows a skeleton
+ * while it is fetched, then the verified value with its source, or the reason there is none) or a field only research can establish.
+ */
+function CellBody({ row, fact, company, sourceIndex, enrich }: { row: string; fact: Comparison['summary'][number]['values'][number]; company: CompanySummary; sourceIndex: Comparison['sourceIndex']; enrich: CompareEnrichment }) {
+  const verified = fact && fact.status === 'verified' && fact.freshness !== 'stale';
+  const lookup = !verified && ROW_FIELD[row] ? enrich.cell(row, company) : null;
+  if (verified || (fact && !lookup)) {
+    return (
+      <>
+        <FactValue fact={fact!} sourceIndex={sourceIndex} context={company.legalName} />
+        {fact!.reportingPeriod && <span className="freshness">{fact!.reportingPeriod}</span>}
+      </>
+    );
+  }
+  if (!lookup) {
+    // not a figure a lookup can answer: it is established by research, so say that rather than a bare "Not available"
+    const researched = company.researchState !== 'not_researched';
+    return (
+      <span className="fact--missing" title={researched ? 'Research did not verify this.' : 'Not researched yet. Open the company to research it.'}>
+        {researched ? 'Not available' : 'Not researched'}
+      </span>
+    );
+  }
+  const { state, view, sources } = lookup;
+  if (state === 'fetching') return <span className="cmp-skel" role="status" aria-label={`Looking up ${company.legalName}`} data-testid="cmp-cell-fetching" />;
+  return (
+    <span className="cmp-lookup" data-state={state} data-org={company.orgNumber}>
+      <FigureValue view={view} naClass="fact--missing" />
+      {view.value != null && (view.detail || sources?.length) && (
+        <span className="freshness">
+          {[view.detail, sources?.map((s) => s.name).join(', ')].filter(Boolean).join(' · ')}
+        </span>
+      )}
+      {state === 'failed' && (
+        <button className="link-btn cmp-retry" onClick={() => enrich.retry(company.orgNumber)}>
+          <RotateCw aria-hidden /> Retry
+        </button>
+      )}
+    </span>
   );
 }
 

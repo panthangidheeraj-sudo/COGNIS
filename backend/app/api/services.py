@@ -62,6 +62,9 @@ class Services:
         self.runs = RunManager(self)
         self.sheets = SheetManager(self)
         self.enricher = Enricher(self)  # Discover: targeted lookups for the figures a result card is missing
+        from .chat_threads import ChatThreads
+
+        self.chat_threads = ChatThreads(self)  # AI Chat: durable conversation history
 
     def start_background(self) -> None:
         """Keep the NAV job-ad index fresh while the API runs (bounded syncs; never blocks a request)."""
@@ -106,12 +109,12 @@ class Services:
 
     # ------------------------------------------------------------ research --
     async def research(self, org: str, *, mode: str = "deep", step_keys: list[str] | None = None, fresh: bool = False, on_event: EventSink | None = None,
-                       run_id: str | None = None, focus: str | None = None) -> dict[str, Any]:
+                       run_id: str | None = None, focus: str | None = None, orch: Orchestrator | None = None) -> dict[str, Any]:
         lock = self._locks.setdefault(org, asyncio.Lock())
         async with lock:
             previous = repo.latest_record(self.db, org)
             previous_version = repo.latest_version_id(self.db, org)
-            record = await self.orch.research(org, run_id=run_id or new_run_id("api"), on_event=on_event,
+            record = await (orch or self.orch).research(org, run_id=run_id or new_run_id("api"), on_event=on_event,
                                               options=ResearchOptions(mode=mode, fresh=fresh, include_website=mode != "registry", step_keys=step_keys, focus=focus))
             if record.get("identity") is None:
                 return record

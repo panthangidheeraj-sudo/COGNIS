@@ -167,23 +167,16 @@
   background: var(--primary-bg-hover);
   border-color: var(--primary-border);
 }
-.btn--ivory {
-  background: var(--c-ivory);
-  color: #0f1b2a;
-  border-color: transparent;
+.btn--inverse {
+  /* the inverse of the page: an ivory button on the dark page, a navy button on the light page */
+  background: var(--emphasis-bg);
+  color: var(--emphasis-fg);
+  border-color: var(--emphasis-border);
+  box-shadow: var(--emphasis-shadow);
 }
-.btn--ivory:hover:not(:disabled) {
-  background: #fff;
-  border-color: transparent;
-}
-/* On the light canvas ivory needs an edge to read as a button */
-:root[data-theme='light'] .btn--ivory {
-  background: #fffdf8;
-  border-color: rgba(16, 42, 67, 0.2);
-  box-shadow: 0 1px 2px rgba(16, 42, 67, 0.08), inset 0 1px 0 #fff;
-}
-:root[data-theme='light'] .btn--ivory:hover:not(:disabled) {
-  border-color: rgba(16, 42, 67, 0.35);
+.btn--inverse:hover:not(:disabled) {
+  background: var(--emphasis-bg-hover);
+  border-color: var(--emphasis-border);
 }
 .btn--ghost {
   background: transparent;

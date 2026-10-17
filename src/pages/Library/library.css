@@ -108,6 +108,20 @@
 
 /* Thumbnails */
 .thumb {
+  /* artwork palette: ivory marks on a navy tile on the dark page; the mirror (navy marks on an ivory tile) on the light page */
+  --th-ink: #f7f3ea;
+  --th-ink-2: #c6d3e4;
+  --th-fill: #eef2f8;
+  --th-spark: #dfe6f0;
+  --th-cell: rgba(255, 255, 255, 0.1);
+  --th-cell-h: rgba(255, 255, 255, 0.3);
+  --th-grid: rgba(255, 255, 255, 0.2);
+  --th-line: rgba(255, 255, 255, 0.32);
+  --th-hot: rgba(167, 195, 239, 0.55);
+  --th-bar-a: #a7c3ef;
+  --th-bar-a2: rgba(167, 195, 239, 0.22);
+  --th-bar-b: #f7f3ea;
+  --th-bar-b2: rgba(247, 243, 234, 0.25);
   position: relative;
   height: 108px;
   overflow: hidden;
@@ -117,12 +131,6 @@
     radial-gradient(90% 120% at 0% 100%, rgba(120, 146, 192, 0.1), transparent 60%),
     linear-gradient(160deg, #172338, #071326);
 }
-:root[data-theme='light'] .thumb {
-  background:
-    radial-gradient(120% 140% at 85% 0%, rgba(180, 198, 228, 0.1), transparent 55%),
-    radial-gradient(90% 120% at 0% 100%, rgba(120, 146, 192, 0.1), transparent 60%),
-    linear-gradient(160deg, #1b2840, #0d1422);
-}
 .thumb--company .thumb-initials {
   position: absolute;
   left: 16px;
@@ -130,21 +138,21 @@
   font-size: 28px;
   font-weight: 500;
   letter-spacing: -0.04em;
-  color: #f7f3ea;
+  color: var(--th-ink);
 }
 .thumb-spark {
   position: absolute;
   right: 14px;
   bottom: 10px;
-  --accent-soft: #dfe6f0;
-  --accent-wash: rgba(255, 255, 255, 0.1);
+  --accent-soft: var(--th-spark);
+  --accent-wash: var(--th-cell);
 }
 .thumb-grid {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
-  fill: rgba(255, 255, 255, 0.2);
+  fill: var(--th-grid);
 }
 .thumb--report {
   display: grid;
@@ -156,17 +164,17 @@
   font-family: var(--font-mono);
   font-size: 9px;
   letter-spacing: 0.3em;
-  color: #c6d3e4;
+  color: var(--th-ink-2);
 }
 .thumb-cover-l2 {
   font-family: var(--font-serif);
   font-size: 22px;
-  color: #f7f3ea;
+  color: var(--th-ink);
 }
 .thumb-cover-rule {
   width: 40px;
   height: 1px;
-  background: #eef2f8;
+  background: var(--th-fill);
 }
 .thumb-orbit {
   position: absolute;
@@ -176,11 +184,11 @@
   height: 64px;
   transform: translateY(-50%);
   fill: none;
-  stroke: rgba(255, 255, 255, 0.32);
+  stroke: var(--th-line);
 }
 .thumb-orbit .fill,
 .thumb--watch .fill {
-  fill: #eef2f8;
+  fill: var(--th-fill);
   stroke: none;
 }
 .thumb--sheet {
@@ -197,13 +205,13 @@
 .thumb-row span {
   height: 8px;
   border-radius: 2px;
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--th-cell);
 }
 .thumb-row span.h {
-  background: rgba(255, 255, 255, 0.3);
+  background: var(--th-cell-h);
 }
 .thumb-row span.p {
-  background: rgba(167, 195, 239, 0.55);
+  background: var(--th-hot);
 }
 .thumb--compare {
   display: flex;
@@ -215,10 +223,10 @@
 .thumb--compare span {
   width: 26px;
   border-radius: 4px 4px 0 0;
-  background: linear-gradient(180deg, #a7c3ef, rgba(167, 195, 239, 0.22));
+  background: linear-gradient(180deg, var(--th-bar-a), var(--th-bar-a2));
 }
 .thumb--compare span:nth-child(2) {
-  background: linear-gradient(180deg, #f7f3ea, rgba(247, 243, 234, 0.25));
+  background: linear-gradient(180deg, var(--th-bar-b), var(--th-bar-b2));
 }
 .thumb--watch svg {
   width: 100%;
@@ -226,15 +234,36 @@
 }
 .thumb--watch .ring {
   fill: none;
-  stroke: rgba(255, 255, 255, 0.4);
+  stroke: var(--th-line);
 }
 .thumb--search {
   display: grid;
   place-items: center;
-  color: #c6d3e4;
+  color: var(--th-ink-2);
 }
 .lib-card--row {
   grid-template-columns: 1fr;
+}
+
+
+:root[data-theme='light'] .thumb {
+  --th-ink: #0f1b2a;
+  --th-ink-2: #4b5b70;
+  --th-fill: #1f3656;
+  --th-spark: #34507a;
+  --th-cell: rgba(16, 42, 67, 0.08);
+  --th-cell-h: rgba(16, 42, 67, 0.22);
+  --th-grid: rgba(16, 42, 67, 0.12);
+  --th-line: rgba(16, 42, 67, 0.3);
+  --th-hot: rgba(63, 114, 216, 0.5);
+  --th-bar-a: #3f6fb8;
+  --th-bar-a2: rgba(63, 111, 184, 0.2);
+  --th-bar-b: #0f1b2a;
+  --th-bar-b2: rgba(15, 27, 42, 0.2);
+  background:
+    radial-gradient(120% 140% at 85% 0%, rgba(255, 255, 255, 0.7), transparent 55%),
+    radial-gradient(90% 120% at 0% 100%, rgba(16, 42, 67, 0.05), transparent 60%),
+    linear-gradient(160deg, #f6f1e6, #ebe4d4);
 }
 
 /* ---------- Artifact types: one quiet tint each, always paired with icon + label ---------- */

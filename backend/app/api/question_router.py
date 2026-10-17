@@ -25,7 +25,7 @@ LIMIT = _rx(
 )
 FINANCIAL = _rx(
     r"revenues?", r"turnover", r"sales", r"profit\w*", r"operating (?:result|profit|income)", r"ebit\w*", r"net (?:income|result|profit)", r"income", r"earnings", r"margins?",
-    r"accounts", r"annual (?:result|report|accounts)", r"financial\w*", r"balance sheet", r"equity", r"total assets", r"debt", r"cash", r"reporting period", r"fiscal", r"fy\d{2,4}",
+    r"accounts", r"annual (?:result|report|accounts)", r"financial\w*", r"balance sheet", r"equity", r"total assets", r"debt", r"liabilit\w*", r"borrowings?", r"gjeld", r"rentebærende", r"cash", r"reporting period", r"fiscal", r"fy\d{2,4}",
     r"omsetning\w*", r"driftsinntekt\w*", r"driftsresultat\w*", r"resultat\w*", r"overskudd", r"regnskap\w*", r"årsresultat\w*", r"egenkapital\w*",
 )
 ANNOUNCE = _rx(
@@ -51,7 +51,9 @@ METRICS = (
     ("annual_result", _rx(r"net (?:income|result|profit)", r"annual result", r"årsresultat\w*", r"bottom[- ]?line", r"profit\w*", r"resultat\w*", r"earnings", r"overskudd")),
     ("total_assets", _rx(r"total assets", r"assets", r"eiendeler")),
     ("equity", _rx(r"equity", r"egenkapital\w*")),
-    ("debt", _rx(r"debt", r"gjeld")),
+    # total liabilities (what the register files as "sum gjeld") and debt are DIFFERENT measures: a question about debt never selects total liabilities
+    ("total_liabilities", _rx(r"liabilit\w*", r"sum gjeld", r"total gjeld", r"(?<!rentebærende )(?<!netto )gjeld")),
+    ("debt", _rx(r"debt", r"borrowings?", r"interest[- ]bearing", r"rentebærende", r"netto gjeld")),
     ("cash", _rx(r"cash", r"kontanter", r"bankinnskudd")),
 )
 PERIOD = _rx(r"reporting period", r"period", r"fiscal year", r"financial year", r"fy\d{2,4}", r"which year", r"regnskapsår", r"regnskapsperiode")

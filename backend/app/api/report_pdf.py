@@ -664,7 +664,7 @@ class ReportBuilder:
             out.append(self.table(["Metric"] + chunk, rows, [w_first] + [(1 - w_first) / len(chunk)] * len(chunk)))
             out.append(Spacer(1, 6))
         wanted = [("revenue", "Revenue"), ("operating_result", "Operating result"), ("annual_result", "Annual result"), ("total_assets", "Total assets"), ("equity", "Equity"),
-                  ("debt", "Total debt"), ("cash", "Cash")]
+                  ("total_liabilities", "Total liabilities"), ("cash", "Cash")]
         have = {s["key"] for s in series if s["points"]}
         missing = [label for key, label in wanted if key not in have]
         if missing:

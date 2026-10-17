@@ -40,6 +40,8 @@ import { ALL_SPECS, SECTOR_KEYWORDS } from './companies';
 import { MUNICIPALITIES } from './geo';
 import { NOW } from './profileBuilder';
 import { answerFromProfile } from './answers';
+import { chatContextFor, chatReplyFor } from './chat';
+import { createMockThreads } from './chatThreads';
 import { briefFromProfile, explainFromProfile } from './briefs';
 import { buildScript, planFor } from './researchScript';
 import {
@@ -713,6 +715,28 @@ export const mockApi: CognisApi = {
         ].slice(0, stale * 2),
         missingFields: p.knowns.filter((k) => k.status === 'unknown').map((k) => k.label),
       };
+    },
+  },
+
+  chat: {
+    threads: createMockThreads({
+      companies: () => ALL_SPECS.map((c) => ({ orgNumber: c.org, legalName: c.name })),
+      reply: (org, q) => (specsByOrg.has(org) ? clone(chatReplyFor(profileFor(org), q, nowIso())) : null),
+      wait: (ms, signal) => sleep(ms, signal),
+      now: nowIso,
+    }),
+    async context(orgNumber) {
+      await latency(200);
+      if (!specsByOrg.has(orgNumber)) throw new ApiError('not_found', 'Company not found.', 404);
+      return clone(chatContextFor(profileFor(orgNumber)));
+    },
+    async ask({ orgNumber, question, expectedName }) {
+      await latency(700);
+      if (!specsByOrg.has(orgNumber)) throw new ApiError('not_found', 'Company not found.', 404);
+      const p = profileFor(orgNumber);
+      if (expectedName && expectedName.trim().toLowerCase() !== p.company.legalName.trim().toLowerCase())
+        throw new ApiError('ambiguous', `Organisation number ${orgNumber} is registered to ${p.company.legalName}, not ${expectedName}.`, 409);
+      return clone(chatReplyFor(p, question, nowIso()));
     },
   },
 

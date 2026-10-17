@@ -1,3 +1,4 @@
+import { PressureText } from '@/components/common/PressureText';
 import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -50,10 +51,16 @@ export default function HomePage() {
         <GlobeStage className="hero-globe" />
         <div className="hero-inner">
           <span className="eyebrow">Research · Discover · Verify</span>
-          <h1 id="hero-title" className="hero-title t-display">
-            <span className="t-gradient">Find.</span> <span className="t-gradient">Understand.</span>{' '}
-            <em className="t-serif hero-accent">Verify.</em>
-          </h1>
+          <PressureText
+            as="h1"
+            id="hero-title"
+            className="hero-title t-display"
+            segments={[
+              { text: 'Find.', className: 't-gradient' },
+              { text: 'Understand.', className: 't-gradient' },
+              { text: 'Verify.', className: 't-serif hero-accent', as: 'em', pressure: false },
+            ]}
+          />
           <p className="hero-sub">Company intelligence built from public evidence.</p>
           <HeroSearch autoFocus={false} />
           <div className="hero-examples" aria-label="Example searches">
@@ -70,8 +77,8 @@ export default function HomePage() {
 
       <div className="page home-body">
         <section aria-label="Start" className="action-grid">
-          {ACTIONS.map(({ to, icon: Icon, title, text }, i) => (
-            <Link key={to} to={to} className="action-card on-ivory" style={{ animationDelay: `${80 + i * 50}ms` }}>
+          {ACTIONS.map(({ to, icon: Icon, title, text }) => (
+            <Link key={to} to={to} className="action-card on-inverse">
               <span className="action-icon">
                 <Icon aria-hidden />
               </span>

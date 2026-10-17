@@ -96,9 +96,10 @@ def parse_financial_record(item: dict[str, Any]) -> dict[str, Any]:
         "cash": _get(item, "eiendeler", "sumBankinnskuddOgKontanter"),
         "receivables": _get(item, "eiendeler", "sumFordringer"),
         "equity": _get(item, "egenkapitalGjeld", "egenkapital", "sumEgenkapital"),
-        "debt": _get(item, "egenkapitalGjeld", "gjeldOversikt", "sumGjeld"),
-        "short_term_debt": _get(item, "egenkapitalGjeld", "gjeldOversikt", "kortsiktigGjeld", "sumKortsiktigGjeld"),
-        "long_term_debt": _get(item, "egenkapitalGjeld", "gjeldOversikt", "langsiktigGjeld", "sumLangsiktigGjeld"),
+        # "sum gjeld" is TOTAL LIABILITIES (all obligations, interest-bearing or not) — not debt, interest-bearing debt or net debt
+        "total_liabilities": _get(item, "egenkapitalGjeld", "gjeldOversikt", "sumGjeld"),
+        "current_liabilities": _get(item, "egenkapitalGjeld", "gjeldOversikt", "kortsiktigGjeld", "sumKortsiktigGjeld"),
+        "non_current_liabilities": _get(item, "egenkapitalGjeld", "gjeldOversikt", "langsiktigGjeld", "sumLangsiktigGjeld"),
         "journal_number": item.get("journalnr"),
     }
 
@@ -121,7 +122,7 @@ def normalize_financials(body: Any) -> dict[str, Any]:
             "annual_result": _get(item, "resultatregnskapResultat", "aarsresultat"),
             "assets": _get(item, "eiendeler", "sumEiendeler"),
             "equity": _get(item, "egenkapitalGjeld", "egenkapital", "sumEgenkapital"),
-            "debt": _get(item, "egenkapitalGjeld", "gjeldOversikt", "sumGjeld"),
+            "total_liabilities": _get(item, "egenkapitalGjeld", "gjeldOversikt", "sumGjeld"),
         })
     return {"records": out}
 

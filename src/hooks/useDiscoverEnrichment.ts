@@ -17,6 +17,25 @@ export function clearEnrichmentCache() {
   cache.clear();
 }
 
+/**
+ * The shared lookup cache. Discover and Compare read and write the same entries, so a figure looked up for a card is not fetched again for the
+ * comparison (and the other way round). Fields are merged per company; only figures that were actually established are kept
+ * (an unreachable source is retried on the next visit rather than remembered).
+ */
+export function readCachedField(org: string, field: EnrichmentField): EnrichedFigure | undefined {
+  const hit = cache.get(org);
+  if (!hit || Date.now() - hit.at >= TTL_MS) return undefined;
+  return hit.data.fields[field];
+}
+export function writeCachedLookup(r: CompanyEnrichment): void {
+  // per figure: one that was established is kept, one whose source was unreachable is not (it is tried again on the next visit)
+  const kept = Object.fromEntries(Object.entries(r.fields).filter(([, f]) => f && f.state !== 'unavailable'));
+  if (!Object.keys(kept).length) return;
+  const prev = cache.get(r.orgNumber);
+  const fresh = prev && Date.now() - prev.at < TTL_MS ? prev.data.fields : {};
+  cache.set(r.orgNumber, { at: Date.now(), data: { ...r, fields: { ...fresh, ...kept } } });
+}
+
 /** The figures a result card is missing that a lookup can answer. Researched companies already show what research established. */
 export function missingFigures(c: CompanySummary): EnrichmentField[] {
   if (c.researchState !== 'not_researched') return [];
@@ -88,8 +107,7 @@ export function useDiscoverEnrichment(items: CompanySummary[] | undefined, { ena
         results = b.map((w) => failedLookup(w.org, w.fields, (err as Error).message || 'request failed'));
       }
       if (ctrl.signal.aborted) return;
-      const at = Date.now();
-      for (const r of results) if (Object.values(r.fields).every((f) => f && f.state !== 'unavailable')) cache.set(r.orgNumber, { at, data: r });
+      for (const r of results) writeCachedLookup(r);
       done += b.length;
       setByOrg((prev) => ({ ...prev, ...Object.fromEntries(results.map((r) => [r.orgNumber, r])) }));
       setPending((prev) => {

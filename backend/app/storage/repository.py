@@ -11,6 +11,7 @@ import json
 from typing import Any
 
 from ..core.util import now_iso, sha256_json, stable_id
+from ..extraction.financial_metrics import upgrade_record
 from .db import Database, dumps, loads
 
 
@@ -169,15 +170,15 @@ def _module_for_field(field: str) -> str:
 # ------------------------------------------------------------------ reads --
 def latest_record(db: Database, org: str) -> dict[str, Any] | None:
     row = db.one("SELECT research_json FROM profile_versions WHERE org_number = ? ORDER BY created_at DESC LIMIT 1", (org,))
-    return loads(row["research_json"]) if row else None
+    return upgrade_record(loads(row["research_json"])) if row else None
 
 
 def previous_record(db: Database, org: str, before_version: str | None = None) -> dict[str, Any] | None:
     rows = db.all("SELECT id, research_json FROM profile_versions WHERE org_number = ? ORDER BY created_at DESC LIMIT 2", (org,))
     if before_version:
         rows = [r for r in rows if r["id"] != before_version]
-        return loads(rows[0]["research_json"]) if rows else None
-    return loads(rows[1]["research_json"]) if len(rows) > 1 else None
+        return upgrade_record(loads(rows[0]["research_json"])) if rows else None
+    return upgrade_record(loads(rows[1]["research_json"])) if len(rows) > 1 else None
 
 
 def record_versions(db: Database, org: str) -> list[dict[str, Any]]:
@@ -187,7 +188,7 @@ def record_versions(db: Database, org: str) -> list[dict[str, Any]]:
 
 def record_by_version(db: Database, version_id: str) -> dict[str, Any] | None:
     row = db.one("SELECT research_json FROM profile_versions WHERE id = ?", (version_id,))
-    return loads(row["research_json"]) if row else None
+    return upgrade_record(loads(row["research_json"])) if row else None
 
 
 def changes_for(db: Database, org: str, limit: int = 100) -> list[dict[str, Any]]:
@@ -197,7 +198,7 @@ def changes_for(db: Database, org: str, limit: int = 100) -> list[dict[str, Any]
 
 def company_run_record(db: Database, run_id: str, org: str) -> dict[str, Any] | None:
     row = db.one("SELECT research_json FROM profile_versions WHERE org_number = ? AND run_id = ? ORDER BY created_at DESC LIMIT 1", (org, run_id))
-    return loads(row["research_json"]) if row else None
+    return upgrade_record(loads(row["research_json"])) if row else None
 
 
 def save_run(db: Database, run_id: str, *, kind: str, status: str, started_at: str, finished_at: str | None, input_count: int, completed_count: int,

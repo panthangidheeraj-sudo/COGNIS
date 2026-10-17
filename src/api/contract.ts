@@ -11,6 +11,14 @@ import type {
   ArtifactSummary,
   BackendHealth,
   BatchStatus,
+  ChatContext,
+  ChatProgress,
+  ChatReply,
+  ChatThread,
+  ChatThreadSummary,
+  ThreadAskInput,
+  ThreadAskResult,
+  ChatRequest,
   ChangeExplanation,
   ColumnPreview,
   CompanyArtifact,
@@ -83,6 +91,25 @@ export interface ResearchApi {
   assess(artifactId: string): Promise<ContinueResearchAssessment>;
 }
 
+export interface ChatApi {
+  /** Identity, suggested questions, per-area coverage and capabilities for the Ask AI panel. */
+  context(orgNumber: string): Promise<ChatContext>;
+  /** Company-specific, source-grounded answer. Never switches company; citations point to real evidence. */
+  ask(input: ChatRequest, onProgress?: (p: ChatProgress) => void): Promise<ChatReply>;
+  /** Durable conversations for the AI Chat page. */
+  threads: ChatThreadsApi;
+}
+
+export interface ChatThreadsApi {
+  list(): Promise<ChatThreadSummary[]>;
+  get(id: string): Promise<ChatThread>;
+  /** Idempotent: creating an id that exists returns it. */
+  create(input: { id: string; orgNumber?: string; title?: string }): Promise<ChatThreadSummary>;
+  rename(id: string, title: string): Promise<ChatThreadSummary>;
+  remove(id: string): Promise<void>;
+  ask(input: ThreadAskInput): Promise<ThreadAskResult>;
+}
+
 export interface LibraryApi {
   list(query: LibraryQuery, signal?: AbortSignal): Promise<LibraryPage>;
   recent(): Promise<ArtifactSummary[]>;
@@ -138,6 +165,7 @@ export interface CognisApi {
   search: SearchApi;
   companies: CompaniesApi;
   research: ResearchApi;
+  chat: ChatApi;
   library: LibraryApi;
   sheets: SheetsApi;
   compare: CompareApi;

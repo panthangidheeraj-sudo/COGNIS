@@ -163,6 +163,11 @@ def test_quick_reads_the_pages_its_limit_allows_and_deep_reads_more_of_the_same_
     assert len(deep_requests) > len(quick_requests)
 
 
+def without_regulatory(calls: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Deep research also makes one official-regulator search (domain E); these tests are about the job-page / website discovery searches."""
+    return [c for c in calls if "vedtak tilsyn" not in str(c.get("query"))]
+
+
 def test_quick_skips_the_search_for_job_pages_unless_the_focus_is_hiring_and_deep_always_runs_it(settings: Settings) -> None:
     settings_with(settings, tavily_api_key=TAVILY_KEY)
     outcomes: dict[str, tuple[dict[str, Any], list[dict[str, Any]]]] = {}
@@ -171,7 +176,8 @@ def test_quick_skips_the_search_for_job_pages_unless_the_focus_is_hiring_and_dee
         net.load_brreg_probes()
         net.add_site("autobjorn.no", site())  # a careers page with no opening, so search discovery is the only way to look further
         net.handlers.append(tavily_handler([], calls))
-        outcomes[label] = (run(orchestrate(net, mode=mode, focus=focus, provider=FakeProvider())), calls)
+        record = run(orchestrate(net, mode=mode, focus=focus, provider=FakeProvider()))
+        outcomes[label] = (record, without_regulatory(calls))
 
     assert outcomes["quick"][1] == [] and outcomes["quick-financials"][1] == []  # optional discovery the focus does not need
     assert len(outcomes["quick-hiring"][1]) == 1 and len(outcomes["deep"][1]) == 1
@@ -267,7 +273,7 @@ def test_an_unrelated_company_site_is_not_verified_in_either_mode_and_deeper_sea
         net.add_site("autobjorn.no", verified_site("Helt Annet AS", "914552108"))  # the register's website belongs to a different company
         net.add_site("autobjorn-bergen.no", verified_site("Autobjørn Bergen AS", "914552108"))  # and the search offers a look-alike
         net.handlers.append(tavily_handler([{"url": "https://autobjorn-bergen.no/", "title": "Autobjørn Bergen AS", "content": "Autobjørn Bergen AS bilforhandler"}], calls))
-        runs[mode] = (run(orchestrate(net, mode=mode, provider=FakeProvider())), calls)
+        runs[mode] = (run(orchestrate(net, mode=mode, provider=FakeProvider())), without_regulatory(calls))
     (quick, quick_calls), (deep, deep_calls) = runs["quick"], runs["deep"]
     assert quick_calls == [] and len(deep_calls) == 1  # Deep looked wider ...
     assert any(a["domain"] == "autobjorn-bergen.no" for a in deep["site_attempts"])

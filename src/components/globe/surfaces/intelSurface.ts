@@ -187,8 +187,10 @@ export function createIntelSurface({ renderer, lowPower, light, invalidate }: Su
   return {
     globe: [sphere, land],
     scene: [halo],
-    // the sphere is pale in both themes, so markers are navy ink on it
-    markers: { core: '#16243d', focusCore: '#0a1630', ring: '#33445f', focusRing: '#0a1630', coreScale: 0.005, focusCoreScale: 0.0085, ringBase: 0.012, focusRingBase: 0.022, ringSpan: 0.03, focusRingSpan: 0.062, ringOpacity: 0.38, focusRingOpacity: 0.66 },
+    // markers take the geography's ink: navy on the pale dark-theme sphere, ivory on the navy light-theme sphere
+    markers: light
+      ? { core: '#f4efe3', focusCore: '#ffffff', ring: '#c6d3e4', focusRing: '#ffffff', coreScale: 0.005, focusCoreScale: 0.0085, ringBase: 0.012, focusRingBase: 0.022, ringSpan: 0.03, focusRingSpan: 0.062, ringOpacity: 0.42, focusRingOpacity: 0.7 }
+      : { core: '#16243d', focusCore: '#0a1630', ring: '#33445f', focusRing: '#0a1630', coreScale: 0.005, focusCoreScale: 0.0085, ringBase: 0.012, focusRingBase: 0.022, ringSpan: 0.03, focusRingSpan: 0.062, ringOpacity: 0.38, focusRingOpacity: 0.66 },
     arcs: { hubs: ARC_HUBS, color: raw(pal.ink), base: 1.1, signal: 0.42, nodes: { color: pal.ink, size: 0.0052, opacity: light ? 0.6 : 0.55 } },
     motion: { baseSpeed: 0.05, maxImpulse: 0.16, impulsePerPx: 0.0006, impulseDecayS: 1.1, pointerYaw: 0.09, pointerPitch: 0.05, pointerCam: 0.06 },
     update() {

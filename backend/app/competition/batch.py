@@ -25,6 +25,7 @@ from ..net.http import HttpClient
 from ..providers.llm_base import LLMProvider
 from ..providers.registry import build_provider, describe
 from ..runtime.budgets import BudgetLimits, RunBudget
+from ..runtime.lag import LoopLagMonitor
 from ..storage import repository as repo
 from ..storage.cache import ResponseCache
 from ..storage.db import Database, get_db
@@ -97,6 +98,7 @@ async def run_batch(cfg: BatchConfig, settings: Settings | None = None) -> dict[
                 records[org] = rec
                 resumed += 1
     runtimes: list[int] = []
+    lag = LoopLagMonitor()  # measures event-loop stalls so a slow run can be explained from the report (diagnostics only)
     async with HttpClient(transport=cfg.transport, cache=cache, recorder=repo.tool_call_recorder(db)) as http:
         provider = cfg.provider if cfg.use_provider_override else build_provider(http, s)
         orch = Orchestrator(http=http, run_budget=budget, provider=provider, settings=s, db=db)
@@ -135,7 +137,11 @@ async def run_batch(cfg: BatchConfig, settings: Settings | None = None) -> dict[
             if done % 10 == 0:
                 log_event(log, "progress", run_id=run_id, done=done + resumed, total=len(orgs), requests=budget.spend.requests)
 
-        await asyncio.gather(*(one(org) for org in orgs))
+        lag.start()
+        try:
+            await asyncio.gather(*(one(org) for org in orgs))
+        finally:
+            await lag.stop()
 
     completed_at = now_iso()
     envelopes = []
@@ -161,6 +167,7 @@ async def run_batch(cfg: BatchConfig, settings: Settings | None = None) -> dict[
     report = _report(run_id, started_at, completed_at, time.monotonic() - t0, orgs, envelopes, records, budget, bulk_meta, validation, resumed, change_total,
                      previous, runtimes, s)
     report["free_source_indexes"] = {"nav_job_ads": nav_meta}
+    report["event_loop_lag"] = lag.report()
     if cfg.report:
         Path(cfg.report).parent.mkdir(parents=True, exist_ok=True)
         Path(cfg.report).write_text(_json(report), encoding="utf-8")

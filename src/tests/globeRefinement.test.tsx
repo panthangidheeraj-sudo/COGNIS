@@ -136,12 +136,13 @@ describe('intel palette', () => {
     return (Math.max(...c) - Math.min(...c)) / Math.max(...c);
   };
 
-  it('is an ivory-white sphere with navy-ink geography, and the paper-and-ink sphere on the light theme', () => {
+  it('is an ivory-white sphere with navy-ink geography, and the exact inverse (a navy sphere with ivory-ink geography) on the light theme', () => {
     expect(lum(INTEL_DARK.mid)).toBeGreaterThan(235); // bright ivory-white ocean (the lit side)
     expect(lum(INTEL_DARK.deep)).toBeGreaterThan(170); // even the shaded side is light: the ocean never reads as dark blue
     expect(lum(INTEL_DARK.ink)).toBeLessThan(60); // navy land, coast and dots
-    expect(lum(INTEL_LIGHT.mid)).toBeGreaterThan(200); // paper
-    expect(lum(INTEL_LIGHT.ink)).toBeLessThan(60); // navy ink
+    expect(lum(INTEL_LIGHT.mid)).toBeLessThan(80); // navy ocean (the lit side)
+    expect(lum(INTEL_LIGHT.deep)).toBeLessThan(lum(INTEL_LIGHT.mid)); // the shaded side is deeper still
+    expect(lum(INTEL_LIGHT.ink)).toBeGreaterThan(200); // ivory land, coast and dots
     // restrained: a soft rim, a crisp but never solid coast, no glow
     for (const p of [INTEL_DARK, INTEL_LIGHT]) {
       expect(p.rimAmount).toBeLessThan(0.5);
@@ -249,18 +250,24 @@ describe('white oceans on the Home and Discover globe', () => {
     expect(litSide - shadeSide).toBeLessThan(120); // ... but it is shading, not a dark half
   });
 
-  it('keeps the light theme a paper sphere, a little deeper than the dark theme white', () => {
+  it('makes the light theme the inverse of the dark one: a navy sphere, far darker than the dark theme white', () => {
     const light = sphereLum(paint('light', 'intel').image!).mean;
     const dark = sphereLum(paint('dark', 'intel').image!).mean;
-    expect(light).toBeGreaterThan(190);
+    expect(light).toBeLessThan(90);
+    expect(dark).toBeGreaterThan(190);
     expect(light).toBeLessThan(dark);
   });
 
-  it('draws no hard-coded navy ocean and no ivory markers (they would vanish on a white sphere)', () => {
-    expect(intelSurfaceSource).not.toMatch(/#03060c|#0a1220/i); // the old ocean colours
-    expect(intelSurfaceSource).not.toMatch(/#f4efe4|#ffffff/i); // markers are navy ink on the pale sphere
+  it('draws no hard-coded ocean, and gives the markers the ink of the sphere they sit on (navy on the pale sphere, ivory on the navy one)', () => {
+    expect(intelSurfaceSource).not.toMatch(/#03060c/i); // the old ocean colour
     expect(intelSurfaceSource).toMatch(/uMid/); // the ocean colour comes from the palette
     expect(intelSurfaceSource).toMatch(/pal\.mid/);
+    // ivory markers exist only in the light-theme branch; the dark-theme branch keeps navy ink
+    const markers = /markers:\s*light\s*\?\s*\{([^}]*)\}\s*:\s*\{([^}]*)\}/.exec(intelSurfaceSource);
+    expect(markers).not.toBeNull();
+    expect(markers![1]).toMatch(/#f4efe3/i);
+    expect(markers![2]).not.toMatch(/#f4efe3|#ffffff/i);
+    expect(markers![2]).toMatch(/#16243d/i);
   });
 
   it('leaves the natural Earth of the About page unchanged: blue ocean, its own surface, none of the intel palette', () => {

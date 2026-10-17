@@ -143,7 +143,7 @@ export default function AboutPage() {
             ].map(([Icon, title, source, text], i) => {
               const I = Icon as typeof Building2;
               return (
-                <div key={title as string} className="dossier-layer paper" data-reveal style={{ '--i': i } as CSSProperties}>
+                <div key={title as string} className="dossier-layer paper flip-in-light" data-reveal style={{ '--i': i } as CSSProperties}>
                   <span className="dossier-icon">
                     <I />
                   </span>
@@ -198,7 +198,7 @@ export default function AboutPage() {
       </section>
 
       {/* ---------------- 05: Evidence architecture — an ivory reading chapter ---------------- */}
-      <section id="act-evidence" className="act act--evidence paper" data-act aria-labelledby="h-evidence">
+      <section id="act-evidence" className="act act--evidence paper flip-in-light" data-act aria-labelledby="h-evidence">
         <div className="pin">
           <div className="act-copy">
             <Copy id="h-evidence" num="05" kicker="Evidence" title={<>Sources have <em className="t-serif">rank.</em></>}>
@@ -290,7 +290,7 @@ export default function AboutPage() {
               Discover companies
             </Link>
           </div>
-          <div className="final-notes paper" data-reveal>
+          <div className="final-notes paper flip-in-light" data-reveal>
             <section>
               <h3>Freshness</h3>
               <p>

@@ -63,7 +63,7 @@ export function Segmented<T extends string>({
   tone?: 'default' | 'ivory';
 }) {
   return (
-    <div className={tone === 'ivory' ? 'segmented on-ivory' : 'segmented'} role="group" aria-label={label}>
+    <div className={tone === 'ivory' ? 'segmented on-inverse' : 'segmented'} role="group" aria-label={label}>
       {options.map((o) => (
         <button key={o.value} aria-pressed={o.value === value} onClick={() => onChange(o.value)} title={o.title}>
           {o.icon}

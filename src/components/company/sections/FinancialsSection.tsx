@@ -17,10 +17,10 @@ const GROUPS: { id: string; label: string; keys: FinancialMetricKey[] }[] = [
   { id: 'balance', label: 'Assets & equity', keys: ['total_assets', 'equity'] },
   { id: 'fte', label: 'Average FTEs', keys: ['employees'] },
 ];
-const CASH_KEYS: FinancialMetricKey[] = ['cash', 'debt', 'equity'];
+const CASH_KEYS: FinancialMetricKey[] = ['cash', 'total_liabilities', 'equity'];
 
 type View = 'trend' | 'annual' | 'ratios' | 'cash' | 'sources';
-const VIEW_LABEL: Record<View, string> = { trend: 'Trend', annual: 'Annual values', ratios: 'Ratios', cash: 'Cash / debt', sources: 'Sources' };
+const VIEW_LABEL: Record<View, string> = { trend: 'Trend', annual: 'Annual values', ratios: 'Ratios', cash: 'Cash / liabilities', sources: 'Sources' };
 
 /** Each amount carries the currency its own filing states; a change is only computed between amounts in the same currency (no conversion is ever applied). */
 const fmtShort = (s: Pick<FinancialSeries, 'unit'>, v: number | null, currency?: string) =>
@@ -33,7 +33,7 @@ const plotted = (s: FinancialSeries): FinancialSeries => {
 };
 
 /**
- * Financials. One view at a time — Trend, Annual values, Ratios, Cash / debt,
+ * Financials. One view at a time — Trend, Annual values, Ratios, Cash / liabilities,
  * Sources — and only the views the filed data actually supports. Every chart
  * has a "View table" beneath it with exact values, periods, changes and the
  * source for each point.
@@ -75,7 +75,7 @@ export function FinancialsSection({ profile, compactCharts, onExplain }: { profi
     );
 
   const latest = (k: FinancialMetricKey) => fin.series.find((s) => s.key === k)?.points.at(-1);
-  const headline: FinancialMetricKey[] = ['revenue', 'operating_result', 'annual_result', 'total_assets', 'equity', 'debt', 'cash'];
+  const headline: FinancialMetricKey[] = ['revenue', 'operating_result', 'annual_result', 'total_assets', 'equity', 'total_liabilities', 'cash'];
   const selected = (groups.find((g) => g.id === group) ?? groups[0])?.keys.map((k) => fin.series.find((s) => s.key === k)).filter((s): s is FinancialSeries => !!s && s.points.length > 0).map(plotted) ?? [];
   const cashSeries = CASH_KEYS.map((k) => fin.series.find((s) => s.key === k)).filter((s): s is FinancialSeries => !!s && s.points.length > 0).map(plotted);
   const mixed = fin.currency === MIXED_CURRENCIES;
@@ -206,15 +206,15 @@ export function FinancialsSection({ profile, compactCharts, onExplain }: { profi
       {active === 'cash' && (
         <section className="card paper fin-paper" aria-labelledby="fin-cash" data-search-block="financial-cash">
           <div className="card-head">
-            <h2 id="fin-cash">Cash / debt</h2>
-            <span className="t-xs t-muted">Cash, total debt and equity as filed at each year end</span>
+            <h2 id="fin-cash">Cash / liabilities</h2>
+            <span className="t-xs t-muted">Cash, total liabilities (sum gjeld — not interest-bearing debt) and equity as filed at each year end</span>
           </div>
           {cashSeries[0]?.points.length >= 2 ? (
             <FinancialChart series={cashSeries} sourceIndex={profile.sourceIndex} kind="bar" height={chartH} />
           ) : (
             <p className="t-sm t-muted">Only one reporting period is available, so no chart is drawn.</p>
           )}
-          <ChartTable series={cashSeries} profile={profile} caption="Cash, debt and equity by reporting period" open={cashSeries[0]?.points.length < 2} />
+          <ChartTable series={cashSeries} profile={profile} caption="Cash, total liabilities and equity by reporting period" open={cashSeries[0]?.points.length < 2} />
         </section>
       )}
 

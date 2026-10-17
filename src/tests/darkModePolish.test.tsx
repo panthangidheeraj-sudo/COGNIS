@@ -2,7 +2,7 @@
  * Dark-mode UI polish: ivory surfaces on the dark workspace, a bright sidebar, a clearer run history and one-shot About reveals.
  *
  * jsdom does no layout and loads no stylesheets (the Vitest CSS pipeline returns empty text), so the guarantees are pinned two ways: the
- * components that carry the shared `.on-ivory` scope (and keep their behaviour), and the stylesheet contracts read straight from disk.
+ * components that carry the shared `.on-inverse` scope (and keep their behaviour), and the stylesheet contracts read straight from disk.
  * The pages were also checked in a real browser, in dark and light, at 1440 and 420 px.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -84,15 +84,17 @@ describe('ivory surface tokens', () => {
     for (const ink of ['--ivory-ink', '--ivory-ink-2', '--ivory-ink-3', '--ivory-ink-4'])
       for (const bg of surfaces) expect(contrast(hex(ink), bg), `${ink} on ${bg}`).toBeGreaterThanOrEqual(4.5);
   });
-  it('draws the keyboard focus ring with enough contrast on ivory and on the dark navy page (WCAG 1.4.11: 3:1)', () => {
-    const dark = tokensCss.indexOf("--ivory-ring: #3f7be0");
-    expect(dark).toBeGreaterThan(0);
+  it('draws the keyboard focus ring with enough contrast on the inverse surface and on the page around it (WCAG 1.4.11: 3:1)', () => {
+    // dark page: the ring sits on ivory fields and on the navy page
+    expect(tokensCss).toContain('--inverse-ring: #3f7be0');
     for (const bg of [...surfaces, '#0f1725', '#06111c']) expect(contrast('#3f7be0', bg), `ring on ${bg}`).toBeGreaterThanOrEqual(3);
-    const lightBlock = tokensCss.indexOf(":root[data-theme='light']");
-    for (const bg of [...surfaces, hex('--c-ivory')]) expect(contrast(hex('--ivory-ring', lightBlock), bg)).toBeGreaterThanOrEqual(3);
+    // light page: the mirrored scope is a navy field on the ivory canvas
+    const lightRing = hex('--inverse-ring', tokensCss.indexOf(":root[data-theme='light'] {"));
+    for (const bg of [hex('--c-ivory'), '#0f1725', '#141d2d']) expect(contrast(lightRing, bg), `light ring on ${bg}`).toBeGreaterThanOrEqual(3);
+    expect(contrast(lightRing, hex('--c-ivory'))).toBeGreaterThanOrEqual(4.5);
   });
-  it('remaps the semantic tokens inside the .on-ivory scope, so everything within reads dark-on-light', () => {
-    const scope = rule(ivoryCss, '.on-ivory');
+  it('remaps the semantic tokens inside the .on-inverse scope on the dark page, so everything within reads dark-on-light', () => {
+    const scope = rule(ivoryCss, ":root:not([data-theme='light']) .on-inverse");
     for (const t of ['--text-1', '--text-2', '--text-3', '--text-4', '--line', '--line-strong', '--line-focus', '--surface-1', '--surface-2', '--surface-3', '--primary-bg', '--ok', '--warn', '--err'])
       expect(scope[t], t).toBeTruthy();
     expect(scope['--text-1']).toBe('var(--ivory-ink)');
@@ -104,15 +106,15 @@ describe('ivory surface tokens', () => {
     expect(mainTsx).toContain("import './styles/ivory.css'");
   });
   it('gives fields, chips and toggles hover, focus, selected and disabled states', () => {
-    expect(hasRule(ivoryCss, ':is(.input, .textarea, .select).on-ivory:focus-visible')).toBe(true);
-    expect(rule(ivoryCss, '.chip.on-ivory:hover:not(:disabled):not([aria-disabled=\'true\'])')['border-color']).toBeTruthy();
-    expect(rule(ivoryCss, ".chip.on-ivory[aria-pressed='true']")['background']).toBe('var(--ivory-ink)');
-    expect(rule(ivoryCss, '.chip.on-ivory:disabled')['cursor']).toBe('not-allowed');
-    expect(rule(ivoryCss, '.chip.on-ivory:focus-visible')['border-radius']).toBe('var(--r-pill)'); // a pill stays a pill when focused
-    expect(rule(ivoryCss, ".segmented.on-ivory button[aria-pressed='true']")['background']).toBe('var(--ivory-ink)');
-    expect(hasRule(ivoryCss, '.segmented.on-ivory button:focus-visible')).toBe(true);
+    expect(hasRule(ivoryCss, ':is(.input, .textarea, .select).on-inverse:focus-visible')).toBe(true);
+    expect(rule(ivoryCss, '.chip.on-inverse:hover:not(:disabled):not([aria-disabled=\'true\'])')['border-color']).toBeTruthy();
+    expect(rule(ivoryCss, ".chip.on-inverse[aria-pressed='true']")['background']).toBe('var(--text-1)');
+    expect(rule(ivoryCss, '.chip.on-inverse:disabled')['cursor']).toBe('not-allowed');
+    expect(rule(ivoryCss, '.chip.on-inverse:focus-visible')['border-radius']).toBe('var(--r-pill)'); // a pill stays a pill when focused
+    expect(rule(ivoryCss, ".segmented.on-inverse button[aria-pressed='true']")['background']).toBe('var(--text-1)');
+    expect(hasRule(ivoryCss, '.segmented.on-inverse button:focus-visible')).toBe(true);
     // placeholders are fully opaque ink-4, never the faded dark-theme grey
-    expect(strip(ivoryCss)).toMatch(/::placeholder\s*\{\s*color:\s*var\(--ivory-ink-4\);\s*opacity:\s*1;/);
+    expect(strip(ivoryCss)).toMatch(/::placeholder\s*\{\s*color:\s*var\(--text-4\);\s*opacity:\s*1;/);
   });
 });
 
@@ -125,10 +127,10 @@ describe('Segmented', () => {
       { value: 'b', label: 'Beta' },
     ];
     const { rerender } = render(<Segmented label="Pick" value="a" onChange={onChange} options={opts} />);
-    expect(screen.getByRole('group', { name: 'Pick' })).not.toHaveClass('on-ivory');
+    expect(screen.getByRole('group', { name: 'Pick' })).not.toHaveClass('on-inverse');
     rerender(<Segmented label="Pick" value="a" onChange={onChange} options={opts} tone="ivory" />);
     const group = screen.getByRole('group', { name: 'Pick' });
-    expect(group).toHaveClass('segmented', 'on-ivory');
+    expect(group).toHaveClass('segmented', 'on-inverse');
     expect(screen.getByRole('button', { name: 'Alpha' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('button', { name: 'Beta' })).toHaveAttribute('aria-pressed', 'false');
     fireEvent.click(screen.getByRole('button', { name: 'Beta' }));
@@ -147,7 +149,7 @@ describe('Home', () => {
       expect.stringContaining('Create a data sheet'),
       expect.stringContaining('Explore the library'),
     ]);
-    cards.forEach((c) => expect(c).toHaveClass('on-ivory'));
+    cards.forEach((c) => expect(c).toHaveClass('on-inverse'));
     // the card title reads from the remapped ink token, not a hard-coded colour
     expect(rule(homeCss, '.action-title')['color']).toBe('var(--text-1)');
     expect(rule(homeCss, '.action-card')['background']).toBe('var(--surface-1)');
@@ -163,9 +165,9 @@ describe('Discover', () => {
   it('draws the search bar and the query suggestions on ivory, and the suggestions still search', async () => {
     const { container } = renderWithProviders(<DiscoverPage />, { route: '/discover' });
     const form = container.querySelector('form[role="search"]')!;
-    expect(form).toHaveClass('disc-search', 'on-ivory', 'is-bar');
+    expect(form).toHaveClass('disc-search', 'on-inverse', 'is-bar');
     const chips = await screen.findAllByRole('button', { name: /Norwegian SaaS companies with over 100 employees/ });
-    chips.forEach((c) => expect(c).toHaveClass('chip', 'on-ivory'));
+    chips.forEach((c) => expect(c).toHaveClass('chip', 'on-inverse'));
     fireEvent.click(chips[0]);
     expect(await screen.findByDisplayValue('Norwegian SaaS companies with over 100 employees')).toBeInTheDocument();
   });
@@ -176,15 +178,15 @@ describe('Research', () => {
   it('draws the company field, the question box and the "How research works" panel on ivory, and keeps them working', () => {
     const { container } = renderWithProviders(<ResearchPage />, { route: '/research' });
     const company = screen.getByLabelText('Company');
-    expect(company.closest('.input-wrap')).toHaveClass('on-ivory');
+    expect(company.closest('.input-wrap')).toHaveClass('on-inverse');
     const question = screen.getByLabelText('Or ask your own question');
-    expect(question).toHaveClass('on-ivory');
-    expect(container.querySelector('.composer-explain')).toHaveClass('on-ivory');
+    expect(question).toHaveClass('on-inverse');
+    expect(container.querySelector('.composer-explain')).toHaveClass('on-inverse');
     expect(screen.getByRole('heading', { name: 'How research works' }).closest('.composer-explain')).toBe(container.querySelector('.composer-explain'));
     // typing and focus options still work; the Quick/Deep control and Start research are untouched
     fireEvent.change(question, { target: { value: 'Has it opened offices abroad?' } });
     expect(question).toHaveValue('Has it opened offices abroad?');
-    expect(screen.getByRole('group', { name: 'Research depth' })).not.toHaveClass('on-ivory');
+    expect(screen.getByRole('group', { name: 'Research depth' })).not.toHaveClass('on-inverse');
     expect(screen.getByRole('button', { name: /Start research/ })).toBeDisabled(); // nothing typed in the company field yet
   });
 });
@@ -193,7 +195,7 @@ describe('Research', () => {
 describe('Library', () => {
   it('draws the search bar on ivory', () => {
     const { container } = renderWithProviders(<LibraryPage />, { route: '/library' });
-    expect(container.querySelector('.lib-search')).toHaveClass('input-wrap', 'on-ivory');
+    expect(container.querySelector('.lib-search')).toHaveClass('input-wrap', 'on-inverse');
     expect(screen.getByLabelText('Search your research')).toBeInTheDocument();
   });
   it('shows when each item was researched as a real <time> element, set off by a separator', async () => {
@@ -276,7 +278,7 @@ describe('Library run history', () => {
 describe('Settings', () => {
   it('draws the Theme, Motion, Data density and research-mode toggles on ivory, and they still change the settings', () => {
     renderWithProviders(<SettingsPage />, { route: '/settings' });
-    for (const label of ['Theme', 'Motion', 'Data density', 'Default research mode']) expect(screen.getByRole('group', { name: label })).toHaveClass('segmented', 'on-ivory');
+    for (const label of ['Theme', 'Motion', 'Data density', 'Default research mode']) expect(screen.getByRole('group', { name: label })).toHaveClass('segmented', 'on-inverse');
     const mode = screen.getByRole('group', { name: 'Default research mode' });
     expect(within(mode).getByRole('button', { name: 'Quick' })).toHaveAttribute('aria-pressed', 'true');
     fireEvent.click(within(mode).getByRole('button', { name: 'Deep' }));
@@ -294,7 +296,7 @@ describe('Sidebar', () => {
   it('keeps the same links, and marks the current page', () => {
     renderWithProviders(<Rail />, { route: '/library' });
     const nav = screen.getByRole('navigation', { name: 'Primary' });
-    expect(within(nav).getAllByRole('link').map((a) => a.textContent?.replace(/\d+$/, ''))).toEqual(['', 'Home', 'Discover', 'Research', 'Library', 'Data Sheets', 'Compare', 'Watchlist', 'Settings', 'About']);
+    expect(within(nav).getAllByRole('link').map((a) => a.textContent?.replace(/\d+$/, ''))).toEqual(['', 'Home', 'Discover', 'Research', 'AI Chat', 'Library', 'Data Sheets', 'Compare', 'Watchlist', 'Settings', 'About']);
     const library = within(nav).getByRole('link', { name: 'Library' });
     expect(library).toHaveClass('rail-link', 'active');
     expect(within(nav).getByRole('link', { name: 'Home' })).not.toHaveClass('active');
@@ -316,7 +318,7 @@ describe('Sidebar', () => {
     const dark = tokensCss.indexOf("--nav-fg: #f6f4ee");
     expect(dark).toBeGreaterThan(0);
     expect(contrast('#f6f4ee', hex('--c-navy-900'))).toBeGreaterThanOrEqual(7);
-    const lightBlock = tokensCss.indexOf(":root[data-theme='light']");
+    const lightBlock = tokensCss.indexOf(":root[data-theme='light'] {");
     expect(hex('--nav-fg', lightBlock)).toBe('#0f1b2a');
     expect(contrast('#0f1b2a', '#fbf9f4')).toBeGreaterThanOrEqual(7); // the light rail is --chrome-bg #fbf9f4
   });

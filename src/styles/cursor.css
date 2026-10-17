@@ -1,0 +1,55 @@
+/* Minimal dot cursor (components/common/DotCursor.tsx). Enabled only for a mouse; the native cursor is hidden only while the dot is on. */
+html.cg-cursor-on,
+html.cg-cursor-on * {
+  cursor: none !important;
+}
+/* text entry keeps the native I-beam (the dot steps aside there) */
+html.cg-cursor-on :is(input, textarea, [contenteditable='true']):not(:is([type='button'], [type='submit'], [type='checkbox'], [type='radio'], [type='range'], [type='color'])) {
+  cursor: text !important;
+}
+
+.cg-dot-cursor {
+  --cursor-dot: var(--text-1);
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 2147483000;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--cursor-dot);
+  opacity: 0;
+  pointer-events: none;
+  will-change: transform;
+  transition:
+    opacity 160ms ease,
+    width 160ms var(--ease-out, ease),
+    height 160ms var(--ease-out, ease);
+}
+/* the intro is always the ivory surface: a navy dot */
+html.cg-intro-lock .cg-dot-cursor {
+  --cursor-dot: #0f1b2a;
+}
+.cg-dot-cursor[data-ready] {
+  opacity: 0.85;
+}
+.cg-dot-cursor[data-active] {
+  width: 16px;
+  height: 16px;
+}
+.cg-dot-cursor[data-active='drag'],
+.cg-dot-cursor[data-down] {
+  width: 7px;
+  height: 7px;
+}
+.cg-dot-cursor[data-hidden] {
+  opacity: 0;
+}
+.cg-dot-cursor[data-reduced] {
+  transition: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  :root:not([data-motion='full']) .cg-dot-cursor {
+    transition: none;
+  }
+}

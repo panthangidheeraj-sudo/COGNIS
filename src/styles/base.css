@@ -110,8 +110,25 @@ hr {
   margin: 0;
 }
 ::selection {
-  background: var(--accent-wash-2);
-  color: var(--text-1);
+  background: var(--selection-bg);
+  color: var(--selection-fg);
+  -webkit-text-fill-color: var(--selection-fg);
+}
+/* inputs, chat bubbles, citations, source titles, prompt cards and the history list set their own colours: selection must still read there */
+input::selection,
+textarea::selection,
+.askai-msg ::selection,
+.askai-msg::selection,
+.askai-cite::selection,
+.askai-sources ::selection,
+.askai-prompt ::selection,
+.askai-prompt::selection,
+.chat-history ::selection,
+.chat-history::selection,
+.chat-composer ::selection {
+  background: var(--selection-bg);
+  color: var(--selection-fg);
+  -webkit-text-fill-color: var(--selection-fg);
 }
 
 /* ---- Focus: always visible for keyboard users ---- */
@@ -261,14 +278,14 @@ hr {
 /* Highlight pulse for search-to-block navigation and cited facts */
 @keyframes cg-highlight {
   0% {
-    box-shadow: 0 0 0 0 rgba(238, 242, 248, 0);
+    box-shadow: 0 0 0 0 transparent;
     background-color: var(--accent-wash-2);
   }
   30% {
-    box-shadow: 0 0 0 4px rgba(238, 242, 248, 0.28);
+    box-shadow: 0 0 0 4px var(--pulse-ring);
   }
   100% {
-    box-shadow: 0 0 0 0 rgba(238, 242, 248, 0);
+    box-shadow: 0 0 0 0 transparent;
     background-color: transparent;
   }
 }
@@ -328,12 +345,11 @@ hr {
   animation: cg-fade-up var(--motion-slow) var(--ease-out) both;
 }
 .page-enter {
-  animation: cg-page-in var(--motion-slow) var(--ease-out) backwards; /* no lingering transform: it would trap position:fixed children */
+  animation: cg-page-in var(--motion-base) var(--ease-out) backwards; /* opacity only: the boxes inside carry the movement (reveal.css), and no transform would trap position:fixed children */
 }
 @keyframes cg-page-in {
   from {
     opacity: 0;
-    transform: scale(0.992) translateY(4px);
   }
   to {
     opacity: 1;

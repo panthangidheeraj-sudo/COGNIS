@@ -15,7 +15,8 @@
   width: 100%;
   max-width: var(--content-max);
   margin: 0 auto;
-  padding: 28px 32px 64px;
+  --page-px: 32px;
+  padding: 28px var(--page-px) 64px;
   flex: 1;
 }
 .page--wide {
@@ -60,6 +61,9 @@
   align-items: stretch;
   gap: 4px;
   padding: 14px 10px;
+  overflow-x: hidden;
+  overflow-y: auto; /* on a short window the last items (Settings, About) scroll instead of being clipped */
+  scrollbar-width: none;
   border-right: var(--bw) solid var(--line);
   background: var(--chrome-bg); /* solid chrome */
   box-shadow: inset -1px 0 0 rgba(200, 222, 255, 0.02);
@@ -152,6 +156,19 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
+}
+
+@media (max-height: 700px) {
+  .rail {
+    gap: 0;
+    padding-block: 8px;
+  }
+  .rail-logo {
+    height: 48px;
+  }
+  .rail-link {
+    padding-block: 5px;
+  }
 }
 
 /* ---------- Top bar ---------- */
@@ -270,6 +287,10 @@
 }
 
 /* ---------- Compare tray ---------- */
+/* the tray floats, so while it is shown the page keeps clear room under its last content and the footer */
+.shell[data-tray] .shell-main {
+  padding-bottom: 84px;
+}
 .compare-tray {
   position: fixed;
   z-index: var(--z-tray);
@@ -398,7 +419,8 @@
     --rail-w: 72px;
   }
   .page {
-    padding: 22px 22px 56px;
+    --page-px: 22px;
+    padding: 22px var(--page-px) 56px;
   }
   .topbar {
     padding: 0 20px;
@@ -415,7 +437,8 @@
     display: none;
   }
   .page {
-    padding: 16px 16px calc(var(--mobile-nav-h) + 40px + env(safe-area-inset-bottom));
+    --page-px: 16px;
+    padding: 16px var(--page-px) calc(var(--mobile-nav-h) + 40px + env(safe-area-inset-bottom));
   }
   .page-head {
     margin-bottom: 20px;

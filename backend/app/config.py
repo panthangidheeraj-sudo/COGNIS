@@ -166,6 +166,28 @@ class Settings(BaseSettings):
         "reuters.com,bloomberg.com,ft.com,wsj.com,cnbc.com,newsweb.oslobors.no,mynewsdesk.com,newsclient.omxgroup.com,globenewswire.com,prnewswire.com,businesswire.com"
     )  # comma-separated allowlist; a result from any other host is recorded as skipped
 
+    # ---- regulatory and official notices (domain E; official public pages found by search, each fetched, robots-checked and identity-checked) ----
+    enable_regulatory_discovery: bool = True
+    regulatory_max_pages: int = 5  # candidate official pages fetched per company
+    regulatory_domains: str = (
+        "finanstilsynet.no,konkurransetilsynet.no,datatilsynet.no,forbrukertilsynet.no,mattilsynet.no,miljodirektoratet.no,arbeidstilsynet.no,"
+        "legemiddelverket.no,dsa.no,nve.no,nkom.no,sdir.no,havtil.no,regjeringen.no,stortinget.no,lovdata.no,esa.int,eftasurv.int,ec.europa.eu,eur-lex.europa.eu,esma.europa.eu"
+    )  # comma-separated allowlist of official regulators and law-makers; a hit from any other host is recorded as skipped
+
+    # ---- company chat ("Ask AI"): free-usage controls ----------------------
+    enable_chat: bool = True
+    chat_max_question_chars: int = 1000
+    chat_max_history_messages: int = 8  # earlier messages sent back to the model for follow-ups
+    chat_max_searches: int = 2  # web-search calls one question may make (0 = never search)
+    chat_fresh_timeout_seconds: float = 20.0  # upper bound for any check of current sources made for one question (the lower of this and CHAT_LOOKUP_TIMEOUT_SECONDS applies)
+    chat_fresh_max_age_hours: float = 24.0  # saved research younger than this is not re-run for a question
+    chat_max_evidence_items: int = 24  # evidence items given to the model per question
+    # targeted lookup (chat_lookup.py): a question-focused check of current sources instead of the full research pipeline
+    chat_lookup_timeout_seconds: float = 20.0  # wall-clock limit for the whole lookup (official filing + search + page reads)
+    chat_lookup_page_timeout_seconds: float = 8.0  # one page read; pages are fetched in parallel and never retried
+    chat_lookup_max_pages: int = 3  # pages fetched per lookup
+    chat_lookup_cache_seconds: float = 900.0  # the same question about the same company within this time reuses the lookup (no second search)
+
     # ---- public procurement (free) ----------------------------------------
     ted_api_base: str = "https://api.ted.europa.eu/v3"
     ted_min_interval_seconds: float = 0.5  # TED's fair-use limit is per IP; stay well below it

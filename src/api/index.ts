@@ -7,6 +7,7 @@ import type { CognisApi } from './contract';
 import { API_MODE } from './http';
 import { liveCompanies, liveSearch } from './companies';
 import { liveResearch } from './research';
+import { liveChat } from './chat';
 import { liveLibrary } from './library';
 import { liveSheets } from './sheets';
 import { liveCompare, liveExports, liveWatchlist } from './compare';
@@ -18,6 +19,7 @@ const liveApi: CognisApi = {
   search: liveSearch,
   companies: liveCompanies,
   research: liveResearch,
+  chat: liveChat,
   library: liveLibrary,
   sheets: liveSheets,
   compare: liveCompare,

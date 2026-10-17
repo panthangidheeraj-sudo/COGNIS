@@ -24,5 +24,9 @@ export default defineConfig(({ mode }) => ({
     globals: true,
     setupFiles: ['./src/tests/setup.ts'],
     css: false,
+    // The tests describe the built-in demo backend and its fixtures: never let a shell variable or .env file point them at a live backend.
+    env: { VITE_API_MODE: 'mock' },
+    // Mock latency, debounces and lazy chunks are real time; a slow or busy machine (Windows + antivirus/OneDrive, parallel workers) must not fail them.
+    testTimeout: 20000,
   },
 }));

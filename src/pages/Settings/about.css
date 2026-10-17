@@ -129,7 +129,7 @@
 /* ---- chapter index (a small floating navigation overlay: glass is allowed here) ---- */
 .story-index {
   position: fixed;
-  z-index: 20;
+  z-index: var(--z-float);
   right: 18px;
   top: 50%;
   transform: translateY(-50%);
@@ -228,9 +228,11 @@
   border-radius: var(--r-lg);
   border: var(--bw) solid transparent;
   background: var(--surface-ivory);
-  box-shadow: 0 22px 40px -30px rgba(0, 0, 0, 0.85);
+  box-shadow: 0 22px 40px -30px rgb(var(--shadow-rgb) / calc(0.85 * var(--shadow-k)));
 }
 :root[data-theme='light'] .dossier-layer.paper {
+  /* mirrored: navy sheets on the ivory page (`.on-inverse` supplies the dark tokens) */
+  background: var(--surface-1);
   border-color: var(--line);
   box-shadow: var(--shadow-1);
 }
@@ -391,13 +393,16 @@
   box-shadow: none;
 }
 :root[data-theme='light'] .act.act--evidence.paper {
-  background: #fffdf8;
+  /* the alternating chapter: ivory on the dark page, a navy band on the ivory page */
+  background: var(--surface-1);
   box-shadow:
     inset 0 1px 0 var(--line),
     inset 0 -1px 0 var(--line);
 }
 :root[data-theme='light'] .act--evidence .tier {
-  background: var(--c-ivory);
+  background: var(--surface-2);
+  border-color: var(--line);
+  box-shadow: var(--shadow-1);
 }
 
 /* ==================== 06 · workflow ==================== */
@@ -501,7 +506,7 @@
   text-align: left;
   border-radius: 16px;
   background: var(--surface-ivory);
-  box-shadow: 0 36px 70px -44px rgba(0, 0, 0, 0.85);
+  box-shadow: 0 36px 70px -44px rgb(var(--shadow-rgb) / calc(0.85 * var(--shadow-k)));
 }
 .final-notes section {
   padding: 22px 26px 24px;
@@ -518,6 +523,7 @@
   margin-bottom: 10px;
 }
 :root[data-theme='light'] .final-notes.paper {
+  background: var(--surface-1);
   border: 1px solid var(--line);
   box-shadow: var(--shadow-1);
 }

@@ -35,8 +35,9 @@
   --c-ivory-2: #f3eee3;
   --c-ivory-3: #ebe4d6;
 
-  /* Ivory surfaces: light, ink-on-ivory fields, chips, toggles and panels that sit on the dark workspace.
-     Used through the `.on-ivory` scope (styles/ivory.css), which remaps the semantic tokens below it.
+  /* Ivory palette: the light, ink-on-ivory fields, chips, toggles and panels that sit on the DARK workspace.
+     Used through the `.on-inverse` scope (styles/ivory.css), which remaps the semantic tokens below it.
+     In the light theme the same scope receives the dark token set instead (the mirror image).
      Contrast (WCAG): ink 1/2/3 ≥ 6.5:1 on field and panel, ink 4 (placeholders) ≥ 4.8:1. */
   --ivory-panel: #fbf8f1; /* panels and cards */
   --ivory-field: #fffdf8; /* inputs, chips, option surfaces: the lightest step */
@@ -48,6 +49,9 @@
   --ivory-ink-4: #5f6f84;
   --ivory-line: rgba(16, 42, 67, 0.12);
   --ivory-line-strong: rgba(16, 42, 67, 0.28);
+  /* text selection: one opaque, high-contrast pair that reads on ivory, white and navy surfaces alike (white on #2563eb is 5.2:1) */
+  --selection-bg: #2563eb;
+  --selection-fg: #ffffff;
 
   /* ---- Typography ---- */
   --font-sans: 'Geist Variable', 'Geist', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
@@ -115,8 +119,15 @@
   --mobile-nav-h: 64px;
   --content-max: 1360px;
   --drawer-w: 440px;
+  /* Stacking order, lowest to highest. A page never picks its own number: it uses one of these.
+     raised (in-page overlap) < sticky (page bars that stick under the top bar) < float (page controls) < top bar (nav - 1) < rail (nav)
+     < tray < panel (Ask AI) < modal < drawer < palette < toast. The intro and the cursor sit above everything (outside this scale). */
+  --z-raised: 5;
+  --z-sticky: 30;
+  --z-float: 35;
   --z-nav: 40;
   --z-tray: 45;
+  --z-panel: 50; /* the Ask AI side panel: above the tray and rail, below dialogs */
   --z-modal: 70;
   --z-drawer: 74; /* evidence can open on top of a brief or explanation */
   --z-palette: 80;
@@ -138,7 +149,10 @@
    popovers, tooltips, toasts, drawers/modals, the compare tray and floating controls.
    ========================================================================== */
 :root,
-:root[data-theme='dark'] {
+:root[data-theme='dark'],
+:root[data-theme='light'] :is(.on-inverse, .flip-in-light) {
+  /* ^ the last selector is the mirror: inside `.on-inverse` (and `.flip-in-light`, which changes nothing on the dark page)
+       the light page receives the dark token set (styles/ivory.css) */
   color-scheme: dark;
 
   --bg-canvas: var(--c-blue-black);
@@ -191,6 +205,13 @@
   --primary-border: rgba(255, 255, 255, 0.85);
   --primary-shadow: inset 0 1px 0 #ffffff, 0 10px 26px -14px rgba(190, 210, 245, 0.45);
 
+  /* Emphasis button (`.btn--inverse`): the inverse of the page. Ivory here, navy in the light theme. */
+  --emphasis-bg: var(--c-ivory);
+  --emphasis-bg-hover: #ffffff;
+  --emphasis-fg: #0f1b2a;
+  --emphasis-border: transparent;
+  --emphasis-shadow: none;
+
   --accent: #5b8def;
   --accent-strong: #3f72d8;
   --accent-soft: #c6d3e4; /* silver highlight: icons, meters, active borders */
@@ -212,6 +233,12 @@
   --info-wash: rgba(167, 195, 239, 0.1);
   --neutral-wash: rgba(200, 212, 232, 0.06);
 
+  /* Shadow colour (channels) and strength, for shadows written inline: rgb(var(--shadow-rgb) / calc(.6 * var(--shadow-k))) */
+  --shadow-rgb: 0 0 0;
+  --shadow-k: 1;
+  --pulse-ring: rgba(238, 242, 248, 0.28); /* cited-fact highlight ring */
+  --glow-focus: rgba(226, 235, 248, 0.4); /* halo around a focused hero field and the network core */
+
   --shadow-1: inset 0 1px 0 rgba(226, 232, 244, 0.04), 0 14px 34px -22px rgba(0, 2, 8, 0.9);
   --shadow-2: inset 0 1px 0 rgba(226, 232, 244, 0.05), 0 30px 64px -30px rgba(0, 2, 8, 0.95);
   --shadow-3: 0 40px 120px -30px rgba(0, 2, 8, 0.92);
@@ -228,8 +255,7 @@
 
   --grain-opacity: 0.03;
 
-  /* Ivory surfaces on the dark workspace */
-  --ivory-ring: #3f7be0; /* focus ring: ≥ 3.7:1 on ivory and on navy */
+  /* Ivory surfaces on the dark workspace (only read by the dark-page `.on-inverse` scope) */
   --ivory-shadow: 0 1px 0 rgba(255, 255, 255, 0.55) inset, 0 1px 2px rgba(0, 4, 12, 0.22), 0 14px 30px -20px rgba(0, 4, 12, 0.85);
   --ivory-shadow-lift: 0 1px 0 rgba(255, 255, 255, 0.6) inset, 0 2px 4px rgba(0, 4, 12, 0.22), 0 24px 44px -24px rgba(0, 4, 12, 0.9);
 
@@ -240,6 +266,16 @@
   --nav-active-bg: rgba(246, 244, 238, 0.14);
   --nav-active-line: rgba(246, 244, 238, 0.36);
   --nav-indicator: #f6f4ee;
+}
+
+/* Focus ring for `.on-inverse` surfaces. It lives outside the token blocks above on purpose: the mirrored scope
+   must keep the PAGE theme's ring. Dark page: ≥ 3.7:1 on ivory and navy. Light page: ≥ 4.5:1 on the ivory canvas. */
+:root,
+:root[data-theme='dark'] {
+  --inverse-ring: #3f7be0;
+}
+:root[data-theme='light'] {
+  --inverse-ring: #2f66d0;
 }
 
 /* ==========================================================================
@@ -290,6 +326,12 @@
   --primary-border: #0f1b2a;
   --primary-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 10px 22px -14px rgba(15, 27, 42, 0.6);
 
+  --emphasis-bg: var(--c-navy);
+  --emphasis-bg-hover: #1a3552;
+  --emphasis-fg: #f7f3ea;
+  --emphasis-border: rgba(16, 42, 67, 0.9);
+  --emphasis-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 8px 18px -12px rgba(15, 27, 42, 0.55);
+
   --accent: #3f72d8;
   --accent-strong: #2c5fc4;
   --accent-soft: #34507a;
@@ -311,6 +353,11 @@
   --info-wash: rgba(42, 91, 191, 0.07);
   --neutral-wash: rgba(16, 42, 67, 0.05);
 
+  --shadow-rgb: 16 42 67;
+  --shadow-k: 0.4;
+  --pulse-ring: rgba(16, 42, 67, 0.2);
+  --glow-focus: rgba(16, 42, 67, 0.16);
+
   --shadow-1: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 1px 2px rgba(16, 42, 67, 0.04), 0 10px 30px -20px rgba(16, 42, 67, 0.25);
   --shadow-2: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 2px 4px rgba(16, 42, 67, 0.04), 0 28px 60px -30px rgba(16, 42, 67, 0.35);
   --shadow-3: 0 40px 100px -40px rgba(16, 42, 67, 0.45);
@@ -326,11 +373,6 @@
   --chart-axis: #66768a;
 
   --grain-opacity: 0.03;
-
-  /* Ivory surfaces on the ivory canvas: the same fills, with a hairline and a lighter shadow to stay distinct */
-  --ivory-ring: #2f66d0;
-  --ivory-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 1px 2px rgba(16, 42, 67, 0.06), 0 10px 26px -18px rgba(16, 42, 67, 0.3);
-  --ivory-shadow-lift: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 2px 4px rgba(16, 42, 67, 0.06), 0 22px 44px -26px rgba(16, 42, 67, 0.4);
 
   /* Sidebar: the rail is ivory in light mode, so bright means dark ink here */
   --nav-fg: #0f1b2a;

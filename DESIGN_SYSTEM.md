@@ -54,6 +54,29 @@ Ivory is a premium institutional research note, not a light theme: a mono masthe
 
 **Typography over badges.** Pills are reserved for statuses, filters, verification and compact controls. Categorical labels (reporting period, event type, change category, source kind, location kind, tags, "AI synthesis") use `.tag` — mono micro text, separated by `·`. A status inside a header or card can be `.pill--bare` (dot + words in the tone colour, no capsule). Material changes on a company read as a ledger line divided by hairlines, not a row of capsules.
 
+## Light mode is the inverse of dark mode
+
+Light is not a second design: every role keeps its place and hierarchy and only the polarity flips. Navy surfaces become white/ivory; ivory text and icons become navy; whatever stands out as **ivory-on-navy** in dark stands out as **navy-on-ivory** in light. Status colours are not swapped blindly: `--ok/--warn/--err/--info/--link` have their own per-theme values, each ≥ 4.5:1 on its cards.
+
+| Role | Dark | Light |
+| --- | --- | --- |
+| Canvas, cards, wells, chrome | deep navy steps | ivory canvas, warm-white cards, ivory wells |
+| Text 1–4, icons, nav | ivory / silver | navy |
+| Primary action (`--primary-*`) | white, navy label | navy, white label |
+| Emphasis button (`.btn--inverse`, `--emphasis-*`) | ivory | navy |
+| Selected chip / toggle | inverted (navy on ivory chips; ivory on navy) | inverted the other way |
+| Inverse surfaces (`.on-inverse`: Home action cards, Discover search + query chips, Research inputs + "How research works", Library search, Settings toggles) | ivory on the navy page | **navy on the ivory page** |
+| Statement blocks (executive summary, report cover) | ivory / navy | navy |
+| About chapters + Compare summary band (`.flip-in-light`) | ivory on the navy page | navy on the ivory page |
+| Library thumbnails (`--th-*`) | ivory marks on a navy tile | navy marks on an ivory tile |
+| Globe | ivory sphere, navy geography | navy sphere, ivory geography |
+| Shadows (`--shadow-rgb`, `--shadow-k`) | near-black, strong | navy, soft |
+| Focus ring | ivory line; `--inverse-ring` blue on inverse surfaces | navy line; `--inverse-ring` blue on inverse surfaces |
+
+**How it is built.** Dark tokens are declared once, on `:root, [data-theme='dark']` **and** on `:root[data-theme='light'] :is(.on-inverse, .flip-in-light)`, so a mirrored surface inside the light page receives the real dark palette with no second copy. On the dark page `.on-inverse` remaps the tokens to the light values (`styles/ivory.css`). Every rule inside the scopes reads semantic tokens (`--surface-*`, `--text-*`, `--line*`), never colours, so one rule serves both directions. `.flip-in-light` does nothing in dark.
+
+**Deliberate exception.** Long reading surfaces (the saved report, executive-brief modal, financial tables, research synthesis, evidence drawer — `.paper`) stay warm white in light: they are documents to read and print, and a navy page of body text would be the dark theme again. Their tokens are the light ink-on-ivory set in both themes.
+
 ## Verification language
 
 Never percentages or scores. Labels come from `verification()` in `src/utils/status.ts`, computed from the evidence's source tiers, and always pair an icon with text:
@@ -79,7 +102,7 @@ Use `VerificationBadge` (pill) in popovers and drawers, `VerificationLine` (icon
 
 One scene, two looks (`GlobeStage` → lazy `IntelGlobe` / `EarthGlobe` → shared `GlobeCanvas`; each look is a `GlobeSurface` in `src/components/globe/surfaces/`). `GlobeStage` takes `variant`: `intel` (default) or `earth`.
 
-- **`intel` — the workspace globe** (Home, Discover; result locations, and the globe turns toward hovered companies). *Corporate intelligence visualization, not Google Earth.* A matte near-black navy sphere (soft fall-off from a lit upper-left face into shade, no specular); **fine ivory dots** for land (the Natural Earth lattice in `landDots.ts`, ~1.1° apart; globes under ~190 px radius draw every other row and column so the dots never turn to grain; each dot varies a little in size and brightness, deterministically); a **hairline ivory coastline**, a faint tone on land and one soft contour a little inland, all read from a 2048×1024 Natural Earth land mask (`assets/land-mask-2k.png`, rebuilt by `scripts/prepare-land-mask.py`); a **restrained silver rim** and a barely-there halo; **sparse, small location nodes** (backend points, ringed softly; the focus node a little larger) and a few faint connection arcs from Oslo to five hubs (decorative, no data meaning). No satellite imagery, no green/brown, no neon glow, no dense wireframe. On the light (ivory) theme the same drawing is inverted: a pale paper sphere with navy ink. Palette and shading live in `intelPalette.ts`, shared by the WebGL surface and the static fallback.
+- **`intel` — the workspace globe** (Home, Discover; result locations, and the globe turns toward hovered companies). *Corporate intelligence visualization, not Google Earth.* A matte near-black navy sphere (soft fall-off from a lit upper-left face into shade, no specular); **fine ivory dots** for land (the Natural Earth lattice in `landDots.ts`, ~1.1° apart; globes under ~190 px radius draw every other row and column so the dots never turn to grain; each dot varies a little in size and brightness, deterministically); a **hairline ivory coastline**, a faint tone on land and one soft contour a little inland, all read from a 2048×1024 Natural Earth land mask (`assets/land-mask-2k.png`, rebuilt by `scripts/prepare-land-mask.py`); a **restrained silver rim** and a barely-there halo; **sparse, small location nodes** (backend points, ringed softly; the focus node a little larger) and a few faint connection arcs from Oslo to five hubs (decorative, no data meaning). No satellite imagery, no green/brown, no neon glow, no dense wireframe. On the light (ivory) theme the same drawing is the exact inverse: a deep navy sphere with fine ivory dots and coastline, a steel rim and ivory location nodes (`INTEL_LIGHT`). The stage reads the live theme (`useResolvedTheme`), so the toggle and the operating system re-tint it without a reload. Palette and shading live in `intelPalette.ts`, shared by the WebGL surface and the static fallback.
 - **`earth` — the natural Earth, About story only** (`#act-earth`): NASA Blue Marble imagery (public domain; `assets/earth-*.jpg`, rebuilt by `scripts/prepare-earth-textures.py`) with a natural ocean grade, green/brown land, white ice, a soft terminator, a sun glint, procedural clouds and a thin atmosphere. Its textures are only requested when this look is mounted.
 - **Motion** (tuned per look): slow continuous eastward rotation that never waits for input (intel ≈ 125 s per turn, earth ≈ 105 s). Pointer → a small orientation/parallax offset (intel ≈ 5° at the screen edge) that relaxes after 2.5 s at rest. Wheel / page scroll → a small, capped, smoothly decaying spin impulse (down = faster forward, up = eases into reverse; intel adds at most ~9°/s and settles in about a second) plus a slight tilt; it always settles back to the normal rotation. With a backend focus (search hit, Discover results) it turns to the location and sways gently around it.
 - **Performance:** three.js loads only where a globe is shown, and the two looks are separate lazy chunks (the land mask is ~64 KB; the Earth imagery is 2k, 1k on low-power devices); ≤ 60 fps (30 on low power), pixel ratio ≤ 1.5, paused when off-screen or the tab is hidden, and no frames at all when the scene is still (paused or reduced motion).
@@ -112,3 +135,38 @@ The official COGNIS logo is **Atlas carrying the celestial letter C**: icon only
 - **Solid by default, glass by exception**: page backgrounds, hero sections, cards, company panels, financials, tables, research surfaces, the rail and the top bar are **solid** (`--surface-*`, `--chrome-bg`) with at most a faint top light. `backdrop-filter` is used only on small floating layers — command palette, search dropdowns (`.hero-suggest`, `.art-search-results`), menus/popovers, tooltips, toasts, drawers/modals, the compare tray, the hero search field, globe controls/labels and the small source-stack tiles. Analyst tables, data grids, sticky headers and frozen columns use the same solid tones (`--solid-*`, `--solid-card`). Nothing inside `.paper` is blurred.
 - **White is the action colour**: primary buttons, completed research steps, finished source tiles, the active tab underline and the rail indicator are white (navy in light mode). Blue only marks things that are live or clickable text.
 - **Motif**: concentric evidence rings + node + ray. A decorative illustration — empty states, the globe, the source stack, the network graph, the report cover. It is not the logo (see Logo).
+
+## Page entrance animation
+
+Every routed page fades in box by box. `RevealRegion` (wrapped around the outlet in `AppShell`, keyed by pathname) runs `useAutoReveal` from `hooks/useRevealOnScroll.ts`: it finds the page's boxes (children of `.page`, `.hero-inner`, tab panels and `[data-reveal-region]`, looking inside `*-grid` / `*-list` / `*-stack` groups and paint-less layout wrappers), hides them before first paint (`data-reveal-auto="hidden"`), and shows them with `reveal.css` (opacity + a 24px `translate`, 650ms ease-out, `--reveal-i` × 90ms stagger; tokens `--reveal-distance/-duration/-step/-ease`) as the box crosses a trigger line 9% above the viewport bottom (IntersectionObserver with `rootMargin`, plus a scroll/resize sweep so nothing stays hidden at the end of a page); tall containers (over 520px) are looked through so a long section is revealed card by card, and at most 120 boxes are tagged per page. Each box is revealed once. Boxes on screen at load arrive as a short sequence in document order; the rest arrive alone as they scroll in. Settled boxes are `done` (no styles).
+
+- Hidden only by script: with no JS the page is simply visible. Reduced motion (Motion setting or OS) never hides anything; focus inside a waiting box shows it.
+- Elements that already carry their own entrance animation, the About story (`.story`, which uses `data-reveal` by hand), dialogs, menus and listboxes are skipped. Opt out with `data-reveal-skip`; add a region with `data-reveal-region`.
+- Do not add per-element `animation: cg-fade-up` to page boxes; it would double up with this system.
+- The Home heading is `PressureText`: per-letter weight follows the pointer (a re-implementation of the React Bits "Text Pressure" behaviour on Geist Variable's weight axis; static under reduced motion).
+
+## Launch intro, tour carousel and dot cursor
+
+- **Launch gate** (`components/intro/LaunchGate.tsx`, mounted in `main.tsx` above the router): shows a full-screen intro on every fresh launch; the app is not mounted until the user presses *Enter COGNIS*, *Skip intro* or Escape. The decision is React state only (nothing in storage), so SPA navigation never reopens it and the next launch shows it again. Page scroll is locked with `html.cg-intro-lock` while it is up.
+- **Surface**: always the deep-navy cinematic surface with the ivory Atlas mark (`CognisLogo variant="ivory"`), in both themes.
+- **Tour & layout**: an asymmetrical two-column composition on a warm-ivory surface — left: navy Atlas mark + COGNIS wordmark, serif headline, one-line description, the five step names, and *Enter COGNIS* (dominant) with a quiet *Skip intro*; right: the DepthCarousel as the centrepiece with a single control band (caption `NN / 05`, segment progress = the component's own dots, arrows). Stacks (brand, tour, actions) at ≤860 px. The backdrop (`IntroBackdrop.tsx`, CSS only, transform-only keyframes, no WebGL) is an ivory→white gradient with faint orbit/contour lines and two soft drifting highlights; reduced motion switches every animation off. `components/reactbits/DepthCarousel.jsx/.css` is the React Bits item, unmodified (depends on `gsap`). `intro/IntroTour.tsx` sizes the card per stage (`depthLayout`, which also shifts the right-leaning stack to centre it), and runs autoplay itself (component `autoplay={false}`): 6.5 s steps, paused while the pointer is held/hovering, on focus, key or wheel use and in a hidden tab, resuming after 5.5 s of quiet, never under reduced motion. `intro/slides.ts` lists five slides with local SVGs in `public/intro/` (generated by `scripts/build-intro-art.py`; fictional sample data, labelled as such).
+- **Dot cursor** (`components/common/DotCursor.tsx`, `styles/cursor.css`): one 10 px dot, mouse only (`(hover: hover) and (pointer: fine)`), no trail or ring; grows slightly over controls, steps aside over text fields (native I-beam kept); exact following under reduced motion.
+
+## Layer scale and page chrome
+
+Stacking order, lowest to highest (tokens in `src/styles/tokens.css`; pages never choose their own number):
+`--z-raised` (5, in-page overlap) < `--z-sticky` (30, page bars that stick under the top bar: company tabs, Compare anchors, sheet toolbar) < `--z-float` (35, floating page controls) < top bar (`--z-nav` − 1) < rail (`--z-nav`, 40) < `--z-tray` (45) < `--z-panel` (50, Ask AI) < `--z-modal` (70) < `--z-drawer` (74) < `--z-palette` (80) < `--z-toast` (90). The launch intro and the dot cursor sit above the whole scale; the cursor is portalled to `<body>` because `#root` is its own stacking context.
+
+Pages set `--page-px` (the page's side padding); a sticky band that must run edge to edge uses `margin-inline: calc(var(--page-px) * -1)`.
+
+The compare tray is a route feature: a route opts in with `handle: { compareTray: true }` in `src/app/router.tsx`, and `useRouteHandle()` (`src/app/routeHandle.ts`) reads it. Only `/compare` opts in.
+
+Compare cells that the saved profile leaves empty are filled by `useCompareEnrichment` through `api.companies.enrich`, sharing Discover's lookup cache. A cell is one of: not fetched, fetching (skeleton), verified (value + its source), confirmed none ("None verified" / "Not reported" / "Not registered"), source unavailable, or lookup failed (with Retry).
+
+## AI Chat, composer, prompts and selection
+
+- **AI Chat** is a main-nav page (`/chat`, `/chat/:threadId`). The history sidebar (New chat; Today / Previous 7 days / Earlier; rename, delete, active indicator, empty state) is separate from the app rail and becomes a slide-over under 860 px. Moving between conversations does not re-run the page reveal (`AppShell` keys the reveal on `/chat`).
+- **Shared rendering**: `components/chat/ChatParts.tsx` renders an answer for both the side panel and the page (small clickable citation markers, one source list equal to the citations used, comparison table, context-change notice, candidate picker, follow-up prompts, real progress).
+- **Composer and prompt cards** (`.chat-composer`, `.askai-prompt`) use the explicit `--ivory-*` tokens (ivory field, navy ink), not the page's semantic tokens, so they are identical in dark and light.
+- **Side panel width**: `clamp(520px, 40vw, 650px)`, 720 px from 1920 px, full-width sheet at ≤ 640 px; the message area scrolls on its own.
+- **Selection**: one opaque pair, `--selection-bg: #2563eb` / `--selection-fg: #fff` (5.2:1), used everywhere, including inputs, bubbles, citations, source titles, prompts and the history list.

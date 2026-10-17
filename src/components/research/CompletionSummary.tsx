@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowRight, BookmarkCheck, BookmarkPlus, CircleAlert, CircleCheck, FileText, LoaderCircle, Timer } from 'lucide-react';
+import { ArrowRight, BookmarkCheck, BookmarkPlus, CircleAlert, CircleCheck, FileText, LoaderCircle, Sparkles, Timer } from 'lucide-react';
 import { api } from '@/api';
 import type { ResearchRun } from '@/types';
 import { CoverageMeter } from '@/components/company/Coverage';
@@ -21,7 +21,7 @@ function elapsed(ms: number) {
  * backend's run.completed summary; anything the backend did not send is
  * left out rather than estimated.
  */
-export function CompletionSummary({ run, onSaved }: { run: ResearchRun; onSaved?: (artifactId: string) => void }) {
+export function CompletionSummary({ run, onSaved, onAsk, askOpen }: { run: ResearchRun; onSaved?: (artifactId: string) => void; onAsk?: () => void; askOpen?: boolean }) {
   const s = run.summary;
   const company = run.company;
   const nav = useNavigate();
@@ -89,6 +89,11 @@ export function CompletionSummary({ run, onSaved }: { run: ResearchRun; onSaved?
         </div>
         <span className="spacer" />
         <div className="row-wrap" style={{ gap: 8 }}>
+          {company && onAsk && (
+            <button type="button" className={cn('btn', askOpen && 'is-selected')} onClick={onAsk} aria-expanded={!!askOpen} aria-controls="ask-ai" data-testid="ask-ai-from-research">
+              <Sparkles aria-hidden /> Ask AI about this company
+            </button>
+          )}
           {company && (
             <Link to={`/company/${company.orgNumber}`} className="btn btn--primary">
               Open company <ArrowRight aria-hidden />

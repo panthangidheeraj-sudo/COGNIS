@@ -186,3 +186,19 @@ Researched companies: `CompanySummary.openPositionsStatus` is the hiring outcome
 * `checks?`: `{ id, name, state: checked | unavailable | incomplete, note, required }[]` — what each hiring source returned.
 * `totalCurrent` is `null` whenever nothing is verified; a `0` appears only when the company's own careers page says it has no open positions and no source was unavailable.
 * `Job`: `title`, `url`, `state` (`current` | `stale` | `closed`), `postedAt?`, `updatedAt?`, `validThrough?`, `checkedAt?`, `alsoListed?` (`{ source, url, state, posted_at?, updated_at? }[]` — the same opening on other sources, counted once), `evidence[]`.
+
+## AI Chat (conversations)
+
+All answers go through the same verified-data pipeline as the company Ask AI panel. Streaming endpoints answer with server-sent events: `progress` (`{stage,label}`; only checks that really started), then one `result` or `error`.
+
+| Method and path | Purpose |
+| --- | --- |
+| `POST /companies/{org}/chat/stream` | Side-panel answer (client-held history) with live progress |
+| `GET /chat/threads` | List conversations (`{threads}`) |
+| `POST /chat/threads` | Create (idempotent by client `id`; optional `orgNumber`, `title`) |
+| `GET /chat/threads/{id}` | Conversation with all messages, citations, check statuses |
+| `PATCH /chat/threads/{id}` | Rename `{title}` |
+| `DELETE /chat/threads/{id}` | Delete the conversation and its stored messages |
+| `POST /chat/threads/{id}/ask` and `/ask/stream` | Ask `{messageId, question, orgNumber?, fresh?, retryOf?}`; the same `messageId` never creates a second message. A different company starts a NEW thread (`switchedFromThreadId`), the old one keeps a notice. |
+
+Reply additions: `intent`, `checked`, `comparison`, `contextSwitch`, `candidates`, `followUps`, `consideredSources`; `search.state` may be `timeout`. Conversations are stored in the backend SQLite database (tables `chat_threads`, `chat_messages`). No new environment variables.

@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Columns3, Download, Ellipsis, FileText, History, MapPin, Radar, RefreshCw, Telescope } from 'lucide-react';
+import { Columns3, Download, Ellipsis, FileText, History, MapPin, Radar, RefreshCw, Sparkles, Telescope } from 'lucide-react';
 import { api, ApiError } from '@/api';
 import type { AmbiguousMatch, Change, CompanyProfile, ExplainSubject } from '@/types';
 import { useCompare, useUi } from '@/stores/ui';
@@ -16,6 +16,7 @@ import { ReportModal } from '@/components/artifacts/ReportModal';
 import { Snapshot } from '@/components/company/Snapshot';
 import { WhatChanged } from '@/components/company/WhatChanged';
 import { ExecutiveBriefModal } from '@/components/company/ExecutiveBriefModal';
+import { AskAiPanel } from '@/components/chat/AskAiPanel';
 import { ExplainModal } from '@/components/company/ExplainModal';
 import { AmbientGlobe } from '@/components/globe/AmbientGlobe';
 import { useCommand } from '@/hooks/useCommand';
@@ -84,6 +85,12 @@ function CompanyView({ profile, exportOpen, setExportOpen }: { profile: CompanyP
   const watched = watch.data?.items.some((i) => i.company.orgNumber === c.orgNumber);
   const assess = useQuery({ queryKey: ['assess', profile.artifactId], queryFn: () => api.research.assess(profile.artifactId!), enabled: !!profile.artifactId });
   const [reportOpen, setReportOpen] = useState(false);
+  const [askOpen, setAskOpen] = useState(params.get('ask') === '1');
+  const askBtn = useRef<HTMLButtonElement>(null);
+  const closeAsk = () => {
+    setAskOpen(false);
+    askBtn.current?.focus();
+  };
   const [briefOpen, setBriefOpen] = useState(params.get('brief') === '1');
   const [explain, setExplain] = useState<{ subject: ExplainSubject; title: string } | null>(null);
   const researched = c.researchState !== 'not_researched';
@@ -140,7 +147,10 @@ function CompanyView({ profile, exportOpen, setExportOpen }: { profile: CompanyP
           </div>
         </div>
         <div className="co-actions">
-          <button className="btn btn--ivory" onClick={() => setBriefOpen(true)}>
+          <button ref={askBtn} className={`btn ${askOpen ? 'is-selected' : ''}`} aria-expanded={askOpen} aria-controls="ask-ai" onClick={() => (askOpen ? closeAsk() : setAskOpen(true))}>
+            <Sparkles aria-hidden /> Ask AI
+          </button>
+          <button className="btn btn--inverse" onClick={() => setBriefOpen(true)}>
             <FileText aria-hidden /> {mobile ? 'Brief' : 'Executive brief'}
           </button>
           <Link to={researchHref} className={researched ? 'btn' : 'btn btn--primary'}>
@@ -207,6 +217,7 @@ function CompanyView({ profile, exportOpen, setExportOpen }: { profile: CompanyP
         </p>
       )}
 
+      {askOpen && <AskAiPanel orgNumber={c.orgNumber} legalName={c.legalName} logoUrl={c.logoUrl ?? undefined} onClose={closeAsk} />}
       <ExportModal open={exportOpen} onClose={() => setExportOpen(false)} target={{ type: 'company', id: c.orgNumber }} title={c.legalName} />
       <ReportModal open={reportOpen} onClose={() => setReportOpen(false)} orgNumber={c.orgNumber} name={c.legalName} />
       <ExecutiveBriefModal open={briefOpen} onClose={() => setBriefOpen(false)} orgNumber={c.orgNumber} companyName={c.legalName} />

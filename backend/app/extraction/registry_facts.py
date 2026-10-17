@@ -43,9 +43,11 @@ FINANCIAL_FIELDS: list[tuple[str, str, str, str]] = [
     ("current_assets", "current_assets", "Current assets", "eiendeler.omloepsmidler.sumOmloepsmidler"),
     ("cash", "cash_and_bank", "Cash and bank deposits", "eiendeler.sumBankinnskuddOgKontanter"),
     ("equity", "equity", "Equity", "egenkapitalGjeld.egenkapital.sumEgenkapital"),
-    ("debt", "debt", "Total debt", "egenkapitalGjeld.gjeldOversikt.sumGjeld"),
-    ("short_term_debt", "short_term_debt", "Short-term debt", "egenkapitalGjeld.gjeldOversikt.kortsiktigGjeld.sumKortsiktigGjeld"),
-    ("long_term_debt", "long_term_debt", "Long-term debt", "egenkapitalGjeld.gjeldOversikt.langsiktigGjeld.sumLangsiktigGjeld"),
+    # Liabilities, by what the filing calls them (sum gjeld / kortsiktig gjeld / langsiktig gjeld). The register does NOT report total (interest-bearing) debt or net
+    # debt: those are different measures and are never filled from these fields (see financial_metrics.py).
+    ("total_liabilities", "total_liabilities", "Total liabilities", "egenkapitalGjeld.gjeldOversikt.sumGjeld"),
+    ("current_liabilities", "current_liabilities", "Current liabilities", "egenkapitalGjeld.gjeldOversikt.kortsiktigGjeld.sumKortsiktigGjeld"),
+    ("non_current_liabilities", "non_current_liabilities", "Non-current liabilities", "egenkapitalGjeld.gjeldOversikt.langsiktigGjeld.sumLangsiktigGjeld"),
 ]
 
 

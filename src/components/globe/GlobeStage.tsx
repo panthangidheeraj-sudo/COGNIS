@@ -3,6 +3,7 @@ import { Pause, Play } from 'lucide-react';
 import { useGlobe } from '@/stores/ui';
 import { usePreferences } from '@/stores/preferences';
 import { useReducedMotion } from '@/hooks/useMediaQuery';
+import { useResolvedTheme } from '@/hooks/useResolvedTheme';
 import { ErrorBoundary } from '@/components/common/ErrorState';
 import { GlobeFallback } from './GlobeFallback';
 import './globe.css';
@@ -40,8 +41,7 @@ export function GlobeStage({ className, variant = 'intel' }: { className?: strin
   const spinPref = usePreferences((s) => s.globeSpin);
   const setPrefs = usePreferences((s) => s.set);
   const spin = spinPref === 'on' || (spinPref === 'auto' && !reduced);
-  const pref = usePreferences((s) => s.theme);
-  const theme: 'dark' | 'light' = pref === 'system' ? (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark') : pref;
+  const theme = useResolvedTheme(); // follows the toggle and the operating system live, so the globe re-tints without a reload
   const [ready, setReady] = useState(false);
   // The static globe stays underneath until the WebGL globe is on screen, then fades out.
   const [glReady, setGlReady] = useState(false);

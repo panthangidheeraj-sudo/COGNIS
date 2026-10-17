@@ -362,6 +362,33 @@ MIGRATIONS: list[tuple[int, str, str]] = [
         CREATE INDEX IF NOT EXISTS ix_company_research_runs_org ON company_research_runs(org_number, started_at)
         """,
     ),
+    (
+        5,
+        "AI Chat conversation threads and their messages (durable history)",
+        """
+        CREATE TABLE IF NOT EXISTS chat_threads (
+            id TEXT PRIMARY KEY,
+            title TEXT NOT NULL,
+            title_edited INTEGER NOT NULL DEFAULT 0,
+            org_number TEXT,
+            legal_name TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS ix_chat_threads_updated ON chat_threads(updated_at);
+        CREATE TABLE IF NOT EXISTS chat_messages (
+            id TEXT PRIMARY KEY,
+            thread_id TEXT NOT NULL REFERENCES chat_threads(id) ON DELETE CASCADE,
+            seq INTEGER NOT NULL,
+            role TEXT NOT NULL,
+            kind TEXT,
+            content TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            payload_json TEXT
+        );
+        CREATE INDEX IF NOT EXISTS ix_chat_messages_thread ON chat_messages(thread_id, seq)
+        """,
+    ),
 ]
 
 

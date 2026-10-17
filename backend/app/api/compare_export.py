@@ -108,7 +108,7 @@ def comparison(profiles: list[dict[str, Any]]) -> dict[str, Any]:
             row("annual_result", "Annual result", lambda p: _latest_fact(p, "annual_result"), money=True),
             row("total_assets", "Total assets", lambda p: _latest_fact(p, "total_assets"), money=True),
             row("equity", "Equity", lambda p: _latest_fact(p, "equity"), money=True),
-            row("debt", "Total debt", lambda p: _latest_fact(p, "debt"), money=True),
+            row("total_liabilities", "Total liabilities", lambda p: _latest_fact(p, "total_liabilities"), money=True),
             row("operating_margin", "Operating margin", ratio("operating_margin"), "%"),
             row("equity_ratio", "Equity ratio", ratio("equity_ratio"), "%")]},
         {"id": "people", "label": "People", "rows": [row("ceo", "CEO", lambda p: _person(p, "CEO")), row("chair", "Chair of the board", lambda p: _person(p, "Chair of the board")),

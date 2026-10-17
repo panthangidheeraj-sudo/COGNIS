@@ -13,6 +13,7 @@ from typing import Any
 from ..agent import llm_tasks
 from ..core.util import format_int, format_money, now_iso
 from ..extraction.boilerplate import is_boilerplate
+from ..extraction.financial_metrics import unavailable_reason
 from ..identity.model import CanonicalIdentity
 from .question_router import route_question
 
@@ -304,8 +305,12 @@ def _financial_blocks(p: dict[str, Any], route: Any, add: Any, gaps: list[str]) 
     keys = route.metrics or (["revenue"] if route.wants_period else ["revenue", "operating_result", "annual_result"])
     shown: list[dict[str, Any]] = []
     for key in keys:
+        why = unavailable_reason(key)
+        if why:  # a measure the filed accounts do not contain (debt, net debt): said plainly, never filled from another line
+            gaps.append(why)
+            continue
         s = _series(p, key)
-        label = {"revenue": "Revenue", "operating_result": "Operating result", "annual_result": "Annual result", "total_assets": "Total assets", "equity": "Equity", "debt": "Total debt", "cash": "Cash and bank deposits"}.get(key, key)
+        label = {"revenue": "Revenue", "operating_result": "Operating result", "annual_result": "Annual result", "total_assets": "Total assets", "equity": "Equity", "total_liabilities": "Total liabilities", "cash": "Cash and bank deposits"}.get(key, key)
         if not s or not s["points"]:
             gaps.append(f"{label}: not found in the filed annual accounts" + (f" ({p['financials'].get('message')})" if p["financials"].get("message") and not p["financials"].get("series") else "") + ".")
             continue

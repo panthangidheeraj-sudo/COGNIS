@@ -19,7 +19,7 @@ PENDING = "Not researched yet. Run research to gather this area from public sour
 STATUS_MAP = {"active": "active", "bankruptcy": "bankruptcy", "under_liquidation": "under_liquidation", "forced_dissolution": "under_liquidation",
               "deleted": "dissolved"}
 SERIES = [("revenue", "revenue", "Revenue"), ("operating_result", "operating_result", "Operating result"), ("annual_result", "annual_result", "Annual result"),
-          ("total_assets", "total_assets", "Total assets"), ("equity", "equity", "Equity"), ("debt", "debt", "Total debt"),
+          ("total_assets", "total_assets", "Total assets"), ("equity", "equity", "Equity"), ("total_liabilities", "total_liabilities", "Total liabilities"),
           ("cash_and_bank", "cash", "Cash and bank deposits")]
 ROLE_GROUP = {"ceo": "executive", "business_manager": "executive", "board_chair": "board", "deputy_chair": "board", "board_member": "board",
               "deputy_board_member": "board", "board_observer": "board", "proprietor": "founder", "general_partner": "other", "partner": "other"}

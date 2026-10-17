@@ -25,7 +25,7 @@ PROFF_CAPABILITY_MAP: list[dict[str, Any]] = [
     {"capability": "Branches / establishments", "status": "covered", "sources": ["brreg_subunits"], "note": "Registered sub-units (underenheter)."},
     {"capability": "Group structure (parent, subsidiaries)", "status": "partial", "sources": ["brreg_group", "brreg_entity"],
      "note": "Parent and group membership as the register exposes them; ownership shares are not available (see shareholders)."},
-    {"capability": "Key financial figures: revenue, operating result, annual result, assets, equity, debt",
+    {"capability": "Key financial figures: revenue, operating result, annual result, assets, equity, total liabilities",
      "status": "covered", "sources": ["brreg_accounts"],
      "note": "Regnskapsregisteret open API, each value with its reporting period and the currency the filing states."},
     {"capability": "Multi-year financial history", "status": "partial", "sources": ["brreg_accounts", "brreg_account_copies"],

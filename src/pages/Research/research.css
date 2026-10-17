@@ -218,7 +218,7 @@
   padding: 22px 24px;
   background: var(--surface-ivory);
   border-color: transparent;
-  box-shadow: 0 34px 70px -42px rgba(0, 0, 0, 0.75);
+  box-shadow: 0 34px 70px -42px rgb(var(--shadow-rgb) / calc(0.75 * var(--shadow-k)));
 }
 .rs-synth .rs-panel-title {
   padding-bottom: 12px;
@@ -261,8 +261,8 @@
 .rs-complete {
   display: grid;
   gap: 16px;
-  margin-top: 20px;
-  padding: 18px 20px;
+  margin-top: 24px;
+  padding: 20px 22px;
   border-radius: var(--r-lg);
   border: var(--bw) solid color-mix(in oklab, var(--accent-soft) 38%, var(--line));
   background: var(--frost-sheen), var(--surface-2);
@@ -293,23 +293,26 @@
   color: var(--warn);
 }
 .rs-complete-stats {
+  /* each metric is its own tile, so a long label, a wrapped sub-line or the coverage meter can never run into its neighbour */
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 156px), 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 14px 0 0;
   border-top: var(--bw) solid var(--line);
-  padding-top: 14px;
-  gap: 14px 0;
 }
 .rs-stat {
   display: grid;
   align-content: start;
-  gap: 4px;
-  padding: 0 16px;
-  border-left: var(--bw) solid var(--line);
+  gap: 6px;
   min-width: 0;
+  padding: 12px 14px;
+  border-radius: var(--r-md);
+  border: var(--bw) solid var(--line);
+  background: var(--surface-1, transparent);
 }
-.rs-stat:first-child {
-  border-left: 0;
-  padding-left: 0;
+.rs-stat--cov {
+  grid-column: span 2;
 }
 .rs-stat dt {
   font-size: var(--fs-xs);
@@ -342,7 +345,23 @@
 }
 .rs-stat-sub {
   font-size: 11.5px;
+  line-height: 1.4;
   color: var(--text-3);
+  overflow-wrap: anywhere;
+}
+.rs-stat dt,
+.rs-stat-v {
+  overflow-wrap: anywhere;
+}
+.rs-stat--cov .cov {
+  white-space: normal;
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+.rs-stat--cov .cov-note {
+  max-width: none;
+  overflow: visible;
+  text-overflow: clip;
 }
 .rs-stat--cov dd {
   padding-top: 4px;
@@ -363,11 +382,18 @@
   }
   .rs-complete-stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
   }
-  .rs-stat,
-  .rs-stat:first-child {
-    padding: 0 10px;
-    border-left: 0;
+  .rs-stat {
+    padding: 10px 12px;
+  }
+}
+@media (max-width: 380px) {
+  .rs-complete-stats {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .rs-stat--cov {
+    grid-column: auto;
   }
 }
 :root[data-density='compact'] .rs-complete {
@@ -531,14 +557,14 @@
 }
 .sstack-scene {
   position: relative;
-  height: 230px;
+  height: 280px;
   --stack-shift: -62px;
   perspective: 900px;
   display: grid;
   place-items: center;
 }
 .sstack--compact .sstack-scene {
-  height: 200px;
+  height: 250px;
 }
 .sstack-tile {
   --i: 0;
@@ -547,13 +573,13 @@
   height: 85px;
   margin-left: calc(var(--stack-shift) * 2);
   border-radius: 12px;
-  transform: rotateX(58deg) rotateZ(-38deg) translateZ(calc(var(--i) * 22px - 50px));
+  transform: rotateX(58deg) rotateZ(-38deg) translateZ(calc(var(--i) * 30px - 75px));
   transform-style: preserve-3d;
   border: 1px solid rgba(255, 255, 255, 0.16);
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.02));
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    0 10px 30px -14px rgba(0, 0, 0, 0.7);
+    0 10px 30px -14px rgb(var(--shadow-rgb) / calc(0.7 * var(--shadow-k)));
   -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
   transition:
@@ -564,7 +590,8 @@
   display: grid;
   place-items: center;
 }
-:is(:root[data-theme='light'], .on-ivory) .sstack-tile {
+:root[data-theme='light'] .sstack-tile:not(.on-inverse .sstack-tile),
+:root:not([data-theme='light']) .on-inverse .sstack-tile {
   border-color: rgba(16, 42, 67, 0.16);
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.85), rgba(239, 233, 220, 0.75));
   box-shadow: 0 10px 24px -14px rgba(16, 42, 67, 0.4);
@@ -597,12 +624,14 @@
   color: #ffffff;
   opacity: 1;
 }
-:is(:root[data-theme='light'], .on-ivory) .sstack-tile--verified {
+:root[data-theme='light'] .sstack-tile--verified:not(.on-inverse .sstack-tile),
+:root:not([data-theme='light']) .on-inverse .sstack-tile--verified {
   border-color: rgba(15, 27, 42, 0.8);
   background: linear-gradient(135deg, rgba(26, 42, 63, 0.92), rgba(15, 27, 42, 0.84));
   box-shadow: 0 12px 26px -14px rgba(15, 27, 42, 0.6);
 }
-:is(:root[data-theme='light'], .on-ivory) .sstack-tile--researching {
+:root[data-theme='light'] .sstack-tile--researching:not(.on-inverse .sstack-tile),
+:root:not([data-theme='light']) .on-inverse .sstack-tile--researching {
   background: linear-gradient(135deg, rgba(63, 114, 216, 0.2), rgba(255, 255, 255, 0.8));
 }
 .sstack-tile--failed,
@@ -622,10 +651,10 @@
 @keyframes cg-float {
   0%,
   100% {
-    transform: rotateX(58deg) rotateZ(-38deg) translateZ(calc(var(--i) * 22px - 50px));
+    transform: rotateX(58deg) rotateZ(-38deg) translateZ(calc(var(--i) * 30px - 75px));
   }
   50% {
-    transform: rotateX(58deg) rotateZ(-38deg) translateZ(calc(var(--i) * 25px - 46px));
+    transform: rotateX(58deg) rotateZ(-38deg) translateZ(calc(var(--i) * 33px - 71px));
   }
 }
 .sstack-legend {
@@ -640,10 +669,12 @@
   font-size: 12.5px;
 }
 .sstack-leg-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 2px;
-  background: var(--line-strong);
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  /* the swatch repeats the layer's own tone in the illustration, so a legend row and its slab are matched by colour as well as by name */
+  background: color-mix(in oklab, var(--accent-soft) calc(var(--i, 0) * 7% + 10%), var(--line-strong));
+  border: 1px solid color-mix(in oklab, var(--text-3) 45%, transparent);
 }
 .sstack-leg--verified .sstack-leg-dot {
   background: var(--accent-soft);
@@ -676,29 +707,30 @@
   color: var(--text-2);
 }
 
-/* On an ivory panel the idle layers are dimmed by colour, not by opacity: fading dark text on ivory drops it below readable contrast */
-.on-ivory .sstack-tile.sstack-tile--idle {
+/* On an ivory panel (inverse scope on the dark page) the idle layers are dimmed by colour, not by opacity: fading dark text on ivory drops it below readable contrast.
+   On the mirrored navy panel (light page) the default dim-by-opacity treatment applies, as on the dark page. */
+:root:not([data-theme='light']) .on-inverse .sstack-tile.sstack-tile--idle {
   opacity: 1;
   border-color: rgba(16, 42, 67, 0.2);
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(236, 229, 214, 0.8));
 }
-.on-ivory .sstack-tile--idle .sstack-tile-icon {
-  color: var(--ivory-ink-4);
+:root:not([data-theme='light']) .on-inverse .sstack-tile--idle .sstack-tile-icon {
+  color: var(--text-4);
   opacity: 0.9;
 }
-.on-ivory .sstack-tag--idle {
+:root:not([data-theme='light']) .on-inverse .sstack-tag--idle {
   opacity: 1;
-  color: var(--ivory-ink-3);
+  color: var(--text-3);
 }
-.on-ivory .sstack-leg--idle {
+:root:not([data-theme='light']) .on-inverse .sstack-leg--idle {
   opacity: 1;
-  color: var(--ivory-ink-2);
+  color: var(--text-2);
 }
-.on-ivory .sstack-leg--idle .sstack-leg-dot {
-  background: var(--ivory-ink-4);
+:root:not([data-theme='light']) .on-inverse .sstack-leg--idle .sstack-leg-dot {
+  background: var(--text-4);
 }
-.on-ivory .sstack-leg-state {
-  color: var(--ivory-ink-3);
+:root:not([data-theme='light']) .on-inverse .sstack-leg-state {
+  color: var(--text-3);
 }
 
 /* Searched, but the source family had nothing to verify */
@@ -713,7 +745,7 @@
 }
 
 /* Layer names beside the stack. Each tag sits at its tile's projected height
-   (translateZ step 22px × sin 58° ≈ 18.7px per layer). */
+   (translateZ step 30px × sin 58° ≈ 25.4px per layer). */
 .sstack-tags {
   position: absolute;
   inset: 0;
@@ -723,7 +755,7 @@
   --i: 0;
   position: absolute;
   left: calc(50% + 30px);
-  top: calc(50% - 7px - (var(--i) * 18.66px - 42.4px));
+  top: calc(50% - 7px - (var(--i) * 25.44px - 63.6px));
   display: flex;
   align-items: center;
   gap: 5px;
@@ -986,4 +1018,46 @@
 }
 .rs-report {
   margin: 10px 0 0;
+}
+
+/* ---- Layer separation: every slab has its own tone (Registry at the base, Public Activity on top), a firm edge and an icon that reads on it,
+   so six layers are six different things even before any of them has run. State then changes the slab's colour; it never hides it. ---- */
+.sstack-tile:is(.sstack-tile--idle, .sstack-tile--queued) {
+  opacity: 1;
+  background: color-mix(in oklab, #7aa7f2 calc(var(--i) * 5% + 7%), #101c2c);
+  border-color: color-mix(in oklab, #c6d3e4 calc(var(--i) * 4% + 22%), transparent);
+}
+.sstack-tile:is(.sstack-tile--idle, .sstack-tile--queued) .sstack-tile-icon {
+  color: #c6d3e4;
+  opacity: 0.85;
+}
+.sstack-tile--queued {
+  border-style: solid;
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--accent-soft) 40%, transparent);
+}
+:root[data-theme='light'] .sstack-tile:is(.sstack-tile--idle, .sstack-tile--queued):not(.on-inverse .sstack-tile),
+:root:not([data-theme='light']) .on-inverse .sstack-tile:is(.sstack-tile--idle, .sstack-tile--queued) {
+  opacity: 1;
+  background: color-mix(in oklab, #3f72d8 calc(var(--i) * 7% + 8%), #f6f1e6);
+  border-color: color-mix(in oklab, #102a43 calc(var(--i) * 4% + 24%), transparent);
+  box-shadow: 0 10px 16px -12px rgba(16, 42, 67, 0.55);
+}
+:root[data-theme='light'] .sstack-tile:is(.sstack-tile--idle, .sstack-tile--queued) .sstack-tile-icon:not(.on-inverse *),
+:root:not([data-theme='light']) .on-inverse .sstack-tile:is(.sstack-tile--idle, .sstack-tile--queued) .sstack-tile-icon {
+  color: #1a2a3f;
+  opacity: 0.8;
+}
+.sstack-tile--unavailable {
+  opacity: 1;
+  background: transparent;
+}
+.sstack-tag {
+  font-weight: 500;
+}
+.sstack-leg:is(.sstack-leg--idle, .sstack-leg--queued) .sstack-leg-dot {
+  background: color-mix(in oklab, #7aa7f2 calc(var(--i, 0) * 8% + 12%), #101c2c);
+}
+:root[data-theme='light'] .sstack-leg:is(.sstack-leg--idle, .sstack-leg--queued) .sstack-leg-dot:not(.on-inverse *),
+:root:not([data-theme='light']) .on-inverse .sstack-leg:is(.sstack-leg--idle, .sstack-leg--queued) .sstack-leg-dot {
+  background: color-mix(in oklab, #3f72d8 calc(var(--i, 0) * 9% + 10%), #f6f1e6);
 }

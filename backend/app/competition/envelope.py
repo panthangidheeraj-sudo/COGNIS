@@ -133,7 +133,7 @@ def synthesis_block(record: dict[str, Any], claims: list[dict[str, Any]], change
             "PEOPLE": people,
             "LOCATIONS": collect(fact("business_address", "Business address"), fact("municipality", "Municipality"), fact("registered_establishment_count", "Registered establishments")),
             "FINANCIALS": collect(fact("revenue", "Revenue"), fact("operating_result", "Operating result"), fact("annual_result", "Annual result"),
-                                  fact("total_assets", "Total assets"), fact("equity", "Equity"), fact("debt", "Debt")),
+                                  fact("total_assets", "Total assets"), fact("equity", "Equity"), fact("total_liabilities", "Total liabilities")),
             "HIRING": [{"value": c["value"], "evidence_ids": c["evidence_ids"]} for c in by_field.get("job_posting", [])],
             "PUBLIC_ACTIVITY": [{"value": c["value"], "date": c.get("as_of"), "evidence_ids": c["evidence_ids"]} for c in by_field.get("news_item", [])],
             "RECENT_CHANGES": [{"field": ch.get("field"), "old_value": ch.get("old_value"), "new_value": ch.get("new_value"), "source_url": ch.get("source_url"),

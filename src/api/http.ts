@@ -81,7 +81,85 @@ async function request<T>(method: string, path: string, opts: { query?: Query; b
   return (await res.json()) as T;
 }
 
+/** Parses a server-sent-events body into (event, data) pairs. Exported for tests. */
+export function parseSse(buffer: string): { events: Array<{ event: string; data: unknown }>; rest: string } {
+  const events: Array<{ event: string; data: unknown }> = [];
+  const parts = buffer.split(/\r?\n\r?\n/);
+  const rest = parts.pop() ?? '';
+  for (const block of parts) {
+    let event = 'message';
+    const data: string[] = [];
+    for (const line of block.split(/\r?\n/)) {
+      if (line.startsWith('event:')) event = line.slice(6).trim();
+      else if (line.startsWith('data:')) data.push(line.slice(5).replace(/^ /, ''));
+    }
+    if (!data.length) continue;
+    try {
+      events.push({ event, data: JSON.parse(data.join('\n')) });
+    } catch {
+      /* a malformed block is skipped, never shown */
+    }
+  }
+  return { events, rest };
+}
+
+/**
+ * POST that answers with server-sent events: `progress` events are handed to `onProgress`, then one `result` (resolved) or `error` (thrown as ApiError).
+ * A stream that ends without a result is an error — never a silent success.
+ */
+async function postStream<T>(path: string, body: unknown, onProgress?: (p: never) => void, signal?: AbortSignal): Promise<T> {
+  let res: Response;
+  try {
+    res = await fetch(buildUrl(path), { method: 'POST', signal, headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' }, body: JSON.stringify(body ?? {}), credentials: 'same-origin' });
+  } catch (err) {
+    if ((err as Error).name === 'AbortError') throw err;
+    throw new ApiError('network', 'The COGNIS backend could not be reached.');
+  }
+  if (!res.ok || !res.body) {
+    let payload: { message?: string; code?: ApiErrorCode; details?: unknown } = {};
+    try {
+      payload = await res.json();
+    } catch {
+      /* non-JSON body */
+    }
+    throw new ApiError(payload.code ?? codeForStatus(res.status), payload.message ?? `Request failed (${res.status}).`, res.status, payload.details);
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = '';
+  let result: T | undefined;
+  let failure: ApiError | undefined;
+  const handle = (events: Array<{ event: string; data: unknown }>) => {
+    for (const e of events) {
+      if (e.event === 'progress') onProgress?.(e.data as never);
+      else if (e.event === 'result') result = e.data as T;
+      else if (e.event === 'error') {
+        const d = e.data as { code?: ApiErrorCode; message?: string; details?: unknown };
+        failure = new ApiError(d.code ?? 'unavailable', d.message ?? 'The answer could not be produced.', 0, d.details);
+      }
+    }
+  };
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const parsed = parseSse(buf);
+      buf = parsed.rest;
+      handle(parsed.events);
+    }
+    handle(parseSse(buf + '\n\n').events);
+  } catch (err) {
+    if ((err as Error).name === 'AbortError') throw err;
+    throw new ApiError('network', 'The connection dropped before the answer finished.');
+  }
+  if (failure) throw failure;
+  if (result === undefined) throw new ApiError('unavailable', 'The answer did not finish. Nothing was invented in its place; please try again.');
+  return result;
+}
+
 export const http = {
+  stream: postStream,
   get: <T>(path: string, query?: Query, signal?: AbortSignal) => request<T>('GET', path, { query, signal }),
   post: <T>(path: string, body?: unknown, signal?: AbortSignal) => request<T>('POST', path, { body: body ?? {}, signal }),
   patch: <T>(path: string, body: unknown) => request<T>('PATCH', path, { body }),

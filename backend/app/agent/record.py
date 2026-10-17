@@ -142,6 +142,7 @@ def build_record(st: ResearchState, *, operations: dict[str, Any], completed_at:
         "procurement_candidates": _jsonable(st.procurement_candidates[:25]),
         # what the newsroom / investor-relations / press-coverage discovery read, page by page (also what it could not read)
         "news": _jsonable(st.news),
+        "regulatory": _jsonable(st.regulatory),
         "roles": _jsonable(st.roles),
         "locations": _jsonable(st.locations),
         "financial_records": _jsonable(st.financial_records),

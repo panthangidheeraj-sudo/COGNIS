@@ -115,7 +115,7 @@ function Dossier({ artifact, viewing }: { artifact: CompanyArtifact; viewing: Co
             </span>
           </div>
           <div className="row-wrap" style={{ gap: 8 }}>
-            <Link to={`/research?org=${c.orgNumber}`} className="btn btn--ivory">
+            <Link to={`/research?org=${c.orgNumber}`} className="btn btn--inverse">
               <Telescope aria-hidden /> Continue research
             </Link>
             {artifact.versions.length > 1 && (

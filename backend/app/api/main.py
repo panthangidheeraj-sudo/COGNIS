@@ -5,6 +5,7 @@ Run:  uvicorn app.api.main:app --port 8000      (the Vite dev server proxies /ap
 from __future__ import annotations
 
 import asyncio
+import json
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
@@ -15,15 +16,48 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 
 from ..config import get_settings, validate_configuration
+from ..connectors import regulatory
 from ..errors import ApiError
 from ..logging_setup import configure_logging, get_logger
 from ..storage import repository as repo
-from . import briefs, discover, library
+from . import briefs, chat, discover, library
 from .compare_export import comparison, export, metrics, system_status
 from .services import Services
 
 log = get_logger("api")
 SSE_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"}
+
+
+_BACKGROUND: set[asyncio.Task[None]] = set()
+
+
+async def _sse_answer(run: Any):  # noqa: ANN202
+    """Run an answer and stream what it really does: ``progress`` events as checks start, then one ``result`` (or ``error``). Never leaves a stream hanging."""
+    queue: asyncio.Queue[tuple[str, dict[str, Any]] | None] = asyncio.Queue()
+
+    def progress(stage: str, label: str, **extra: Any) -> None:
+        queue.put_nowait(("progress", {"stage": stage, "label": label, **extra}))
+
+    async def work() -> None:
+        try:
+            queue.put_nowait(("result", await run(progress)))
+        except ApiError as exc:
+            queue.put_nowait(("error", exc.to_body()))
+        except Exception as exc:  # noqa: BLE001 — never expose a stack trace
+            log.warning(f"chat stream failed: {type(exc).__name__}", exc_info=exc)  # the redacted error line and the code locations (no values) are logged
+            queue.put_nowait(("error", {"code": "unavailable", "message": "Something went wrong while answering. Please try again."}))
+        finally:
+            queue.put_nowait(None)
+
+    task = asyncio.create_task(work())  # not cancelled if the browser goes away: the answer still finishes (bounded by the research timeout) and is saved with the thread
+    _BACKGROUND.add(task)
+    task.add_done_callback(_BACKGROUND.discard)
+    while True:
+        item = await queue.get()
+        if item is None:
+            break
+        event, data = item
+        yield f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False, default=str)}\n\n"
 
 
 def create_app(services: Services | None = None) -> FastAPI:
@@ -115,6 +149,75 @@ def create_app(services: Services | None = None) -> FastAPI:
     async def company_brief(request: Request, org: str) -> dict[str, Any]:
         s = S(request)
         return briefs.brief_from_profile(await s.profile(s.clean_org(org)))
+
+    @r.get("/companies/{org}/chat/context")
+    async def company_chat_context(request: Request, org: str) -> dict[str, Any]:
+        """What the "Ask AI" panel needs before the first question: the verified identity, suggested questions, per-domain coverage and what this server can do."""
+        s = S(request)
+        org = s.clean_org(org)
+        record = await s.ensure_record(org)
+        profile = s.profile_for(record)
+        return chat.context_for(s, org, record, profile)
+
+    @r.post("/companies/{org}/chat")
+    async def company_chat(request: Request, org: str, body: dict[str, Any] = Body(default_factory=dict)) -> dict[str, Any]:  # noqa: B008
+        s = S(request)
+        turn = chat.ChatTurn(org=org, question=str(body.get("question") or ""), expected_name=(str(body["expectedName"]) if body.get("expectedName") else None),
+                             history=chat.clean_history(body.get("messages"), max_messages=s.settings.chat_max_history_messages, max_chars=1500), fresh=bool(body.get("fresh")))
+        return await chat.answer_question(s, turn)
+
+    @r.post("/companies/{org}/chat/stream")
+    async def company_chat_stream(request: Request, org: str, body: dict[str, Any] = Body(default_factory=dict)) -> StreamingResponse:  # noqa: B008
+        """The same answer as ``/chat``, preceded by the progress of the checks that really run (server-sent events: ``progress``, then ``result`` or ``error``)."""
+        s = S(request)
+        turn = chat.ChatTurn(org=org, question=str(body.get("question") or ""), expected_name=(str(body["expectedName"]) if body.get("expectedName") else None),
+                             history=chat.clean_history(body.get("messages"), max_messages=s.settings.chat_max_history_messages, max_chars=1500), fresh=bool(body.get("fresh")))
+        return StreamingResponse(_sse_answer(lambda progress: chat.answer_question(s, turn, progress)), media_type="text/event-stream", headers=SSE_HEADERS)
+
+    # ---------------------------------------------------- AI Chat threads --
+    @r.get("/chat/threads")
+    async def chat_threads_list(request: Request) -> dict[str, Any]:
+        return {"threads": S(request).chat_threads.list()}
+
+    @r.post("/chat/threads")
+    async def chat_threads_create(request: Request, body: dict[str, Any] = Body(default_factory=dict)) -> dict[str, Any]:  # noqa: B008
+        s = S(request)
+        org = legal = None
+        if body.get("orgNumber"):
+            org = s.clean_org(str(body["orgNumber"]))
+            legal = ((s.profile_for(await s.ensure_record(org)))["company"] or {}).get("legalName")
+        return s.chat_threads.create(str(body["id"]) if body.get("id") else None, org=org, legal_name=legal, title=str(body["title"]) if body.get("title") else None)
+
+    @r.get("/chat/threads/{thread_id}")
+    async def chat_threads_get(request: Request, thread_id: str) -> dict[str, Any]:
+        return S(request).chat_threads.get(thread_id)
+
+    @r.patch("/chat/threads/{thread_id}")
+    async def chat_threads_rename(request: Request, thread_id: str, body: dict[str, Any] = Body(default_factory=dict)) -> dict[str, Any]:  # noqa: B008
+        return S(request).chat_threads.rename(thread_id, str(body.get("title") or ""))
+
+    @r.delete("/chat/threads/{thread_id}")
+    async def chat_threads_delete(request: Request, thread_id: str) -> dict[str, Any]:
+        if not S(request).chat_threads.delete(thread_id):
+            raise ApiError("not_found", "That conversation does not exist (it may already be deleted).", status=404)
+        return {"deleted": True}
+
+    @r.post("/chat/threads/{thread_id}/ask")
+    async def chat_threads_ask(request: Request, thread_id: str, body: dict[str, Any] = Body(default_factory=dict)) -> dict[str, Any]:  # noqa: B008
+        return await S(request).chat_threads.ask(thread_id, body)
+
+    @r.post("/chat/threads/{thread_id}/ask/stream")
+    async def chat_threads_ask_stream(request: Request, thread_id: str, body: dict[str, Any] = Body(default_factory=dict)) -> StreamingResponse:  # noqa: B008
+        s = S(request)
+        s.chat_threads.get(thread_id)  # 404 before the stream opens
+        return StreamingResponse(_sse_answer(lambda progress: s.chat_threads.ask(thread_id, body, progress)), media_type="text/event-stream", headers=SSE_HEADERS)
+
+    @r.get("/companies/{org}/regulatory")
+    async def company_regulatory(request: Request, org: str) -> dict[str, Any]:
+        s = S(request)
+        org = s.clean_org(org)
+        record = await s.ensure_record(org)
+        return {"organisation_number": org, **(record.get("regulatory") or {"state": "not_checked", "items": [], "ip": regulatory.ip_status()})}
 
     @r.post("/companies/{org}/explain")
     async def company_explain(request: Request, org: str, body: dict[str, Any] = Body(default_factory=dict)) -> dict[str, Any]:  # noqa: B008

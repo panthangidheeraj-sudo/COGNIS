@@ -251,6 +251,19 @@ sources:
     capabilities: [procurement, public_activity]
     notes: "Yearly CSV files imported offline (scripts/import_doffin_open_data.py); facts carry the dataset period. Rows link to a company only through an organisation-number column."
 
+  - id: regulatory_official
+    name: "Official regulators and public notices (found by search)"
+    category: regulatory
+    authority: primary
+    source_class: government_regulator
+    access: http_fetch
+    licence: "official public pages; robots.txt respected; only a short verbatim passage, the title, date and link are stored"
+    auth_required: true
+    env: TAVILY_API_KEY
+    enabled_by_default: true
+    capabilities: [regulation, public_activity]
+    notes: "Discovery uses the existing free Tavily allowance (no paid usage is ever started); every page on the REGULATORY_DOMAINS allowlist is fetched by COGNIS itself and must name this exact organisation (organisation number, or the exact registered name). Stage is read from the page's own wording: proposal vs enacted, allegation vs decision. Patents, trademarks and designs are NOT read (see patentstyret) and are reported as unavailable."
+
   - id: patentstyret
     name: "Patentstyret open API"
     category: ip_registry
@@ -261,7 +274,7 @@ sources:
     env: PATENTSTYRET_API_KEY
     enabled_by_default: false
     capabilities: [ip]
-    notes: "Requires a subscription key; endpoint shape requires review before competition use."
+    notes: "Not used. The data API (developer.patentstyret.no) requires registering and requesting a subscription key, and the public search (search.patentstyret.no) is a script-driven app without a documented anonymous data endpoint. Patents, trademarks and designs are therefore reported as unavailable, never as none. See docs/SOURCE_ACCESS_AUDIT.md."
 
   - id: nav_jobs
     name: "NAV Arbeidsplassen stillingsfeed (pam-stilling-feed)"

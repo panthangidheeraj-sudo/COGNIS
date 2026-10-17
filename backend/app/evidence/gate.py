@@ -69,7 +69,7 @@ NUMERIC_FIELDS = {
 }
 FINANCIAL_FIELDS = {
     "revenue", "operating_expenses", "payroll_expenses", "operating_result", "net_financial_items", "profit_before_tax", "tax_expense",
-    "annual_result", "total_assets", "fixed_assets", "current_assets", "cash_and_bank", "equity", "debt", "short_term_debt", "long_term_debt",
+    "annual_result", "total_assets", "fixed_assets", "current_assets", "cash_and_bank", "equity", "total_liabilities", "current_liabilities", "non_current_liabilities",
 }
 
 
@@ -293,7 +293,7 @@ CORE_FIELDS: dict[str, tuple[tuple[str, ...], str]] = {
     "annual_result": (("financials",), "No filed annual accounts state an annual result."),
     "total_assets": (("financials",), "No filed annual accounts state total assets."),
     "equity": (("financials",), "No filed annual accounts state equity."),
-    "debt": (("financials",), "No filed annual accounts state total debt."),
+    "total_liabilities": (("financials",), "No filed annual accounts state total liabilities."),
     "annual_accounts_filed": (("financial_history",), "No filed annual-account copies are listed."),
     "official_website": (("website",), "No website could be verified as belonging to this exact organisation."),
     "business_description": (("website",), "No company-stated description was found on a verified website."),
@@ -337,7 +337,7 @@ def absences(claims: list[Claim], modules: dict[str, ModuleResult], *, legal_for
             note = worst.note or explanation
             if state == "available":
                 state = "not_available"
-        if fld in {"revenue", "operating_result", "profit_before_tax", "annual_result", "total_assets", "equity", "debt", "annual_accounts_filed"} and legal_form == "ENK" and state == "not_available":
+        if fld in {"revenue", "operating_result", "profit_before_tax", "annual_result", "total_assets", "equity", "total_liabilities", "annual_accounts_filed"} and legal_form == "ENK" and state == "not_available":
             state, note = "not_applicable", "Sole proprietorships (ENK) generally do not file annual accounts with Regnskapsregisteret."
         out.append(Absence(field=fld, availability=state, modules=[m.module for m in consulted], note=note))
     return out

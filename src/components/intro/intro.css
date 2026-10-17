@@ -1,0 +1,603 @@
+/* ================================ LAUNCH INTRO ================================
+   A warm-ivory, art-directed opening: brand and introduction on the left, the five-card product tour on the right, one control band along
+   the bottom. The surface is always ivory with navy ink and muted gold (both app themes), so the navy Atlas mark reads correctly.
+   Nothing here animates continuously: the backdrop is a still, and the only motion is the one-off entrance and a short card transition
+   (transform + opacity only, no filters), both switched off under reduced motion. */
+html.cg-intro-lock,
+html.cg-intro-lock body {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+.launch-intro {
+  --li-ivory: #fbf8f1;
+  --li-paper: #fffdf8;
+  --li-navy: #0f1b2a;
+  --li-ink-2: #34445a;
+  --li-ink-3: #55657a;
+  --li-gold: #b08d4a;
+  --li-gold-d: #7d6128;
+  --li-line: rgba(15, 27, 42, 0.14);
+  --li-band: 104px; /* the control band under the carousel: caption, progress segments, arrows */
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  overflow-x: hidden;
+  overflow-y: auto;
+  color: var(--li-navy);
+  background: linear-gradient(135deg, #fffdf8 0%, #f7f2e6 52%, #efe8d8 100%);
+  transition: opacity 450ms var(--ease-out, ease);
+  -webkit-font-smoothing: antialiased;
+}
+.launch-intro.is-leaving {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ---- background: still line-work (no continuous animation, so nothing repaints while the tour is used) ---- */
+.li-bg {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  contain: strict;
+}
+.li-glow {
+  position: absolute;
+  border-radius: 50%;
+}
+.li-glow--a {
+  width: 72vmax;
+  height: 72vmax;
+  left: -18vmax;
+  top: -30vmax;
+  background: radial-gradient(closest-side, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0));
+}
+.li-glow--b {
+  width: 60vmax;
+  height: 60vmax;
+  right: -16vmax;
+  bottom: -26vmax;
+  background: radial-gradient(closest-side, rgba(176, 141, 74, 0.17), rgba(176, 141, 74, 0));
+}
+.li-orbits {
+  position: absolute;
+  right: -12vmax;
+  top: 50%;
+  width: min(1500px, 118vmax);
+  aspect-ratio: 1;
+  margin-top: calc(min(1500px, 118vmax) / -2);
+}
+.li-orbits svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.li-contours {
+  position: absolute;
+  left: -6%;
+  bottom: 0;
+  width: 112%;
+  height: 46%;
+  opacity: 0.9;
+}
+.li-contours svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* ---- composition: hero | tour, actions under the hero, all on one grid ---- */
+.li-inner {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 1720px;
+  height: 100dvh;
+  min-height: 540px;
+  margin: 0 auto;
+  padding: clamp(20px, 4.4dvh, 52px) clamp(24px, 4.2vw, 84px);
+  display: grid;
+  grid-template-columns: minmax(330px, 0.8fr) minmax(0, 1.2fr);
+  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'hero tour'
+    'actions tour';
+  column-gap: clamp(20px, 3.4vw, 64px);
+}
+.li-hero {
+  grid-area: hero;
+  align-self: center;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: clamp(10px, 2dvh, 22px);
+  min-width: 0;
+}
+.li-brand {
+  display: flex;
+  align-items: center;
+  gap: clamp(14px, 1.4vw, 22px);
+}
+.li-logo {
+  position: relative;
+  display: grid;
+  place-items: center;
+  animation: li-logo-in 1.35s cubic-bezier(0.22, 1, 0.36, 1) 0.2s both;
+}
+.li-logo .cg-logo-img {
+  height: clamp(54px, 9dvh, 96px);
+  width: auto;
+}
+/* one slow pass of warm light, clipped to the mark itself */
+.li-sheen {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  -webkit-mask: url('/brand/cognis-atlas-navy.png') center / contain no-repeat;
+  mask: url('/brand/cognis-atlas-navy.png') center / contain no-repeat;
+  background: linear-gradient(105deg, transparent 38%, rgba(214, 178, 104, 0.95) 50%, transparent 62%) 160% 0 / 250% 100% no-repeat;
+  opacity: 0.8;
+  animation: li-sheen 1.8s ease-in-out 1s both;
+}
+.li-title {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: clamp(15px, 1.2vw, 19px);
+  letter-spacing: 0.46em;
+  color: var(--li-navy);
+  animation: li-rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.9s both;
+}
+.li-headline {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-weight: 400;
+  font-size: clamp(38px, min(4.5vw, 8.4dvh), 78px);
+  line-height: 1.02;
+  letter-spacing: -0.012em;
+  color: var(--li-navy);
+  text-wrap: balance;
+  animation: li-rise 1s cubic-bezier(0.22, 1, 0.36, 1) 1.05s both;
+}
+.li-headline em {
+  display: block;
+  font-style: italic;
+  color: var(--li-gold-d);
+}
+.li-desc {
+  margin: 0;
+  max-width: 44ch;
+  color: var(--li-ink-2);
+  font-size: clamp(14px, 0.5vw + 8.5px, 17px);
+  line-height: 1.55;
+  animation: li-rise 1s cubic-bezier(0.22, 1, 0.36, 1) 1.2s both;
+}
+.li-steps {
+  list-style: none;
+  margin: clamp(2px, 1dvh, 10px) 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  font-size: 13px;
+  color: var(--li-ink-3);
+  animation: li-rise 1s cubic-bezier(0.22, 1, 0.36, 1) 1.35s both;
+}
+.li-steps li {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  padding-bottom: 4px;
+  border-bottom: 2px solid transparent;
+  transition:
+    color 400ms ease,
+    border-color 400ms ease;
+}
+.li-steps li span {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.06em;
+  color: var(--li-gold-d);
+}
+.li-steps li.is-on {
+  color: var(--li-navy);
+  font-weight: 600;
+  border-color: var(--li-gold);
+}
+
+/* ---- tour: one card at a time + one control band ---- */
+.li-tour {
+  grid-area: tour;
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  animation: li-slide-in 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.45s both;
+}
+.li-tourbox {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) var(--li-band);
+  outline: none;
+}
+.li-tourbox:focus-visible .li-cards {
+  outline: 2px solid var(--li-navy);
+  outline-offset: 4px;
+  border-radius: 14px;
+}
+.li-cards {
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+}
+.li-card {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  display: grid;
+  place-items: center;
+  padding: 6px;
+  opacity: 0;
+  visibility: hidden;
+  transform: translate3d(5%, 0, 0);
+  transition:
+    transform 460ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 300ms ease,
+    visibility 0s linear 460ms;
+}
+.li-card[data-state='before'] {
+  transform: translate3d(-5%, 0, 0);
+}
+.li-card[data-state='active'] {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition-delay: 0s;
+}
+.li-card img {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  background: var(--li-paper);
+  border: 1px solid rgba(15, 27, 42, 0.14);
+  border-radius: 14px;
+  box-shadow:
+    0 30px 56px -34px rgba(15, 27, 42, 0.45),
+    0 10px 22px -14px rgba(15, 27, 42, 0.25);
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+/* control band: caption + arrows on the first row, step indicators under them */
+.li-band {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: 1fr auto;
+  align-items: start;
+  column-gap: 16px;
+  row-gap: 8px;
+  padding-top: 8px;
+}
+.li-caption {
+  grid-column: 1;
+  grid-row: 1;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: baseline;
+  gap: 4px 14px;
+  min-width: 0;
+}
+.li-caption-n {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: var(--li-gold-d);
+}
+.li-caption strong {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--li-navy);
+}
+.li-caption-s {
+  grid-column: 2;
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--li-ink-2);
+}
+.li-dots {
+  grid-column: 1;
+  grid-row: 2;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: 8px;
+}
+.li-dot {
+  position: relative;
+  display: block;
+  width: 44px;
+  height: 4px;
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  background: rgba(15, 27, 42, 0.16);
+  cursor: pointer;
+  transition: background 250ms ease;
+}
+.li-dot::before {
+  content: '';
+  position: absolute;
+  inset: -14px -3px;
+}
+.li-dot.is-active {
+  background: var(--li-navy);
+}
+.li-dot:hover:not(.is-active) {
+  background: rgba(15, 27, 42, 0.34);
+}
+.li-arrows {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  display: flex;
+  gap: 10px;
+  align-self: end;
+}
+.li-arrow {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--li-paper);
+  color: var(--li-navy);
+  border: 1px solid var(--li-line);
+  cursor: pointer;
+  transition:
+    background 200ms ease,
+    color 200ms ease,
+    border-color 200ms ease;
+}
+.li-arrow svg {
+  width: 18px;
+  height: 18px;
+}
+.li-arrow:hover:not(:disabled) {
+  background: var(--li-navy);
+  color: var(--li-ivory);
+  border-color: var(--li-navy);
+}
+.li-arrow:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.li-dot:focus-visible,
+.li-arrow:focus-visible {
+  outline: 2px solid var(--li-navy);
+  outline-offset: 3px;
+}
+
+/* ---- actions: aligned with the bottom of the control band ---- */
+.li-actions {
+  grid-area: actions;
+  align-self: end;
+  display: flex;
+  align-items: center;
+  gap: 8px 20px;
+  min-height: 52px;
+  animation: li-rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) 1.5s both;
+}
+.li-enter,
+.li-skip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 52px;
+  font: inherit;
+  cursor: pointer;
+}
+.li-enter {
+  gap: 12px;
+  padding: 0 30px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--li-navy);
+  color: var(--li-ivory);
+  font-size: 16px;
+  font-weight: 560;
+  letter-spacing: 0.005em;
+  box-shadow: 0 14px 26px -14px rgba(15, 27, 42, 0.7);
+  transition:
+    transform 200ms var(--ease-out, ease),
+    background 200ms ease,
+    box-shadow 200ms ease;
+}
+.li-enter svg {
+  width: 18px;
+  height: 18px;
+  color: #d9bb7e;
+  transition: transform 200ms var(--ease-out, ease);
+}
+.li-enter:hover {
+  background: #1b2d46;
+  transform: translateY(-1px);
+}
+.li-enter:hover svg {
+  transform: translateX(3px);
+}
+.li-skip {
+  padding: 0 10px;
+  border: 0;
+  background: none;
+  color: var(--li-ink-3);
+  font-size: 15px;
+  transition: color 200ms ease;
+}
+.li-skip:hover {
+  color: var(--li-navy);
+}
+.li-enter:focus-visible,
+.li-skip:focus-visible {
+  outline: 2px solid var(--li-navy);
+  outline-offset: 3px;
+}
+
+/* ---- smaller desktops: compress, keep the two-column composition ---- */
+@media (max-width: 1240px), (max-height: 700px) {
+  .launch-intro {
+    --li-band: 92px;
+  }
+  .li-desc {
+    max-width: 40ch;
+  }
+  .li-contours {
+    display: none;
+  }
+  .li-caption-s {
+    font-size: 14px;
+  }
+}
+@media (max-height: 640px) and (min-width: 861px) {
+  .launch-intro {
+    --li-band: 84px;
+  }
+  .li-desc,
+  .li-steps {
+    display: none;
+  }
+  .li-caption strong {
+    font-size: 18px;
+  }
+  .li-caption-s {
+    font-size: 13.5px;
+    line-height: 1.35;
+  }
+  .li-enter,
+  .li-skip {
+    height: 46px;
+  }
+}
+
+/* ---- stacked: brand, tour, then the controls ---- */
+@media (max-width: 860px) {
+  .launch-intro {
+    --li-band: 96px;
+  }
+  .li-inner {
+    height: auto;
+    min-height: 100dvh;
+    padding: 20px 20px 28px;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto auto;
+    grid-template-areas:
+      'hero'
+      'tour'
+      'actions';
+    row-gap: 14px;
+  }
+  .li-hero {
+    align-self: start;
+    gap: 10px;
+  }
+  .li-brand {
+    gap: 12px;
+  }
+  .li-logo .cg-logo-img {
+    height: 48px;
+  }
+  .li-headline {
+    font-size: clamp(32px, 9vw, 44px);
+  }
+  .li-desc {
+    font-size: 14px;
+    max-width: none;
+  }
+  .li-steps {
+    display: none;
+  }
+  .li-tour {
+    height: calc(clamp(250px, 40dvh, 360px) + var(--li-band));
+  }
+  .li-orbits {
+    right: -40vmax;
+    opacity: 0.8;
+  }
+  .li-actions {
+    flex-direction: column-reverse;
+    align-items: stretch;
+    gap: 4px;
+  }
+  .li-enter {
+    width: 100%;
+  }
+  .li-skip {
+    height: 44px;
+  }
+  .li-arrow {
+    width: 42px;
+    height: 42px;
+  }
+  .li-dot {
+    width: 32px;
+  }
+}
+
+@keyframes li-logo-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+    clip-path: inset(100% 0 0 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    clip-path: inset(0 0 0 0);
+  }
+}
+@keyframes li-sheen {
+  from {
+    background-position: 160% 0;
+  }
+  to {
+    background-position: -60% 0;
+  }
+}
+@keyframes li-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+@keyframes li-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(28px);
+  }
+}
+
+/* reduced motion: nothing moves continuously and nothing slides in; the background is a still, the content is simply there */
+.launch-intro[data-reduced] *,
+.launch-intro[data-reduced] {
+  animation: none !important;
+}
+.launch-intro[data-reduced] {
+  transition-duration: 1ms;
+}
+.launch-intro[data-reduced] .li-card,
+.launch-intro[data-reduced] .li-dot,
+.launch-intro[data-reduced] .li-arrow {
+  transition: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  :root:not([data-motion='full']) .launch-intro,
+  :root:not([data-motion='full']) .launch-intro * {
+    animation: none !important;
+    transition: none !important;
+  }
+}

@@ -7,6 +7,7 @@ Live (--live):     the same 100 organisation numbers against the real sources (r
 
     python scripts/smoke_test.py                 # offline, ~seconds
     python scripts/smoke_test.py --live          # real network; writes out/smoke-live/
+    python scripts/smoke_test.py --live --seed 7 --fresh --out out/smoke-seed7   # another random 100, cache bypassed (honest request counts)
 
 Checks: one terminal envelope per input, contract/evidence integrity, no wrong-company website
 publication (offline scenarios), idempotent re-run, budgets respected. Writes a Markdown report.
@@ -32,6 +33,7 @@ def main() -> None:
     p.add_argument("--universe", default=str(BACKEND_ROOT / "tests" / "fixtures" / "entry-companies.jsonl"))
     p.add_argument("--out", default=None)
     p.add_argument("--workers", type=int, default=None)
+    p.add_argument("--fresh", action="store_true", help="Bypass the response cache so every request is real (use for benchmarks; the default reuses cached responses)")
     args = p.parse_args()
     bootstrap(quiet=True)
 
@@ -65,7 +67,7 @@ def main() -> None:
     def cfg(run_id: str, previous: str | None = None) -> BatchConfig:
         return BatchConfig(organisations=str(out / "organisations.txt"), bulk=str(out / "bulk.jsonl"), output=str(out / f"{run_id}-envelopes.jsonl"),
                            profiles_output=str(out / f"{run_id}-profiles.jsonl"), report=str(out / f"{run_id}-report.json"), run_id=run_id, expected_count=len(rows),
-                           previous_profiles=previous, transport=transport, provider=provider, use_provider_override=not args.live, db=db, workers=args.workers)
+                           previous_profiles=previous, transport=transport, provider=provider, use_provider_override=not args.live, db=db, workers=args.workers, fresh=args.fresh)
 
     t0 = time.time()
     first = asyncio.run(run_batch(cfg("smoke-1"), settings))
@@ -98,6 +100,8 @@ def main() -> None:
         f"- First run: {t1 - t0:.1f} s · requests {ops['requests']} · cost ${ops['third_party_cost_usd']:.4f} · LLM calls {ops['llm_calls']}",
         f"- Per company runtime p50 {ops['company_runtime_ms']['p50']} ms · p95 {ops['company_runtime_ms']['p95']} ms",
         f"- Re-run (cache + change detection): {t2 - t1:.1f} s · requests {second['operations']['requests']} · changes {second['change_detection']['total_changes']}",
+        f"- Event-loop stalls (>{first['event_loop_lag']['threshold_seconds']:.0f} s): first run {first['event_loop_lag']['stalls_over_threshold']} "
+        f"(max lag {first['event_loop_lag']['max_ms']} ms) · re-run {second['event_loop_lag']['stalls_over_threshold']} (max lag {second['event_loop_lag']['max_ms']} ms)",
         f"- Entity states: {first['entity_states']}", "", "## Coverage (companies with an available claim)", "",
         *(f"- {k}: {v}/{len(envs)}" for k, v in first["coverage"]["companies_with_field"].items()), "", "## Module states", "",
         *(f"- {m}: {s}" for m, s in first["module_states"].items()), "", "## Identity", "",

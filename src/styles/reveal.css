@@ -1,0 +1,41 @@
+/* ==========================================================================
+   AUTOMATIC SECTION REVEALS  (driven by useAutoReveal; see hooks/useRevealOnScroll.ts)
+   --------------------------------------------------------------------------
+   A box waits as `hidden`, transitions as `in`, and is untouched once `done`. The hook sets these only from JS, so content is never
+   hidden if scripts fail. Motion is opacity plus a `translate` (a separate property, so a box's own `transform` is never replaced).
+   The look is its own: 24px rise, 650ms, a long ease-out, and 90ms between boxes that arrive together (`--reveal-i`, 0–8, set at reveal
+   time). These do NOT follow --motion-slow, which is a UI-feedback speed (360ms) and made the reveal read as a plain fade.
+   ========================================================================== */
+:root {
+  --reveal-distance: 24px;
+  --reveal-duration: 650ms;
+  --reveal-step: 90ms;
+  --reveal-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+html [data-reveal-auto='hidden'] {
+  opacity: 0;
+  translate: 0 var(--reveal-distance);
+}
+html [data-reveal-auto='in'] {
+  transition:
+    opacity var(--reveal-duration) var(--reveal-ease) calc(var(--reveal-i, 0) * var(--reveal-step)),
+    translate var(--reveal-duration) var(--reveal-ease) calc(var(--reveal-i, 0) * var(--reveal-step));
+}
+/* a box that has keyboard focus inside is never left invisible */
+html [data-reveal-auto='hidden']:focus-within {
+  opacity: 1;
+  translate: none;
+}
+/* Reduced motion (the COGNIS Motion setting or the OS): boxes are simply there */
+:root[data-motion='reduced'] [data-reveal-auto] {
+  opacity: 1 !important;
+  translate: none !important;
+  transition: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  :root:not([data-motion='full']) [data-reveal-auto] {
+    opacity: 1 !important;
+    translate: none !important;
+    transition: none !important;
+  }
+}

@@ -83,7 +83,7 @@ export default function LibraryPage() {
         </div>
       </div>
 
-      <div className="lib-search input-wrap on-ivory">
+      <div className="lib-search input-wrap on-inverse">
         <Search aria-hidden />
         <label htmlFor="lib-q" className="sr-only">
           Search your research

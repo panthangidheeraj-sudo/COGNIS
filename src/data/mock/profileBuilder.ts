@@ -130,7 +130,7 @@ export interface CompanySpec {
   result?: number[];
   assets?: number[];
   equity?: number[];
-  debt?: number[];
+  totalLiabilities?: number[];
   cash?: number[];
   avgEmployees?: number[];
   employeesNow: number | null;
@@ -356,7 +356,7 @@ export function buildProfile(spec: CompanySpec): CompanyProfile {
     mkSeries('annual_result', 'Annual result', spec.result, 'Årsresultat');
     mkSeries('total_assets', 'Total assets', spec.assets, 'Sum eiendeler');
     mkSeries('equity', 'Equity', spec.equity, 'Sum egenkapital');
-    mkSeries('debt', 'Total debt', spec.debt, 'Sum gjeld');
+    mkSeries('total_liabilities', 'Total liabilities', spec.totalLiabilities, 'Sum gjeld (total liabilities)');
     mkSeries('cash', 'Cash and equivalents', spec.cash, 'Bankinnskudd, kontanter o.l.');
     mkSeries('employees', 'Average FTEs (annual accounts)', spec.avgEmployees, 'Gjennomsnittlig antall årsverk', 'people');
   }

@@ -1,8 +1,8 @@
 /**
  * Monochrome "corporate intelligence" globe: a bright ivory-white sphere with fine navy-ink geography (dots, a crisp coastline, one
  * faint inland contour) and a soft silver rim. The ocean is white, the land is ink, and the shading from lit to shaded side is
- * what makes it a sphere. On the dark workspace the globe is the bright object; on the ivory (light) theme the sphere is a
- * slightly deeper paper tone so it still reads against the page. No blue glow, no imagery.
+ * what makes it a sphere. On the dark workspace the globe is the bright object; on the ivory (light) theme it is the exact
+ * inverse: a deep navy sphere with fine ivory geography, so it is the dark object on the light page. No blue glow, no imagery.
  * One palette for the WebGL surface and the static fallback, so the cross-fade between them is invisible.
  */
 export interface IntelPalette {
@@ -39,20 +39,21 @@ export const INTEL_DARK: IntelPalette = {
   haloStrength: 0.09,
 };
 
+/** The mirror of INTEL_DARK: a deep navy sphere with fine ivory geography and a soft steel rim, set on the ivory page. */
 export const INTEL_LIGHT: IntelPalette = {
-  deep: '#cbc7bb',
-  mid: '#e6e2d7',
-  ink: '#16243d',
-  rim: '#556178',
+  deep: '#0a1322', // the shaded side: deep ink-navy
+  mid: '#22334f', // the lit side: a clear, low-saturation navy
+  ink: '#f4efe3', // ivory ink for the continents
+  rim: '#8d9bb4', // a soft steel shade at the limb that rounds the sphere
   rimAmount: 0.4,
-  rimPower: 3.4,
-  dotOpacity: 0.9,
-  dotFloor: 0.34,
-  dotCore: 0.5,
-  fill: 0.07,
-  coast: 0.42,
-  contour: 0.08,
-  halo: '#44516a',
+  rimPower: 3.2,
+  dotOpacity: 0.94,
+  dotFloor: 0.5,
+  dotCore: 0.6,
+  fill: 0.1,
+  coast: 0.62,
+  contour: 0.13,
+  halo: '#16243d',
   haloStrength: 0.1,
 };
 

@@ -74,7 +74,7 @@ export function SourceStack({ steps, running, compact }: { steps: ResearchStep[]
       <figcaption>
         <ul className="sstack-legend">
           {[...states].reverse().map((l) => (
-            <li key={l.id} className={`sstack-leg sstack-leg--${l.state}`}>
+            <li key={l.id} className={`sstack-leg sstack-leg--${l.state}`} style={{ '--i': states.indexOf(l) } as React.CSSProperties}>
               <span className="sstack-leg-dot" aria-hidden />
               <span className="sstack-leg-label">{l.label}</span>
               <span className="sstack-leg-state">

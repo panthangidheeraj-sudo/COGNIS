@@ -81,7 +81,7 @@
   box-shadow: var(--shadow-1);
   position: sticky;
   top: var(--topbar-h);
-  z-index: 6;
+  z-index: var(--z-sticky);
 }
 .tb-sep {
   width: 1px;
@@ -198,7 +198,7 @@
   z-index: 5;
 }
 .sg-frozen:last-of-type {
-  box-shadow: 6px 0 12px -10px rgba(0, 0, 0, 0.6);
+  box-shadow: 6px 0 12px -10px rgb(var(--shadow-rgb) / calc(0.6 * var(--shadow-k)));
 }
 .sg-num {
   justify-content: center;

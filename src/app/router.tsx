@@ -1,5 +1,6 @@
 import { lazy } from 'react';
-import { createBrowserRouter, Navigate, useParams } from 'react-router-dom';
+import { createBrowserRouter, Navigate, useParams, type RouteObject } from 'react-router-dom';
+import type { RouteHandle } from './routeHandle';
 import { AppShell } from './layout/AppShell';
 
 // Route-level code splitting: heavy pages (charts, 3D) load on demand.
@@ -7,6 +8,7 @@ const Home = lazy(() => import('@/pages/Home/HomePage'));
 const Discover = lazy(() => import('@/pages/Discover/DiscoverPage'));
 const Research = lazy(() => import('@/pages/Research/ResearchPage'));
 const Company = lazy(() => import('@/pages/Company/CompanyPage'));
+const Chat = lazy(() => import('@/pages/Chat/ChatPage'));
 const Library = lazy(() => import('@/pages/Library/LibraryPage'));
 const Artifact = lazy(() => import('@/pages/Artifact/ArtifactPage'));
 const SheetsIndex = lazy(() => import('@/pages/DataSheets/SheetsIndexPage'));
@@ -22,7 +24,7 @@ function CompanyResearchRedirect() {
   return <Navigate to={`/research?org=${orgNumber}`} replace />;
 }
 
-export const router = createBrowserRouter([
+export const routes: RouteObject[] = [
   {
     element: <AppShell />,
     children: [
@@ -31,15 +33,18 @@ export const router = createBrowserRouter([
       { path: '/research', element: <Research /> },
       { path: '/company/:orgNumber', element: <Company /> },
       { path: '/company/:orgNumber/research', element: <CompanyResearchRedirect /> },
+      { path: '/chat/:threadId?', element: <Chat /> },
       { path: '/library', element: <Library /> },
       { path: '/library/:artifactId', element: <Artifact /> },
       { path: '/sheets', element: <SheetsIndex /> },
       { path: '/sheets/:sheetId', element: <Sheet /> },
-      { path: '/compare', element: <Compare /> },
+      { path: '/compare', element: <Compare />, handle: { compareTray: true } satisfies RouteHandle },
       { path: '/watchlist', element: <Watchlist /> },
       { path: '/settings', element: <Settings /> },
       { path: '/about', element: <About /> },
       { path: '*', element: <NotFound /> },
     ],
   },
-]);
+];
+
+export const router = createBrowserRouter(routes);

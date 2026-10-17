@@ -17,7 +17,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from ..config import Settings, get_settings
-from ..connectors import brreg, geonorge, job_discovery, nav, news_discovery, newsroom, norid, optional, procurement, search
+from ..connectors import brreg, geonorge, job_discovery, nav, news_discovery, newsroom, norid, optional, procurement, regulatory, search
 from ..connectors import jobs as jobs_conn
 from ..connectors.base import ConnectorContext, not_run
 from ..connectors.website import ENRICHMENT_KINDS, SiteCrawl, crawl_site, fetch_page, site_links
@@ -97,6 +97,7 @@ class ResearchState:
     hiring_wanted: bool = False
     nav_summary: dict[str, Any] | None = None  # NAV lookup outcome incl. unverified candidates (internal, never published)
     procurement_candidates: list[dict[str, Any]] = field(default_factory=list)  # name-only notices (internal, never published)
+    regulatory: dict[str, Any] | None = None  # official regulator pages / public notices found for this company, plus the always-unavailable IP categories (record["regulatory"])
     news: dict[str, Any] | None = None  # what the newsroom / press-coverage discovery read, per page (record["news"]); drives the "sources checked" list
     roles: list[dict[str, Any]] = field(default_factory=list)
     locations: list[dict[str, Any]] = field(default_factory=list)
@@ -342,6 +343,21 @@ class Orchestrator:
                 st.extra_modules += res.modules
                 st.observations += res.observations
                 st.procurement_candidates += res.candidates
+        # ---- 5b. regulatory notices and public decisions (free: official regulator pages found by search; deep research only) -
+        if st.options.mode == "deep":
+            try:
+                reg = await regulatory.discover_regulatory(ctx, identity)
+            except Exception as exc:  # a connector bug is a recorded failure, never an empty "nothing found"
+                log.exception("regulatory discovery failed", extra={"org_number": st.org_number})
+                reg = regulatory.RegulatoryResult(module=not_run(regulatory.MODULE, source_id=regulatory.SOURCE_ID, source_name=regulatory.SOURCE_NAME, source_class="search_discovery",
+                                                                state="failed", tier="C", note=f"Regulatory notices could not be checked (internal error: {type(exc).__name__}). This is not evidence that there are none."))
+            st.extra_modules += reg.modules
+            if reg.module is not None:
+                st.modules[regulatory.MODULE] = reg.module
+            st.regulatory = reg.summary()
+        else:
+            st.regulatory = {"state": "not_applicable", "note": f"Regulatory notices are not searched in {st.options.mode} research. Not checked.", "items": [], "candidates": [],
+                             "ip": regulatory.ip_status(), "checked_at": None, "searches_used": 0}
         # ---- 6. sources that need permission or review (reported, never scraped) -
         for mod in (await optional.patentstyret_rights(ctx, identity), optional.linkedin_module(), optional.shareholder_module(),
                     optional.industry_module(identity, s.enable_industry_registries)):

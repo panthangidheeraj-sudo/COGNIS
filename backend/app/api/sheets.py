@@ -18,6 +18,7 @@ from typing import Any
 from ..agent import llm_tasks
 from ..core.util import format_int, now_iso, stable_id, title_case_no
 from ..errors import ApiError
+from ..extraction import financial_metrics
 from ..logging_setup import get_logger
 from ..storage import repository as repo
 from ..storage.db import dumps, loads
@@ -36,7 +37,8 @@ FIELDS: dict[str, tuple[str, str, str, list[str], str, str | None]] = {
     "annual_result": ("Annual result", "currency", "Annual result (profit/loss) from the latest filed annual accounts.", ["Regnskapsregisteret"], "registry", None),
     "equity": ("Equity", "currency", "Equity from the latest filed annual accounts.", ["Regnskapsregisteret"], "registry", None),
     "total_assets": ("Total assets", "currency", "Total assets from the latest filed annual accounts.", ["Regnskapsregisteret"], "registry", None),
-    "debt": ("Total debt", "currency", "Total debt from the latest filed annual accounts.", ["Regnskapsregisteret"], "registry", None),
+    "total_liabilities": ("Total liabilities", "currency", "Total liabilities (sum gjeld) from the latest filed annual accounts. Not interest-bearing debt or net debt.",
+                          ["Regnskapsregisteret"], "registry", None),
     "registered_employees": ("Employees (registered)", "number", "Employee count reported to Enhetsregisteret (missing is not zero).", ["Brønnøysundregistrene"], "registry", "people"),
     "founded_date": ("Founded", "date", "Founding date (stiftelsesdato) in Enhetsregisteret.", ["Brønnøysundregistrene"], "registry", None),
     "official_website": ("Website (verified)", "url", "The company's own website, only when identity is verified (org. number, register link or domain holder).",
@@ -61,7 +63,7 @@ RULES: list[tuple[str, str]] = [
     (r"(net (profit|income)|årsresultat|annual result|profit|loss|resultat)", "annual_result"),
     (r"(equity|egenkapital)", "equity"),
     (r"(total assets|eiendeler|balance sheet)", "total_assets"),
-    (r"(\bdebt\b|gjeld|liabilit)", "debt"),
+    (r"(liabilit|sum gjeld|\bgjeld\b)", "total_liabilities"),  # "debt" is a different measure: it is NOT mapped to total liabilities
     (r"(linkedin)", "social_profile_linkedin"),
     (r"(hiring|open positions|openings|vacanc|job postings|jobs\b|ledige stillinger|stillinger|recruit)", "open_positions_count"),
     (r"(website|nettside|hjemmeside|homepage|domain|url)", "official_website"),
@@ -428,6 +430,8 @@ class SheetManager:
 
 
 def _cell_from_record(record: dict[str, Any], profile: dict[str, Any] | None, fld: str) -> dict[str, Any]:
+    if fld in financial_metrics.NOT_IN_REGISTER:  # incl. a column saved by an older version as "debt": the filed accounts state total liabilities, not debt
+        return {"status": "not_available", "value": None, "evidence": [], "note": financial_metrics.UNAVAILABLE_NOTE, "updatedAt": record.get("completed_at")}
     from .profile_builder import Builder
 
     if record.get("identity") is None:
@@ -441,7 +445,7 @@ def _cell_from_record(record: dict[str, Any], profile: dict[str, Any] | None, fl
         status = {"blocked": "blocked", "ambiguous": "ambiguous", "failed": "failed"}.get((ab or {}).get("availability"), "not_available")
         note = (ab or {}).get("note") or "Not established in the searched sources."
         return {"status": status, "value": None, "evidence": [], "note": note, "updatedAt": record.get("completed_at")}
-    if fld in ("revenue", "operating_result", "annual_result", "equity", "total_assets", "debt"):
+    if fld in ("revenue", "operating_result", "annual_result", "equity", "total_assets", "total_liabilities"):
         c = max(claims, key=lambda x: x.get("reporting_period") or "")
         f = b.money_fact(f"sheet.{fld}", fld, c, period=c.get("period_label"))
         display = f"{f['displayValue']} ({c.get('period_label')})"
@@ -468,6 +472,6 @@ def _cell_from_record(record: dict[str, Any], profile: dict[str, Any] | None, fl
            "sourceName": (first_src or {}).get("name"), "updatedAt": record.get("completed_at"), "_sources": sources}
     if f.get("currency"):
         out["currency"] = f["currency"]
-    if fld in ("revenue", "operating_result", "annual_result", "equity", "total_assets", "debt") and f.get("note"):
+    if fld in ("revenue", "operating_result", "annual_result", "equity", "total_assets", "total_liabilities") and f.get("note"):
         out["note"] = f["note"]
     return out
