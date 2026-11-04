@@ -186,7 +186,7 @@ def verified_site(name: str, org: str, *, city: str = "Oslo", jobs: list[str] | 
                                  footer=footer, links=links),
         "/karriere": company_page(f"Karriere – {name}", f"<h1>Ledige stillinger</h1><ul>{job_items}</ul>" + ("" if jobs else "<p>Vi har ingen ledige stillinger akkurat nå.</p>"),
                                   footer=footer, links=links, jsonld=postings),
-        "/nyheter": company_page(f"Nyheter – {name}", '<article><time datetime="2026-08-14">14. august 2026</time><h2>Vi åpner nytt kontor i Bergen og ansetter flere rådgivere</h2></article>',
+        "/nyheter": company_page(f"Nyheter – {name}", '<article><time datetime="2026-08-14">14. august 2026</time><h2><a href="/nyheter/vi-apner-nytt-kontor-i-bergen">Vi åpner nytt kontor i Bergen og ansetter flere rådgivere</a></h2></article>',
                                  footer=footer, links=links),
     }
 

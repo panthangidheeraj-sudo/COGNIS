@@ -142,3 +142,33 @@ Rules that apply to every source:
   bypass access controls, CAPTCHAs or logins.
 * Cached responses keep their original retrieval time and hash — a cached answer is never presented
   as freshly retrieved.
+
+## Version 2 — identity, social, news and trend rules (accuracy before coverage)
+
+**Websites.** Where a candidate came from is never proof. A site that Enhetsregisteret lists, a domain that matches the registered e-mail address and a domain that
+contains a brand word are recorded as *context signals* (`audit.context_signals`) and add nothing to the score. A site is published as the company's own only on
+evidence the site or the domain registry provides: the organisation number on the site, the Norid domain holder being this organisation number, or the exact legal
+name together with another registered identifier (address, phone or e-mail) — 0.65 for a register-linked candidate, 0.75 for any other. A site that presents the
+parent group, or lists several legal entities with their organisation numbers, is a group website (`audit.scope = "group"`) and is not published as the individual
+company's unless Norid names the company as the holder. Every attempt stores its signals, conflicts and plain-language `reasons`.
+
+**Keyless discovery.** With no search API the agent still looks beyond the register: after the register-listed and e-mail-domain candidates it tries up to four
+name-derived domains (`connectors/domain_discovery.py`: e.g. `autobjorn.no`, `autobjorn.com`; never for generic names). A guess is only a candidate: it is fetched
+(robots.txt respected) and must pass the same gate; unreachable guesses are diagnostics, not the website module.
+
+**Social profiles.** A footer link is a candidate. `identity/social.py` accepts it only when the handle carries the registered name or the verified domain's brand,
+and rejects the network's own pages, web-agency / theme / platform links, the parent group and another country's group page. Profile pages are **not** fetched
+(the networks forbid automated reads; LinkedIn is never fetched), so only the handle can be judged; unverified and rejected candidates stay in `diagnostics.social_candidates`.
+
+**News.** An item is published only with a real article URL (not a bare domain, section/listing/archive/tag/pagination page, navigation or product page, file or
+share link, nor the listing it was read from), a meaningful headline, and a genuine *publication* date (`datePublished`, `article:published_time`, RSS `pubDate`, a
+printed date on the item). `dateModified`, `dateCreated`, RSS `updated`, modified `<time>` elements and the retrieval date are never used. Press articles also need
+readable article text and must name this exact company. Rejections are kept with their reasons (`diagnostics.news_rejected`). Press discovery still needs a search
+API: without one the report says press coverage was not checked, never that none exists.
+
+**Trends.** `agent/trends.py` builds multi-year revenue, operating-profit and net-income series from published accounts claims: one accounting basis (company or
+consolidated, never mixed), full twelve-month periods, one filing currency (no conversion), gaps shown, percentages only from a positive base. No model is involved.
+Employees are not trended: the register states only the current headcount.
+
+**Network failures.** A host whose `robots.txt` cannot be retrieved is still treated as off limits (RFC 9309), but is now recorded as the network failure it is
+(`network`, `timeout`, `server_error`), not as "disallowed by robots.txt".

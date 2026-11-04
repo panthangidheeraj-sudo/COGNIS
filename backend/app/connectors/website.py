@@ -17,6 +17,7 @@ from ..evidence.models import ModuleResult
 from ..extraction.html import Link, PageDoc, classify_link, is_ats, looks_parked, parse_html, social_profile
 from ..identity.match import IdentityAudit, audit_site
 from ..identity.model import CanonicalIdentity
+from ..identity.social import SocialVerdict, assess_social
 from ..net.http import FetchResult
 from ..security.urls import canonical_url, host_of, registrable_domain
 from .base import ConnectorContext, module_from_fetch
@@ -43,7 +44,8 @@ class SiteCrawl:
     audit: IdentityAudit | None = None
     state: str = "not_available"
     note: str | None = None
-    social: list[dict[str, str]] = field(default_factory=list)
+    social: list[dict[str, str]] = field(default_factory=list)  # accepted profiles only
+    social_candidates: list[dict[str, Any]] = field(default_factory=list)  # every footer/page link with its verdict (accepted, rejected, unverified)
     ats_links: list[Link] = field(default_factory=list)
     requests: int = 0
 
@@ -133,6 +135,7 @@ async def crawl_site(
     origin: str,
     max_pages: int,
     norid_holder_org: str | None = None,
+    related: list[dict] | None = None,
 ) -> SiteCrawl:
     registry_linked = origin == "registry"
     source_class = "company_owned" if registry_linked else ("company_owned_email_domain" if origin == "email_domain" else "company_owned_discovered")
@@ -176,7 +179,7 @@ async def crawl_site(
     if not parked:
         for kind in IDENTITY_KINDS:
             await take(kind)
-    crawl.audit = audit_site(identity, crawl.docs(), crawl.domain, registry_linked=registry_linked, norid_holder_org=norid_holder_org, parked=parked)
+    crawl.audit = audit_site(identity, crawl.docs(), crawl.domain, registry_linked=registry_linked, norid_holder_org=norid_holder_org, parked=parked, related=related)
     if not crawl.verified:
         crawl.state = "ambiguous" if crawl.audit.decision == "ambiguous" else "not_available"
         crawl.note = "; ".join(crawl.audit.conflicts) or f"identity not established (score {crawl.audit.score:.2f})"
@@ -188,11 +191,26 @@ async def crawl_site(
             break
         await take(kind)
 
+    await collect_links_and_social(ctx, crawl, identity, related)
+    return crawl
+
+
+async def collect_links_and_social(ctx: ConnectorContext, crawl: SiteCrawl, identity: CanonicalIdentity, related: list[dict] | None = None) -> None:
+    """Social links on a verified site are candidates: each is judged by its handle before it is published; rejected and unverified ones stay in diagnostics."""
+    candidates: list[SocialVerdict] = []
+    seen: set[str] = set()
     for doc in crawl.docs():
         for link in doc.links:
             prof = social_profile(link.url)
-            if prof and all(s["url"] != canonical_url(link.url) for s in crawl.social):
-                crawl.social.append({"network": prof[0], "handle": prof[1], "url": canonical_url(link.url), "page": doc.final_url})
+            if prof:
+                url = canonical_url(link.url)
+                if url not in seen:
+                    seen.add(url)
+                    candidates.append(assess_social(identity, crawl.domain, prof[0], prof[1], url, doc.final_url, related=related))
             if is_ats(link.url) and all(canonical_url(a.url) != canonical_url(link.url) for a in crawl.ats_links):
                 crawl.ats_links.append(link)
-    return crawl
+    for verdict in candidates:
+        if verdict.decision == "unverified":  # social networks forbid automated profile reads (and LinkedIn is never fetched): the handle check is all that can be done
+            verdict.reasons.append("profile page not fetched (platform terms); only the handle could be checked")
+    crawl.social_candidates = [v.to_dict() for v in sorted(candidates, key=lambda v: (v.network, v.url))]
+    crawl.social = [v.profile() for v in candidates if v.decision == "accepted"]

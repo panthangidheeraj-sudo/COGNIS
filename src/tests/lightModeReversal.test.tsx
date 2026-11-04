@@ -20,7 +20,8 @@ import { INTEL_DARK, INTEL_LIGHT } from '@/components/globe/intelPalette';
 
 /* ------------------------------------------------------------------ file helpers -- */
 const url = (p: string) => new URL(p, import.meta.url);
-const read = (p: string): string => readFileSync(url(p), 'utf8') as string;
+// Line endings are normalised so the exact-text anchors below (e.g. '.on-inverse,\n:root[...]') hold on a Windows checkout with core.autocrlf, where the CSS files are CRLF.
+const read = (p: string): string => (readFileSync(url(p), 'utf8') as string).replace(/\r\n/g, '\n');
 const strip = (css: string) => css.replace(/\/\*[\s\S]*?\*\//g, '');
 const tokens = strip(read('../styles/tokens.css'));
 const ivory = strip(read('../styles/ivory.css'));

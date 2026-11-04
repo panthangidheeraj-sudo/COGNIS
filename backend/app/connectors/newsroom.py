@@ -28,6 +28,7 @@ from ..extraction.html import PageDoc, classify_link, jsonld_of_type
 from ..extraction.web_facts import _page_base
 from ..security.urls import canonical_url, host_of, registrable_domain
 from .base import ConnectorContext, not_run
+from . import news_validation as nv
 from .website import FetchedPage, SiteCrawl, fetch_page, site_links, sitemap_links
 
 MODULE = "news"
@@ -66,6 +67,7 @@ class NewsItem:
     page_url: str
     doc: PageDoc | None = None
     feed: bool = False
+    date_source: str = "printed_date"  # which field stated the date (see news_validation.PUBLICATION_DATE_SOURCES)
     retrieved_at: str | None = None
     content_sha256: str | None = None
 
@@ -76,6 +78,7 @@ class NewsroomResult:
     module: ModuleResult | None = None
     sources: list[dict[str, Any]] = field(default_factory=list)  # one entry per page or feed that was tried
     items: int = 0
+    rejected: list[dict[str, Any]] = field(default_factory=list)  # items read but not published, with the reason
 
 
 # ----------------------------------------------------------------------------- feeds --
@@ -92,7 +95,7 @@ def parse_feed(xml: str, base_url: str) -> list[tuple[str, str | None, str | Non
             if href:
                 link = urllib.parse.urljoin(base_url, href)
         raw_date = ""
-        for tag in ("pubDate", "published", "updated", "date", "dc:date"):
+        for tag in ("pubDate", "published", "date", "dc:date"):  # never "updated" / lastBuildDate: those are modification dates, not publication dates
             found = node.find(tag)
             if found is not None and clean_ws(found.get_text(" ")):
                 raw_date = clean_ws(found.get_text(" "))
@@ -118,14 +121,14 @@ def _items_from_doc(doc: PageDoc, page_kind: str) -> list[NewsItem]:
 
     base = {"page_kind": page_kind, "page_url": doc.final_url, "doc": doc, "retrieved_at": doc.retrieved_at, "content_sha256": doc.content_sha256}
     for it in doc.items:
-        put(NewsItem(title=it.title, date=it.date, url=it.url, summary=it.summary, span=truncate(it.context, 300), method="newsroom_listing", **base))
+        put(NewsItem(title=it.title, date=it.date, url=it.url, summary=it.summary, span=truncate(it.context, 300), method="newsroom_listing", date_source="time_element" if it.date_text == it.date else "printed_date", **base))
     for art in jsonld_of_type(doc, "NewsArticle", "Article", "BlogPosting", "PressRelease"):
         title = clean_ws(str(art.get("headline") or art.get("name") or ""))
-        day = date_only(str(art.get("datePublished") or art.get("dateCreated") or ""))
+        day = date_only(str(art.get("datePublished") or ""))
         if len(title) >= 12 and day:
             url = art.get("url") if isinstance(art.get("url"), str) else None
             desc = clean_ws(str(art.get("description") or ""))[:400]
-            put(NewsItem(title=title, date=day, url=url, summary=desc, span=truncate(f'{art.get("@type")} "{title}" datePublished {day}', 300), method="json_ld", **base))
+            put(NewsItem(title=title, date=day, url=url, summary=desc, span=truncate(f'{art.get("@type")} "{title}" datePublished {day}', 300), method="json_ld", date_source="datePublished", **base))
     return sorted(out.values(), key=lambda i: i.date, reverse=True)
 
 
@@ -260,7 +263,7 @@ async def discover_newsroom(ctx: ConnectorContext, crawl: SiteCrawl, *, today: d
             continue
         rows = [r for r in parse_feed(res.text(), res.final_url) if len(r[0]) >= 12 and r[2]]
         for title, link, day, summary in rows:
-            found.append(NewsItem(title=title, date=day or "", url=link, summary=summary[:400], span=truncate(f"{title} — {summary}" if summary else title, 300), method="rss_item",
+            found.append(NewsItem(title=title, date=day or "", url=link, summary=summary[:400], span=truncate(f"{title} — {summary}" if summary else title, 300), method="rss_item", date_source="rss_pubDate",
                                   page_kind="news", page_url=res.final_url, feed=True, retrieved_at=res.retrieved_at, content_sha256=res.content_sha256))
         record("feed", feed_url, "read" if rows else "no_dated_items", f"{len(rows)} dated item(s) read" if rows else "the feed lists no dated items", len(rows), res.retrieved_at)
 
@@ -270,7 +273,12 @@ async def discover_newsroom(ctx: ConnectorContext, crawl: SiteCrawl, *, today: d
     unique: dict[str, NewsItem] = {}  # one observation per page or feed that states an item: the same announcement read in two places keeps both as evidence
     headlines: set[str] = set()
     for item in sorted(found, key=lambda i: (i.date, not i.feed), reverse=True):
-        if not item.date or item.date > latest or item.date < oldest:
+        verdict = nv.validate_item(title=item.title, url=item.url, day=item.date, date_source=item.date_source, today=today, max_age_days=s.news_max_age_days,
+                                   listing_url=item.page_url)
+        if not verdict.ok:
+            if len(result.rejected) < 40:
+                result.rejected.append({"title": truncate(item.title, 140), "url": item.url, "date": item.date or None, "source_page": item.page_url, "method": item.method,
+                                        "reason": verdict.reason})
             continue
         head = f"{item.date}|{fold(item.title)[:80]}"
         if head not in headlines and len(headlines) >= s.news_max_items:
@@ -289,7 +297,7 @@ async def discover_newsroom(ctx: ConnectorContext, crawl: SiteCrawl, *, today: d
         result.observations.append(Observation(
             field="news_item", value=truncate(item.title, 220), key_suffix=key, as_of=item.date, effective_from=item.date, claim_span=item.span, extraction_method=item.method,
             label="Company news" if item.page_kind == "news" else "Investor relations",
-            attributes={"url": item.url or item.page_url, "date": item.date, "summary": item.summary or None, "page_kind": item.page_kind, "origin": "investor_relations" if item.page_kind == "investors" else "company_newsroom",
+            attributes={"url": item.url, "date": item.date, "date_source": item.date_source, "summary": item.summary or None, "page_kind": item.page_kind, "origin": "investor_relations" if item.page_kind == "investors" else "company_newsroom",
                         "feed": item.feed},
             document_title=(doc.title if doc is not None else None) or None, **base))
     result.items = len(headlines)
@@ -299,11 +307,13 @@ async def discover_newsroom(ctx: ConnectorContext, crawl: SiteCrawl, *, today: d
              else "failed")
     if read:
         note = f"{result.items} dated announcement(s) read from {len(read)} page(s)/feed(s) on {crawl.domain}"
+        if result.rejected:
+            note += f"; {len(result.rejected)} listed item(s) not used (e.g. {result.rejected[0]['reason']})"
     elif crawled_only and not result.sources:
         state = "not_applicable"
         note = "Company news was not part of this research plan, and the website crawl reached no newsroom or investor-relations page."
     else:
         note = "; ".join(f"{x['kind'].replace('_', ' ')} {x['url']}: {x['note']}" for x in result.sources[:4]) or "no newsroom page found"
     result.module = ModuleResult(module=MODULE, source_id=SOURCE_ID, source_name=SOURCE_NAME, source_class=crawl.source_class, state=state, url=crawl.homepage.final_url,  # type: ignore[arg-type]
-                                 retrieved_at=now_iso(), note=note, requests=requests, tier="B", value={"sources": result.sources, "items": result.items})
+                                 retrieved_at=now_iso(), note=note, requests=requests, tier="B", value={"sources": result.sources, "items": result.items, "rejected": result.rejected[:20]})
     return result

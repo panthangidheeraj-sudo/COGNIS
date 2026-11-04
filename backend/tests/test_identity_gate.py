@@ -43,9 +43,33 @@ def test_name_only_is_not_enough() -> None:
     assert audit.decision != "verified"
 
 
-def test_registry_listed_plus_name_verifies() -> None:
+def test_registry_listed_plus_name_alone_is_not_verified() -> None:
+    """Version 2: being listed in Enhetsregisteret says where the candidate came from, not what the site proves.
+    A name-only page stays ambiguous (the old test encoded the organiser-reported bug where a registry listing + a name verified a site)."""
     audit = audit_site(IDENT, [_doc("<p>Velkommen til AUTOBJØRN A/S – din bilforhandler</p>")], "autobjorn.no", registry_linked=True)
+    assert audit.decision == "ambiguous"
+    assert "registry_listed_website" in audit.context_signals and "registry_listed_website" not in audit.signals
+    assert audit.score < 0.65
+
+
+def test_registry_listed_plus_name_and_address_verifies() -> None:
+    audit = audit_site(IDENT, [_doc("<p>AUTOBJØRN A/S – Cecilie Thoresens vei 5-7, 1153 Oslo</p>")], "autobjorn.no", registry_linked=True)
     assert audit.decision == "verified"
+    assert {"legal_name_on_site", "registered_address_on_site"} <= set(audit.signals)
+
+
+def test_registered_email_domain_is_context_only() -> None:
+    ident = CanonicalIdentity(org_number="810359862", legal_name="AUTOBJØRN A/S", email="post@autobjorn.no", website="https://www.autobjorn.no")
+    audit = audit_site(ident, [_doc("<p>Velkommen</p>")], "autobjorn.no", registry_linked=True)
+    assert audit.decision != "verified" and "registered_email_domain" in audit.context_signals
+    assert "registered_email_domain" not in audit.signals and audit.score < 0.65
+
+
+def test_parent_group_site_is_not_published_as_company_site() -> None:
+    page = parse_html("https://group.no/", "https://group.no/", "<html><head><title>Bilgruppen ASA</title></head><body><h1>Bilgruppen ASA</h1>"
+                      "<p>Datterselskap: AUTOBJØRN A/S. Cecilie Thoresens vei 5-7</p></body></html>", retrieved_at="2026-10-01T00:00:00Z", content_sha256="x")
+    audit = audit_site(IDENT, [page], "group.no", registry_linked=True, related=[{"name": "Bilgruppen ASA", "org": "999999999"}])
+    assert audit.scope == "group" and audit.decision == "ambiguous"
 
 
 def test_parked_domain_rejected() -> None:

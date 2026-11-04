@@ -20,6 +20,7 @@ class RobotsCache:
         self.client = client
         self._rules: dict[str, urllib.robotparser.RobotFileParser | bool] = {}
         self.sitemaps: dict[str, list[str]] = {}
+        self.unreadable: dict[str, str] = {}  # origin → why robots.txt could not be read (network, timeout, server_error): the site is treated as off limits, but it is not 'disallowed'
 
     async def allowed(self, url: str, *, budget: Any = None, optional: bool = True, run_id: str | None = None, org_number: str | None = None) -> bool | None:
         parts = urllib.parse.urlsplit(url)
@@ -40,7 +41,13 @@ class RobotsCache:
                 self._rules[origin] = False
             else:
                 self._rules[origin] = False  # 5xx / timeout / network: assume complete disallow (RFC 9309 §2.3.1.4)
+                self.unreadable[origin] = result.classification
         rule = self._rules[origin]
         if isinstance(rule, bool):
             return rule
         return rule.can_fetch(ROBOTS_AGENT, url)
+
+    def unreadable_reason(self, url: str) -> str | None:
+        """The failure class when robots.txt for this URL's origin could not be retrieved (None when it was read, or was absent)."""
+        parts = urllib.parse.urlsplit(url)
+        return self.unreadable.get(f"{parts.scheme}://{parts.netloc}".lower())

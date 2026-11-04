@@ -76,6 +76,21 @@ python scripts/run_competition_batch.py --organisations orgs.jsonl --bulk enhete
 * Refresh / change detection: next time add `--previous-profiles out\profiles.jsonl` (use a new run id
   and new output names).
 
+
+### C2. Keyless run (no GROQ / TAVILY keys, no `.env`)
+
+The evaluator command works without any key: `llm_provider` defaults to `none` (deterministic, evidence-linked synthesis) and search is off when no Tavily key is set.
+
+```powershell
+python scripts/run_agent.py --input orgs.txt --output out/envelopes.jsonl
+```
+
+To prove a run is keyless whatever the shell or a local `.env` contains, set `COGNIS_KEYLESS=1` first (`$env:COGNIS_KEYLESS = "1"`): every credential is cleared and no
+model or search provider is used. The batch report (`*-report.json` → `verification`) lists companies submitted/processed, claims by availability, missing information
+grouped by reason, websites tried/verified by origin, social candidates accepted/rejected, news published/rejected, multi-year series, and source failures.
+A structurally valid envelope is not counted as "researched": `companies_researched_beyond_register` counts companies with at least one available claim from a source
+other than the entity register itself.
+
 ## D. Running the app
 
 ```powershell

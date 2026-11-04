@@ -11,6 +11,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
@@ -28,6 +29,11 @@ def default_data_dir() -> Path:
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=str(BACKEND_ROOT / ".env"), env_file_encoding="utf-8", extra="ignore", case_sensitive=False,
                                       env_ignore_empty=True)
+
+    # ---- keyless guard ----------------------------------------------------
+    # COGNIS_KEYLESS=1 makes a run independent of the environment: every credential is cleared (whatever the shell or a local .env supplies), no language model
+    # and no search provider is used. It exists so a keyless run can be shown to be keyless; without it, unset keys already mean the same thing.
+    cognis_keyless: bool = False
 
     # ---- mode -------------------------------------------------------------
     app_env: Literal["development", "test", "production"] = "development"
@@ -198,6 +204,7 @@ class Settings(BaseSettings):
     enable_search: bool = True
     enable_geocoding: bool = True
     enable_norid: bool = True
+    enable_domain_discovery: bool = True  # keyless name-derived website candidates (each one still passes the identity gate)
     enable_jobs: bool = True
     enable_group_structure: bool = True
     enable_financial_history: bool = True
@@ -244,6 +251,15 @@ class Settings(BaseSettings):
     @property
     def search_enabled(self) -> bool:
         return self.enable_search and self.search_provider == "tavily" and bool(self.tavily_api_key)
+
+    @model_validator(mode="after")
+    def _apply_keyless(self) -> "Settings":
+        if self.cognis_keyless:
+            for name in ("groq_api_key", "llm_api_key", "tavily_api_key", "proff_api_key", "doffin_api_key", "patentstyret_api_key", "nav_feed_token"):
+                setattr(self, name, None)
+            self.llm_provider = "none"
+            self.search_provider = "none"
+        return self
 
     def cors_origin_list(self) -> list[str]:
         return [item.strip() for item in self.cors_origins.split(",") if item.strip()]

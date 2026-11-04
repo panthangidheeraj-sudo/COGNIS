@@ -250,12 +250,19 @@ def _dated_items(soup: BeautifulSoup, base: str) -> list[PageItem]:
         if id(node) in ancestor_ids or any(id(p) in accepted_ids for p in node.parents):
             continue
         iso_dates: dict[str, str] = {}
+        modified: set[str] = set()
         for t in node.find_all("time"):
             attr = str(t.get("datetime") or "")[:10]
+            marker = " ".join([str(t.get("itemprop") or ""), " ".join(t.get("class") or [])]).casefold()
+            if any(m in marker for m in ("datemodified", "modified", "updated", "lastmod")):
+                if re.match(r"^\d{4}-\d{2}-\d{2}$", attr):
+                    modified.add(attr)  # a modification date is not the publication date, in the attribute or as printed text
+                continue
             if re.match(r"^\d{4}-\d{2}-\d{2}$", attr):
                 iso_dates.setdefault(attr, clean_ws(t.get_text(" ")) or attr)
         for f in find_dates(text):
-            iso_dates.setdefault(f.iso, f.text)
+            if f.iso not in modified:
+                iso_dates.setdefault(f.iso, f.text)
         if len(iso_dates) != 1:
             continue
         (iso, printed), = iso_dates.items()

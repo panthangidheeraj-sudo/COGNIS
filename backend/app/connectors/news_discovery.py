@@ -29,8 +29,9 @@ from ..evidence.models import ModuleResult, Observation
 from ..extraction.html import PageDoc, jsonld_of_type
 from ..identity.employer import org_numbers_in
 from ..identity.model import CanonicalIdentity
-from ..identity.normalization import is_generic_name, name_in_text, normalize_name
+from ..identity.normalization import continues_into_longer_name, is_generic_name, name_in_text, normalize_name  # noqa: F401  (re-exported for callers)
 from ..security.urls import host_of, registrable_domain
+from . import news_validation as nv
 from . import search
 from .base import ConnectorContext, not_run
 from .job_discovery import _can_spend, short_name
@@ -116,10 +117,14 @@ def read_article(doc: PageDoc) -> tuple[Article | None, str | None]:
     headline = next((h for h in (_strip_site_name(c) for c in candidates) if len(h) >= 12 and _norm(h)[:48] in surface), "")
     if not headline:
         return None, "no headline could be read from the page"
-    raw_date = str((chosen or {}).get("datePublished") or (chosen or {}).get("dateCreated") or doc.og.get("published_time") or "")
-    day = date_only(raw_date) or next((date_only(t.datetime[:10]) for t in doc.times if t.datetime), None)
+    # Only a stated PUBLICATION date counts: datePublished or article:published_time. dateCreated, dateModified, <time> elements of unknown meaning and the
+    # retrieval date are never substituted.
+    raw_date = str((chosen or {}).get("datePublished") or doc.og.get("published_time") or "")
+    day = date_only(raw_date)
     if not day:
-        return None, "the page states no publication date"
+        modified = (chosen or {}).get("dateModified") or doc.og.get("modified_time")
+        return None, ("the page states only a modification date, not a publication date" if modified or (chosen or {}).get("dateCreated")
+                      else "the page states no publication date")
     lead = next((p for p in doc.paragraphs if len(p) >= 60 and not BOILERPLATE.search(p) and _norm(p)[:40] != _norm(headline)[:40]), "")
     nosnippet = any(flag in doc.robots_meta for flag in ("nosnippet", "noarchive", "none"))
     return Article(headline=truncate(headline, 220), day=day, lead="" if nosnippet else truncate(lead, EXCERPT_CHARS), nosnippet=nosnippet), None
@@ -141,26 +146,6 @@ def identity_basis(doc: PageDoc, article: Article, identity: CanonicalIdentity, 
     if in_head and not is_generic_name(legal) and len(normalize_name(legal)) >= 5:
         return "exact_legal_name_in_headline", None
     return None, "the article does not name this exact organisation in its headline (a similar name or a shared word is not enough)"
-
-
-_LEGAL_FORM = r"(?:AS|ASA|A/S|ANS|DA|SA|ENK|NUF|KS|BA|SF|IKS|Ltd|Limited|AB|Oy|GmbH|Inc|LLC|ApS)"
-_CAPITAL_WORD = r"[A-ZÆØÅ][\wæøåÆØÅ&.-]*"
-
-
-def continues_into_longer_name(text: str, legal_name: str) -> bool:
-    """True when the company's name only begins a longer company name in the text ("Autobjørn Bergen AS" for "Autobjørn AS"). Such a text names a different
-    organisation, so it is never matched to this one by name."""
-    core = " ".join(normalize_name(legal_name).split())
-    if not core:
-        return False
-    words = r"\s+".join(re.escape(w) for w in core.split())
-    after = re.compile(rf"(?<!\w){words}(?:\s+(?:{_CAPITAL_WORD})){{1,3}}\s+{_LEGAL_FORM}\b", re.I)
-    before = re.compile(rf"{_CAPITAL_WORD}\s+(?i:{words})\s+{_LEGAL_FORM}\b")
-    for m in after.finditer(text):  # case-insensitive match, then require the added words to look like name words (capitalised in the original)
-        tail = text[m.start() + len(core):m.end()].split()
-        if tail and all(w[:1].isupper() for w in tail[:-1]):
-            return True
-    return bool(before.search(text))
 
 
 def _skipped(note: str, state: str = "not_applicable") -> NewsSearchResult:
@@ -241,6 +226,10 @@ async def discover_news(ctx: ConnectorContext, crawl: SiteCrawl | None, identity
             out.candidates.append({**cand, "status": "unverified", "reason": why})
             continue
         cand["title"], cand["date"] = article.headline[:140], article.day
+        problem = nv.url_problem(doc.final_url, article_page=True) or nv.title_problem(article.headline, company_name=legal)
+        if problem:
+            out.candidates.append({**cand, "status": "rejected", "reason": problem})
+            continue
         if article.day > latest:
             out.candidates.append({**cand, "status": "rejected", "reason": "the article is dated in the future"})
             continue
@@ -250,6 +239,10 @@ async def discover_news(ctx: ConnectorContext, crawl: SiteCrawl | None, identity
         basis, why = identity_basis(doc, article, identity, verified_domain)
         if basis is None:
             out.candidates.append({**cand, "status": "unverified", "reason": why})
+            continue
+        why_body = nv.body_problem(doc.paragraphs)
+        if why_body:
+            out.candidates.append({**cand, "status": "unverified", "reason": why_body})
             continue
         out.observations.append(_observation(doc, article, basis, identity, outlet, query))
         out.candidates.append({**cand, "status": "accepted", "reason": f"tied to this organisation by {basis.replace('_', ' ')}", "outlet": outlet})

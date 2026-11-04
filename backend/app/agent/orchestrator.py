@@ -20,13 +20,14 @@ from ..config import Settings, get_settings
 from ..connectors import brreg, geonorge, job_discovery, nav, news_discovery, newsroom, norid, optional, procurement, regulatory, search
 from ..connectors import jobs as jobs_conn
 from ..connectors.base import ConnectorContext, not_run
-from ..connectors.website import ENRICHMENT_KINDS, SiteCrawl, crawl_site, fetch_page, site_links
+from ..connectors import domain_discovery
+from ..connectors.website import ENRICHMENT_KINDS, SiteCrawl, collect_links_and_social, crawl_site, fetch_page, site_links
 from ..core.util import clean_ws, format_int, format_money, now_iso, stable_id, truncate
 from ..evidence.gate import Claim, absences, publish
 from ..evidence.models import ModuleResult, Observation
 from ..extraction import registry_facts as rf
 from ..extraction import web_facts as wf
-from ..identity.match import audit_site
+from ..identity.match import audit_site, related_names_of
 from ..identity.model import CanonicalIdentity, identity_from_bulk
 from ..identity.normalization import WEBMAIL_DOMAINS, email_domain, normalize_org_number, org_checksum_ok
 from ..logging_setup import get_logger
@@ -36,6 +37,7 @@ from ..runtime.budgets import CompanyBudget, RunBudget
 from ..security.urls import canonical_url, host_of, normalize_website, registrable_domain
 from ..storage.db import Database
 from . import crosscheck, hiring, llm_tasks, modes
+from .trends import build_trends
 from .focus import focus_kinds
 from .record import build_record
 
@@ -103,6 +105,7 @@ class ResearchState:
     locations: list[dict[str, Any]] = field(default_factory=list)
     financial_records: list[dict[str, Any]] = field(default_factory=list)
     summary: dict[str, Any] | None = None
+    trends: dict[str, Any] | None = None  # deterministic multi-year financial trends (record["trends"]); see agent/trends.py
     errors: list[dict[str, Any]] = field(default_factory=list)
     trace: list[dict[str, Any]] = field(default_factory=list)
     entity_state: str = "complete"
@@ -366,6 +369,7 @@ class Orchestrator:
         # ---- 7. synthesis ---------------------------------------------------
         emit("stage", {"stage": "reconcile"})
         st.claims, st.rejections = publish(st.observations, st.org_number)
+        _set_trends(st)
         wants_crosscheck = ("crosscheck" in st.options.step_keys) if st.options.step_keys is not None else st.options.mode == "deep"
         if wants_crosscheck:
             t = _step_start(emit, "crosscheck")
@@ -467,7 +471,7 @@ class Orchestrator:
             st.modules[news_discovery.MODULE] = press.module
         if press.searched:
             st.trace.append({"action": "search_news", "state": press.module.state if press.module else None, "accepted": len(press.observations), "considered": len(press.candidates)})
-        st.news = {"newsroom": {"state": own.module.state if own.module else None, "note": own.module.note if own.module else None, "sources": own.sources},
+        st.news = {"newsroom": {"state": own.module.state if own.module else None, "note": own.module.note if own.module else None, "sources": own.sources, "rejected": own.rejected},
                    "search": press.summary()}
         total = len(own.observations) + len(press.observations)
         state = "available" if total else (own.module.state if own.module else "not_available")
@@ -500,12 +504,17 @@ class Orchestrator:
                 break
         if (best is None or not best.verified) and s.search_enabled and st.options.mode != "quick":
             best = _better(best, await self._search_for_site(st, ctx, identity, max_pages, emit))
+        if (best is None or not best.verified) and s.enable_domain_discovery and st.options.mode != "quick":
+            best = _better(best, await self._probe_name_domains(st, ctx, identity, max_pages, emit))
         if best is None:
             note = "The register lists no website and no company domain could be derived from registered contact details."
             if not s.search_enabled:
                 note += " Web search discovery is not configured."
             elif st.search_summary is not None:
                 note += f" Web search found no result that names the company ({st.search_summary['screened_out']} unrelated result(s) not fetched)."
+            guessed = sum(1 for a in st.site_attempts if a.get("origin") == "name_derived")
+            if guessed:
+                note += f" {guessed} name-derived domain(s) were tried and none could be read."
             st.modules["website"] = not_run("website", source_id="website", source_name="Official company website", source_class="company_owned", state="not_available", note=note)
         else:
             st.crawl = best
@@ -516,7 +525,7 @@ class Orchestrator:
 
     async def _crawl_with_norid(self, ctx: ConnectorContext, url: str, identity: CanonicalIdentity, *, origin: str, max_pages: int, st: ResearchState) -> SiteCrawl:
         crawl = await crawl_site(ctx, url, identity, origin="registry" if origin == "registry" else ("email_domain" if origin == "email_domain" else "search"),
-                                 max_pages=max_pages)
+                                 max_pages=max_pages, related=related_names_of(st.observations))
         if origin == "registry_subunit":
             crawl.origin = "registry_subunit"
         if not crawl.verified and crawl.homepage is not None and crawl.domain.endswith(".no") and self.settings.enable_norid and not (crawl.audit and crawl.audit.parked):
@@ -524,14 +533,35 @@ class Orchestrator:
             st.extra_modules.append(mod)
             if holder:
                 crawl.audit = audit_site(identity, crawl.docs(), crawl.domain, registry_linked=origin == "registry", norid_holder_org=holder,
-                                         parked=bool(crawl.audit and crawl.audit.parked))
+                                         parked=bool(crawl.audit and crawl.audit.parked), related=related_names_of(st.observations))
                 if crawl.verified:
                     crawl.state, crawl.note = "available", None
-                    await _enrich_verified(ctx, crawl, max_pages)
+                    await _enrich_verified(ctx, crawl, max_pages, identity, related_names_of(st.observations))
         st.site_attempts.append({"url": url, "domain": crawl.domain, "origin": crawl.origin, "state": crawl.state,
                                  "decision": crawl.audit.decision if crawl.audit else "not_fetched", "score": round(crawl.audit.score, 2) if crawl.audit else None,
                                  "signals": crawl.audit.signals if crawl.audit else [], "conflicts": crawl.audit.conflicts if crawl.audit else [], "note": crawl.note})
         return crawl
+
+    async def _probe_name_domains(self, st: ResearchState, ctx: ConnectorContext, identity: CanonicalIdentity, max_pages: int, emit: EventSink) -> SiteCrawl | None:
+        """Keyless discovery: try the domains a company of this name would plausibly own. Candidates only; each goes through the full identity gate."""
+        tried = {a["domain"] for a in st.site_attempts}
+        best: SiteCrawl | None = None
+        probed = 0
+        for dom in domain_discovery.candidate_domains(identity, exclude=tried):
+            if ctx.budget is not None and not getattr(ctx.budget, "can_optional", lambda: True)():
+                break
+            _progress(emit, "website", f"Checking whether {dom} belongs to this company")
+            crawl = await self._crawl_with_norid(ctx, f"https://{dom}", identity, origin="search", max_pages=max_pages, st=st)
+            probed += 1
+            st.site_attempts[-1]["origin"] = "name_derived"
+            crawl.origin = "name_derived"
+            if crawl.homepage is not None:  # an unreachable guess is a diagnostic entry, never "the website"
+                best = _better(best, crawl)
+            if crawl.verified:
+                break
+        if probed:
+            st.trace.append({"action": "probe_name_domains", "probed": probed, "verified": bool(best and best.verified)})
+        return best
 
     async def _search_for_site(self, st: ResearchState, ctx: ConnectorContext, identity: CanonicalIdentity, max_pages: int, emit: EventSink) -> SiteCrawl | None:
         tried = {a["domain"] for a in st.site_attempts}
@@ -737,6 +767,8 @@ class Orchestrator:
         self._assess_hiring(st)  # also after a time-out: "incomplete" is reported, never an empty "no openings"
         if not st.claims and st.observations:
             st.claims, st.rejections = publish(st.observations, st.org_number)
+        if st.trends is None:
+            _set_trends(st)
         for name in ("roles", "locations", "financials", "group", "financial_history", "website", "jobs"):
             if name not in st.modules:
                 st.modules[name] = _missing_module(name, st)
@@ -919,10 +951,8 @@ def _fetched(kind: str, res, doc):  # noqa: ANN001
     return FetchedPage(kind, res, doc)
 
 
-async def _enrich_verified(ctx: ConnectorContext, crawl: SiteCrawl, max_pages: int) -> None:
+async def _enrich_verified(ctx: ConnectorContext, crawl: SiteCrawl, max_pages: int, identity: CanonicalIdentity, related: list[dict] | None = None) -> None:
     """After a late identity verification (e.g. via Norid), fetch the enrichment pages crawl_site skipped."""
-    from ..extraction.html import is_ats, social_profile
-
     home = crawl.homepage
     if home is None:
         return
@@ -937,13 +967,7 @@ async def _enrich_verified(ctx: ConnectorContext, crawl: SiteCrawl, max_pages: i
             res, doc = await fetch_page(ctx, link.url, optional=True)
             crawl.pages.append(_fetched(kind, res, doc))
             seen.add(canonical_url(link.url))
-    for doc in crawl.docs():
-        for link in doc.links:
-            prof = social_profile(link.url)
-            if prof and all(s["url"] != canonical_url(link.url) for s in crawl.social):
-                crawl.social.append({"network": prof[0], "handle": prof[1], "url": canonical_url(link.url), "page": doc.final_url})
-            if is_ats(link.url) and all(canonical_url(a.url) != canonical_url(link.url) for a in crawl.ats_links):
-                crawl.ats_links.append(link)
+    await collect_links_and_social(ctx, crawl, identity, related)
 
 
 def _page_options(crawl: SiteCrawl) -> list[dict[str, str]]:
@@ -1055,6 +1079,12 @@ def _compat_observations(st: ResearchState) -> list[Observation]:
 
 
 # ------------------------------------------------------------------- summary --
+def _set_trends(st: ResearchState) -> None:
+    from .record import evidence_id
+
+    st.trends = build_trends(st.claims, lambda c: evidence_id(c.primary) if c.primary else "")
+
+
 def _fact_lines(st: ResearchState) -> list[tuple[str, str, list[str]]]:
     """(sentence-ready fact text, evidence id, fields) from published claims only."""
     from .record import evidence_id
@@ -1101,6 +1131,9 @@ def _fact_lines(st: ResearchState) -> list[tuple[str, str, list[str]]]:
         res = next((c for c in by_field.get("annual_result", []) if c.reporting_period == r.reporting_period), None)
         if res:
             lines.append((f"Annual result {res.period_label}: {format_money(res.value, res.currency)}", eid(res), ["annual_result"]))
+    for key, metric in ((st.trends or {}).get("metrics") or {}).items():
+        if len(metric["series"]) >= 2 and metric["evidence_ids"]:
+            lines.append((metric["statement"], metric["evidence_ids"][-1], [f"trend_{key}"]))
     ceo = first("ceo")
     if ceo:
         lines.append((f"General manager (daglig leder): {ceo.value}", eid(ceo), ["ceo"]))
@@ -1178,6 +1211,9 @@ def _deterministic_summary(st: ResearchState, lines: list[tuple[str, str, list[s
         sent = f"Filed accounts for {r.period_label} show revenue of {format_money(r.value, r.currency)}"
         sent += f" and an annual result of {format_money(res.value, res.currency)}." if res else "."
         add(sent, "revenue", "annual_result")
+    for key, metric in ((st.trends or {}).get("metrics") or {}).items():
+        if len(metric["series"]) >= 2 and metric["evidence_ids"]:
+            sentences.append({"text": metric["statement"], "evidence_ids": list(metric["evidence_ids"])})
     emp = by.get("registered_employees")
     if emp:
         add(f"The register reports {format_int(emp.value)} employees.", "registered_employees")

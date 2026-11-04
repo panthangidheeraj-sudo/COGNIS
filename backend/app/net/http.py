@@ -244,6 +244,10 @@ class HttpClient:
         if check_robots and self.settings.respect_robots:
             allowed = await self.robots.allowed(full_url, budget=budget, optional=optional, run_id=run_id, org_number=org_number)
             if allowed is False:
+                why = self.robots.unreadable_reason(full_url)
+                if why:  # robots.txt itself could not be retrieved: the host is off limits (RFC 9309), but this is a network failure, not a robots.txt rule
+                    self._record(run_id=run_id, org_number=org_number, connector=connector, operation=method, url=full_url, classification=why, http_status=0, duration_ms=0, retries=0, from_cache=0)
+                    return FetchResult(full_url, full_url, 0, why, error=f"robots.txt could not be retrieved ({why}), so the site was not fetched", retrieved_at=now_iso())
                 self._record(run_id=run_id, org_number=org_number, connector=connector, operation=method, url=full_url, classification="robots_disallowed", http_status=0, duration_ms=0, retries=0, from_cache=0)
                 return FetchResult(full_url, full_url, 0, "robots_disallowed", error="disallowed by robots.txt", retrieved_at=now_iso())
 

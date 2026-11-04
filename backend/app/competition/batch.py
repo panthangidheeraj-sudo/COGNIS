@@ -183,6 +183,69 @@ def _json(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, indent=2, default=str) + "\n"
 
 
+def verification_summary(orgs: list[str], envelopes: list[dict[str, Any]], records: dict[str, dict[str, Any]], s: Settings, validation: dict[str, Any], resumed: int) -> dict[str, Any]:
+    """Compact, honest accounting for the batch: what was submitted and processed, what is verified, what is missing and why.
+
+    Counts come only from the envelopes and records of this run. A structurally valid envelope is not counted as a fully researched company: ``researched``
+    needs a verified registry identity AND at least one claim from a source beyond the register itself."""
+    claims = [(env, c) for env in envelopes for c in env["claims"]]
+    available = [c for _env, c in claims if c["availability"] == "available"]
+    by_state: dict[str, int] = {}
+    for _env, c in claims:
+        by_state[c["availability"]] = by_state.get(c["availability"], 0) + 1
+    missing: dict[str, int] = {}
+    for _env, c in claims:
+        if c["availability"] != "available":
+            reason = f'{c["availability"]}: {(c.get("note") or "no reason recorded")[:110]}'
+            missing[reason] = missing.get(reason, 0) + 1
+    top_missing = dict(sorted(missing.items(), key=lambda kv: -kv[1])[:20])
+    registry_only_classes = {"official_registry_live", "official_registry_bulk"}
+    researched = 0
+    for env in envelopes:
+        ev = {e["id"]: e for e in env["evidence"]}
+        classes = {ev[i]["source_class"] for c in env["claims"] if c["availability"] == "available" for i in c.get("evidence_ids") or [] if i in ev}
+        if classes - registry_only_classes:
+            researched += 1
+    attempts = [a for env in envelopes for a in env.get("website_attempts") or []]
+    by_origin: dict[str, dict[str, int]] = {}
+    for a in attempts:
+        row = by_origin.setdefault(a.get("origin") or "?", {"tried": 0, "verified": 0, "ambiguous": 0, "rejected": 0, "not_fetched": 0, "screened_out": 0})
+        row["tried"] += 1
+        decision = a.get("decision") or "not_fetched"
+        row[decision if decision in row else "not_fetched"] += 1
+    cands = [c for env in envelopes for c in (env.get("diagnostics") or {}).get("social_candidates") or []]
+    social = {"candidates": len(cands), "accepted": sum(1 for c in cands if c["decision"] == "accepted"), "rejected": sum(1 for c in cands if c["decision"] == "rejected"),
+              "unverified": sum(1 for c in cands if c["decision"] == "unverified"),
+              "companies_with_accepted_profile": sum(1 for env in envelopes if any(c["field"].startswith("social_profile_") and c["availability"] == "available" for c in env["claims"]))}
+    rejected_news = [r for env in envelopes for r in (env.get("diagnostics") or {}).get("news_rejected") or []]
+    news_reasons: dict[str, int] = {}
+    for r in rejected_news:
+        key = str(r.get("reason") or "?")[:90]
+        news_reasons[key] = news_reasons.get(key, 0) + 1
+    news = {"items_published": sum(1 for _e, c in claims if c["field"] == "news_item" and c["availability"] == "available"),
+            "companies_with_news": sum(1 for env in envelopes if any(c["field"] == "news_item" and c["availability"] == "available" for c in env["claims"])),
+            "candidates_rejected_or_unusable": len(rejected_news), "rejection_reasons": dict(sorted(news_reasons.items(), key=lambda kv: -kv[1])[:10])}
+    trend_counts = {k: sum(1 for r in records.values() if len(((r.get("trends") or {}).get("metrics") or {}).get(k, {}).get("series") or []) >= 2) for k in ("revenue", "operating_result", "annual_result")}
+    failures: dict[str, dict[str, int]] = {}
+    for env in envelopes:
+        for m, st in (env.get("modules") or {}).items():
+            if st["state"] in ("source_error", "blocked_robots", "blocked_policy", "budget_exhausted", "submission_error"):
+                failures.setdefault(m, {}).setdefault(st["state"], 0)
+                failures[m][st["state"]] += 1
+    keyless = not s.search_enabled and getattr(s, "llm_provider", "none") in ("none", "", None)
+    return {
+        "companies_submitted": len(orgs), "companies_processed": len(envelopes) + resumed, "envelopes_emitted": len(envelopes), "structurally_valid": bool(validation.get("passed")),
+        "companies_researched_beyond_register": researched,
+        "claims": {"available": len(available), "by_availability": by_state, "missing_by_reason": top_missing},
+        "websites": {"companies_verified": sum(1 for env in envelopes if any(c["field"] == "official_website" and c["availability"] == "available" for c in env["claims"])),
+                     "candidates_tried": len(attempts), "by_origin": by_origin},
+        "social_profiles": social, "news": news, "financial_trends": {"companies_with_multi_year_series": trend_counts},
+        "source_failures": failures,
+        "keyless": {"keyless_run": keyless, "search_configured": s.search_enabled, "llm_provider": getattr(s, "llm_provider", None)},
+        "note": "Diagnostics cover companies researched in this run; profiles resumed from an earlier run are counted as processed but carry no new diagnostics." if resumed else None,
+    }
+
+
 def _report(run_id: str, started_at: str, completed_at: str, elapsed: float, orgs: list[str], envelopes: list[dict[str, Any]], records: dict[str, dict[str, Any]],
             budget: RunBudget, bulk_meta: dict[str, Any], validation: dict[str, Any], resumed: int, change_total: int, previous: dict[str, Any],
             runtimes: list[int], s: Settings) -> dict[str, Any]:
@@ -247,6 +310,7 @@ def _report(run_id: str, started_at: str, completed_at: str, elapsed: float, org
             "website_attempts": _attempt_summary(envelopes),
         },
         "conflicts": sum(len(e.get("conflicts") or []) for e in envelopes),
+        "verification": verification_summary(orgs, envelopes, records, s, validation, resumed),
         "change_detection": {"previous_profiles_loaded": len(previous), "total_changes": change_total},
         "errors": sum(len(e["errors"]) for e in envelopes),
         "validation": validation,

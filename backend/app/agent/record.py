@@ -114,7 +114,7 @@ def build_record(st: ResearchState, *, operations: dict[str, Any], completed_at:
             "audit": crawl.audit.to_dict() if crawl.audit else None,
             "pages": [{"kind": p.kind, "url": p.doc.final_url if p.doc else p.result.url, "title": p.doc.title if p.doc else None, "status": p.result.classification,
                        "retrieved_at": p.result.retrieved_at, "content_sha256": p.result.content_sha256, "lang": p.doc.lang if p.doc else None} for p in crawl.pages],
-            "social": crawl.social, "ats_links": [{"url": a.url, "text": a.text} for a in crawl.ats_links],
+            "social": crawl.social, "social_candidates": crawl.social_candidates, "ats_links": [{"url": a.url, "text": a.text} for a in crawl.ats_links],
             "https": bool(crawl.homepage and crawl.homepage.final_url.startswith("https://")),
             "languages": sorted({(p.doc.lang or "")[:2] for p in crawl.pages if p.doc and p.doc.lang}),
         }
@@ -147,6 +147,7 @@ def build_record(st: ResearchState, *, operations: dict[str, Any], completed_at:
         "locations": _jsonable(st.locations),
         "financial_records": _jsonable(st.financial_records),
         "summary": _jsonable(st.summary),
+        "trends": _jsonable(st.trends),
         "errors": _jsonable(st.errors),
         "trace": _jsonable(st.trace),
         "operations": _jsonable(operations),

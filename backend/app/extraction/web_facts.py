@@ -47,7 +47,7 @@ def website_observations(crawl: SiteCrawl) -> list[Observation]:
     obs: list[Observation] = []
     audit = crawl.audit
     best_signal = next((s for s in ("org_number_on_site", "norid_holder_match", "registered_email_on_site", "registered_address_on_site", "legal_name_on_site",
-                                     "registered_phone_on_site", "registry_listed_website") if s in audit.evidence), None)
+                                     "registered_phone_on_site") if s in audit.evidence), None)
     span = audit.evidence.get(best_signal or "", "") or f"identity signals: {', '.join(audit.signals)}"
     evidence_doc = next((d for d in crawl.docs() if best_signal and audit.evidence.get(best_signal, "")[:40] and audit.evidence[best_signal][:40] in (d.text + d.footer_text)), home)
     obs.append(Observation(
@@ -68,8 +68,8 @@ def website_observations(crawl: SiteCrawl) -> list[Observation]:
     for prof in sorted(crawl.social, key=lambda s: (s["network"], s["url"])):
         page = next((d for d in crawl.docs() if d.final_url == prof.get("page")), home)
         obs.append(Observation(field=f"social_profile_{prof['network']}", value=prof["url"], key_suffix=prof["url"],
-                               claim_span=f'link on {page.final_url}: {prof["url"]}', extraction_method="company_linked_profile",
-                               label=f"{prof['network'].title() if prof['network'] != 'x' else 'X'} profile", attributes={"network": prof["network"], "handle": prof.get("handle")},
+                               claim_span=f'link on {page.final_url}: {prof["url"]} ({prof.get("evidence") or "handle " + str(prof.get("handle"))})', extraction_method="company_linked_profile",
+                               label=f"{prof['network'].title() if prof['network'] != 'x' else 'X'} profile", attributes={"network": prof["network"], "handle": prof.get("handle"), "verified_by": prof.get("basis")},
                                **{**_page_base(crawl, page), "source_class": "company_linked_social_profile"}))
 
     # Contact details: e-mail on the company's own domain, phone numbers on the contact page.
@@ -151,34 +151,34 @@ def description_observation(crawl: SiteCrawl) -> Observation | None:
 
 
 def news_observations(crawl: SiteCrawl, *, limit: int = 8) -> list[Observation]:
-    """Dated news items published on the verified site (newsroom / press pages)."""
+    """Dated news items published on the verified site (newsroom / press pages) — only items with their own article URL and a publication date."""
     if not crawl.verified:
         return []
+    from datetime import date as _date
+
+    from ..connectors import news_validation as nv
+
     items: dict[str, Observation] = {}
     for doc in crawl.docs("news") + crawl.docs("investors"):
         for art in jsonld_of_type(doc, "NewsArticle", "Article", "BlogPosting", "PressRelease"):
             title = clean_ws(str(art.get("headline") or art.get("name") or ""))
-            date = date_only(str(art.get("datePublished") or art.get("dateCreated") or ""))
-            if len(title) >= NEWS_TITLE_MIN and date:
-                key = f"{date}|{title.casefold()}"
-                items.setdefault(key, Observation(field="news_item", value=title, key_suffix=key, as_of=date, effective_from=date,
-                                                  claim_span=f'{art.get("@type")} "{truncate(title, 200)}" datePublished {date}', extraction_method="json_ld",
-                                                  label="Company news", attributes={"url": art.get("url") or doc.final_url, "date": date},
+            day = date_only(str(art.get("datePublished") or ""))  # dateCreated / dateModified are not publication dates
+            url = art.get("url") if isinstance(art.get("url"), str) else None
+            verdict = nv.validate_item(title=title, url=url, day=day, date_source="datePublished", today=_date.today(), max_age_days=3650, listing_url=doc.final_url)
+            if len(title) >= NEWS_TITLE_MIN and verdict.ok and day:
+                key = f"{day}|{title.casefold()}"
+                items.setdefault(key, Observation(field="news_item", value=title, key_suffix=key, as_of=day, effective_from=day,
+                                                  claim_span=f'{art.get("@type")} "{truncate(title, 200)}" datePublished {day}', extraction_method="json_ld",
+                                                  label="Company news", attributes={"url": url, "date": day, "date_source": "datePublished"},
                                                   document_title=doc.title or None, **_page_base(crawl, doc)))
-        for t in doc.times:
-            dt = parse_iso(t.datetime) or (parse_iso(t.datetime[:10] + "T00:00:00Z") if re.match(r"\d{4}-\d{2}-\d{2}", t.datetime) else None)
-            if not dt:
+        for it in doc.items:
+            verdict = nv.validate_item(title=it.title, url=it.url, day=it.date, date_source="printed_date", today=_date.today(), max_age_days=3650, listing_url=doc.final_url)
+            if not verdict.ok:
                 continue
-            date = dt.date().isoformat()
-            title = clean_ws(t.context.replace(t.text, "", 1))[:180]
-            if len(title) < NEWS_TITLE_MIN:
-                continue
-            key = f"{date}|{title.casefold()[:80]}"
-            if key in items:
-                continue
-            items[key] = Observation(field="news_item", value=truncate(title, 180), key_suffix=key, as_of=date, effective_from=date,
-                                     claim_span=truncate(t.context, 300), extraction_method="time_element", label="Company news",
-                                     attributes={"url": doc.final_url, "date": date}, document_title=doc.title or None, **_page_base(crawl, doc))
+            key = f"{it.date}|{it.title.casefold()[:80]}"
+            items.setdefault(key, Observation(field="news_item", value=truncate(it.title, 180), key_suffix=key, as_of=it.date, effective_from=it.date,
+                                              claim_span=truncate(it.context, 300), extraction_method="newsroom_listing", label="Company news",
+                                              attributes={"url": it.url, "date": it.date, "date_source": "printed_date"}, document_title=doc.title or None, **_page_base(crawl, doc)))
     ordered = sorted(items.values(), key=lambda o: o.as_of or "", reverse=True)
     return ordered[:limit]
 

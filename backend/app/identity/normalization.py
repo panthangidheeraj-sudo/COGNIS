@@ -74,6 +74,11 @@ def normalize_name(name: str | None) -> str:
     return " ".join(tokens)
 
 
+def spell_as(name: str | None) -> str:
+    """"AUTOBJØRN A/S" → "AUTOBJØRN AS": the older Danish-style spelling is the legal form AS, not two one-letter words (used where a name becomes a slug / domain)."""
+    return re.sub(r"\ba\s*/\s*s\b", "AS", name or "", flags=re.I)
+
+
 def name_tokens(name: str | None) -> list[str]:
     return [t for t in normalize_name(name).split() if t]
 
@@ -139,3 +144,24 @@ def email_domain(value: str | None) -> str:
     if not value or "@" not in value:
         return ""
     return value.rsplit("@", 1)[1].strip().lower().rstrip(".")
+
+
+_LEGAL_FORM = r"(?:AS|ASA|A/S|ANS|DA|SA|ENK|NUF|KS|BA|SF|IKS|Ltd|Limited|AB|Oy|GmbH|Inc|LLC|ApS)"
+_CAPITAL_WORD = r"[A-ZÆØÅ][\wæøåÆØÅ&.-]*"
+
+
+def continues_into_longer_name(text: str, legal_name: str) -> bool:
+    """True when the company's name only begins a longer company name in the text ("Autobjørn Bergen AS" for "Autobjørn AS"). Such a text names a different
+    organisation, so it is never matched to this one by name."""
+    core = " ".join(normalize_name(legal_name).split())
+    if not core:
+        return False
+    words = r"\s+".join(re.escape(w) for w in core.split())
+    after = re.compile(rf"(?<!\w){words}(?:\s+(?!{_LEGAL_FORM}\b)(?:{_CAPITAL_WORD})){{1,3}}\s+{_LEGAL_FORM}\b", re.I)
+    before = re.compile(rf"(?<!\w)(?!(?:{_LEGAL_FORM})\b)({_CAPITAL_WORD})\s+(?i:{words})\s+{_LEGAL_FORM}\b")
+    for m in after.finditer(text):  # case-insensitive match, then require the added words to look like name words (capitalised in the original)
+        tail = text[m.start() + len(core):m.end()].split()
+        added = [w for w in tail[:-1]]
+        if added and all(w[:1].isupper() for w in added) and any(normalize_name(w) not in core.split() for w in added):  # the name repeated ("Autobjørn Autobjørn AS") is not a longer name
+            return True
+    return any(normalize_name(m.group(1)) not in core.split() for m in before.finditer(text))

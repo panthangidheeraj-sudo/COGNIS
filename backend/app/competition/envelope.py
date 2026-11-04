@@ -134,6 +134,10 @@ def synthesis_block(record: dict[str, Any], claims: list[dict[str, Any]], change
             "LOCATIONS": collect(fact("business_address", "Business address"), fact("municipality", "Municipality"), fact("registered_establishment_count", "Registered establishments")),
             "FINANCIALS": collect(fact("revenue", "Revenue"), fact("operating_result", "Operating result"), fact("annual_result", "Annual result"),
                                   fact("total_assets", "Total assets"), fact("equity", "Equity"), fact("total_liabilities", "Total liabilities")),
+            "TRENDS": [{"metric": key, "label": m["label"], "basis": m["basis"], "currency": m["currency"], "direction": m["direction"], "statement": m["statement"],
+                        "series": [{"year": r["year"], "value": r["value"], "evidence_ids": [r["evidence_id"]] if r.get("evidence_id") else []} for r in m["series"]],
+                        "changes": m["changes"], "excluded": m["excluded"], "evidence_ids": m["evidence_ids"]}
+                       for key, m in ((record.get("trends") or {}).get("metrics") or {}).items()],
             "HIRING": [{"value": c["value"], "evidence_ids": c["evidence_ids"]} for c in by_field.get("job_posting", [])],
             "PUBLIC_ACTIVITY": [{"value": c["value"], "date": c.get("as_of"), "evidence_ids": c["evidence_ids"]} for c in by_field.get("news_item", [])],
             "RECENT_CHANGES": [{"field": ch.get("field"), "old_value": ch.get("old_value"), "new_value": ch.get("new_value"), "source_url": ch.get("source_url"),
@@ -186,6 +190,16 @@ def build_envelope(record: dict[str, Any], *, run_id: str, started_at: str | Non
     attempts = [{k: a.get(k) for k in ("domain", "origin", "state", "decision", "score", "signals", "conflicts", "note")} for a in record.get("site_attempts") or []]
     if attempts:
         envelope["website_attempts"] = attempts
+    website = record.get("website") or {}
+    news = record.get("news") or {}
+    diagnostics = {
+        "social_candidates": website.get("social_candidates") or [],
+        "news_rejected": ((news.get("newsroom") or {}).get("rejected") or []) + [c for c in (news.get("search") or {}).get("candidates") or []
+                                                                                if c.get("status") in ("rejected", "unverified", "blocked", "unreadable")],
+        "website_identity": (website.get("audit") or {}),
+    }
+    if any(diagnostics.values()):
+        envelope["diagnostics"] = diagnostics
     conflicts = [{"field": c["field"], "reporting_period": c.get("reporting_period"), **c["conflict"]} for c in record.get("claims") or [] if c.get("conflict")]
     if conflicts:
         envelope["conflicts"] = conflicts
