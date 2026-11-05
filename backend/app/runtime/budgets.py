@@ -12,10 +12,25 @@ affected modules are reported as ``blocked`` with reason ``budget_exhausted``.
 """
 from __future__ import annotations
 
+import contextvars
 import threading
 import time
 from collections import Counter
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, field
+
+_PURPOSE: contextvars.ContextVar[str | None] = contextvars.ContextVar("spend_purpose", default=None)
+
+
+@contextmanager
+def spend_purpose(name: str) -> Iterator[None]:
+    """Requests made inside this block are charged to the named purpose, so they may use capacity held for it (see ``CompanyBudget.hold``). Per task, not global."""
+    token = _PURPOSE.set(name)
+    try:
+        yield
+    finally:
+        _PURPOSE.reset(token)
 
 
 @dataclass
@@ -158,6 +173,8 @@ class CompanyBudget:
         self.by_connector: Counter = Counter()
         self.blocked: Counter = Counter()
         self._lock = threading.Lock()
+        self._holds: dict[str, int] = {}  # purpose → requests of the company allowance still kept back for it
+        self._hold_size: dict[str, int] = {}  # purpose → the amount first held (a refunded request gives its capacity back, up to this)
 
     def elapsed(self) -> float:
         return self._clock() - self.started
@@ -165,12 +182,55 @@ class CompanyBudget:
     def deadline_left(self) -> float:
         return min(self.max_seconds - self.elapsed(), self.run.remaining_seconds() - self.run.limits.finalize_reserve_seconds / 3)
 
+    # ----------------------------------------------------------------- holds --
+    def hold(self, purpose: str, requests: int) -> int:
+        """Keep back part of the company's optional allowance for one purpose (e.g. article verification), so earlier, greedier steps cannot spend all of it. Spending
+        inside ``spend_purpose(purpose)`` uses the held capacity first; every other optional request sees the allowance less what is still held. Mandatory requests ignore
+        holds. Returns the amount actually held (never more than what is left of the allowance)."""
+        with self._lock:
+            held = max(0, min(int(requests), self.max_requests - self.requests))
+            self._holds[purpose] = self._hold_size[purpose] = held
+            return held
+
+    def release(self, purpose: str) -> None:
+        with self._lock:
+            self._holds.pop(purpose, None)
+            self._hold_size.pop(purpose, None)
+
+    def held(self, purpose: str | None = None) -> int:
+        with self._lock:
+            return self._holds.get(purpose or "", 0) if purpose else sum(self._holds.values())
+
+    def _held_for_others_locked(self) -> int:
+        mine = _PURPOSE.get()
+        return sum(v for k, v in self._holds.items() if k != mine)
+
+    def _cap_left_locked(self) -> int:
+        return self.max_requests - self._held_for_others_locked() - self.requests
+
     def can_optional(self) -> bool:
-        return self.deadline_left() > 2 and self.requests < self.max_requests and self.run.time_for_optional()
+        with self._lock:
+            cap_left = self._cap_left_locked()
+        return self.deadline_left() > 2 and cap_left > 0 and self.run.time_for_optional()
+
+    def why_not_optional(self) -> str | None:
+        """None while an optional request may be made; otherwise why not: ``company_request_cap`` (the company's own allowance, or what is left of it after holds),
+        ``company_time``, ``run_time`` or ``run_budget`` (the whole run's allowance)."""
+        with self._lock:
+            cap_left = self._cap_left_locked()
+        if cap_left <= 0:
+            return "company_request_cap"
+        if self.max_seconds - self.elapsed() <= 2:
+            return "company_time"
+        if not self.run.time_for_optional() or self.run.remaining_seconds() - self.run.limits.finalize_reserve_seconds / 3 <= 2:
+            return "run_time"
+        if not self.run.can_spend(requests=1, optional=True):
+            return "run_budget"
+        return None
 
     def reserve(self, *, connector: str, requests: int = 1, cost_usd: float = 0.0, optional: bool = True, search: bool = False) -> bool:
         with self._lock:
-            if optional and (self.requests + requests > self.max_requests or self.deadline_left() <= 1):
+            if optional and (requests > self._cap_left_locked() or self.deadline_left() <= 1):
                 self.blocked[connector] += 1
                 return False
             if search and self.searches >= self.max_searches:
@@ -186,6 +246,9 @@ class CompanyBudget:
             self.by_connector[connector] += requests
             if search:
                 self.searches += 1
+            mine = _PURPOSE.get()
+            if mine in self._holds:
+                self._holds[mine] = max(0, self._holds[mine] - requests)
         return True
 
     def refund(self, *, connector: str, requests: int = 1, cost_usd: float = 0.0, search: bool = False) -> None:
@@ -196,6 +259,9 @@ class CompanyBudget:
             self.by_connector[connector] = max(0, self.by_connector[connector] - requests)
             if search:
                 self.searches = max(0, self.searches - 1)
+            mine = _PURPOSE.get()
+            if mine in self._holds:
+                self._holds[mine] = min(self._hold_size.get(mine, 0), self._holds[mine] + requests)
 
     def allow_llm(self) -> bool:
         with self._lock:
@@ -217,6 +283,7 @@ class CompanyBudget:
                 "runtime_ms": int(self.elapsed() * 1000),
                 "requests_by_connector": dict(self.by_connector),
                 "blocked_by_budget": dict(self.blocked),
+                **({"held_for": dict(self._holds)} if self._holds else {}),
             }
 
 

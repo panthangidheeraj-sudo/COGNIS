@@ -53,6 +53,7 @@ PARKED_MARKERS = (
 class Link:
     url: str
     text: str
+    zone: str = ""  # where a social-network link sits on the page: footer | header | body (set for social links only; "" for every other link)
 
 
 @dataclass
@@ -64,10 +65,13 @@ class TimeItem:
 
 @dataclass
 class PageItem:
-    """One dated entry on a newsroom / press / investor page: headline, link, date and the exact text it was read from."""
+    """One dated entry on a newsroom / press / investor page: headline, link, date and the exact text it was read from.
+
+    The date is only a *hint* for ordering and for skipping obviously old entries. A date printed on a listing card (a generic ``<time datetime>`` or text) is
+    never the publication date of an article: that is read from the article page itself (see ``connectors/news_article.py``)."""
     title: str
     url: str | None
-    date: str  # ISO date
+    date: str  # ISO date as shown on the listing card (a hint, not a publication date)
     date_text: str  # the date as printed on the page
     summary: str
     context: str
@@ -90,6 +94,11 @@ class PageDoc:
     phones: list[str] = field(default_factory=list)
     jsonld: list[dict[str, Any]] = field(default_factory=list)
     times: list[TimeItem] = field(default_factory=list)
+    # Dates that say what they are. ``meta_dates``: published_time (``article:published_time``), modified_time (``article:modified_time`` / ``og:updated_time``),
+    # time_modified (``<time itemprop="dateModified">``). ``pub_times``: ``<time itemprop="datePublished">`` inside an article scope. Generic ``<time datetime>``
+    # elements are only kept in ``times`` and never count as a publication date.
+    meta_dates: dict[str, str] = field(default_factory=dict)
+    pub_times: list[TimeItem] = field(default_factory=list)
     items: list[PageItem] = field(default_factory=list)
     feeds: list[str] = field(default_factory=list)
     robots_meta: str = ""
@@ -129,6 +138,10 @@ def parse_html(url: str, final_url: str, html: str, *, content_sha256: str | Non
         content = clean_ws(meta.get("content") or "")
         if not content:
             continue
+        if name in ("article:published_time", "og:article:published_time"):
+            doc.meta_dates.setdefault("published_time", content[:60])
+        elif name in ("article:modified_time", "og:updated_time", "og:article:modified_time"):
+            doc.meta_dates.setdefault("modified_time", content[:60])
         if name == "robots":
             doc.robots_meta = content.casefold()[:120]
         if name == "description":
@@ -151,6 +164,7 @@ def parse_html(url: str, final_url: str, html: str, *, content_sha256: str | Non
 
     base = doc.final_url
     seen: set[str] = set()
+    social_links: dict[str, Link] = {}
     for a in soup.find_all("a", href=True):
         href = str(a["href"]).strip()
         text = clean_ws(a.get_text(" "))[:160]
@@ -170,17 +184,32 @@ def parse_html(url: str, final_url: str, html: str, *, content_sha256: str | Non
         if not absolute.startswith(("http://", "https://")):
             continue
         key = canonical_url(absolute)
+        social = social_profile(absolute) is not None
         if key in seen:
+            if social:  # the same profile linked twice: keep the more deliberate placement (footer/header over a link inside page content)
+                zone = _link_zone(a)
+                known = social_links[key]
+                if ZONE_RANK[zone] > ZONE_RANK[known.zone]:
+                    known.zone = zone
             continue
         seen.add(key)
-        doc.links.append(Link(absolute, text))
+        link = Link(absolute, text, _link_zone(a) if social else "")
+        if social:
+            social_links[key] = link
+        doc.links.append(link)
 
     for t in soup.find_all("time"):
         dt = t.get("datetime") or ""
         if dt:
             parent = t.find_parent(["article", "li", "div", "section"]) or t.parent
             context = clean_ws(parent.get_text(" ") if parent else t.get_text(" "))[:300]
-            doc.times.append(TimeItem(str(dt), clean_ws(t.get_text(" ")), context))
+            item = TimeItem(str(dt), clean_ws(t.get_text(" ")), context)
+            doc.times.append(item)
+            itemprop = str(t.get("itemprop") or "").casefold()
+            if "datepublished" in itemprop and _in_article_scope(t):
+                doc.pub_times.append(item)
+            elif "datemodified" in itemprop:
+                doc.meta_dates.setdefault("time_modified", str(dt)[:60])
 
     for link in soup.find_all("link", href=True):
         rel = " ".join(link.get("rel") or []).casefold()
@@ -206,6 +235,55 @@ def parse_html(url: str, final_url: str, html: str, *, content_sha256: str | Non
     doc.paragraphs = paragraphs[:80]
     doc.text = clean_ws(soup.get_text(" "))[:60000]
     return doc
+
+
+ZONE_RANK = {"body": 0, "header": 1, "footer": 2}
+
+
+def _link_zone(tag: Any) -> str:
+    """``footer`` / ``header`` / ``body``: where a link sits. A footer (or role=contentinfo) or the page-level header/nav is where a company puts its own profiles;
+    a link inside page content may point at anyone."""
+    zone = "body"
+    for parent in tag.parents:
+        name = getattr(parent, "name", None)
+        role = str((getattr(parent, "attrs", None) or {}).get("role") or "").casefold()
+        if name == "footer" or role == "contentinfo":
+            return "footer"
+        if name in ("header", "nav") or role in ("banner", "navigation"):
+            zone = "header"
+    return zone
+
+
+_ORG_TYPES = ("organization", "corporation", "localbusiness", "ngo", "company")
+
+
+def declared_same_as(doc: Any) -> list[str]:
+    """Profile URLs the page's own structured data lists under ``sameAs`` for an organisation (not for a person, an article or a publisher)."""
+    out: list[str] = []
+    for node in doc.jsonld:
+        kinds = node.get("@type")
+        kinds = kinds if isinstance(kinds, list) else [kinds]
+        names = {str(k).casefold() for k in kinds if k}
+        if not any(t in n for n in names for t in _ORG_TYPES) or any("person" in n for n in names):
+            continue
+        same = node.get("sameAs")
+        for url in same if isinstance(same, list) else [same]:
+            if isinstance(url, str) and url.strip().startswith(("http://", "https://")) and url.strip() not in out:
+                out.append(url.strip())
+    return out
+
+
+def _in_article_scope(tag: Any) -> bool:
+    """True when the element sits inside an ``<article>`` (or an element typed as an article by microdata), outside navigation and footers."""
+    scoped = False
+    for parent in tag.parents:
+        name = getattr(parent, "name", None)
+        if name in ("nav", "footer", "aside", "menu", "dialog"):
+            return False
+        attrs = getattr(parent, "attrs", None) or {}
+        if name == "article" or any(k in str(attrs.get("itemtype") or "").casefold() for k in ("article", "blogposting", "newsarticle")):
+            scoped = True
+    return scoped
 
 
 _FURNITURE_TAGS = {"nav", "footer", "aside", "menu", "dialog"}

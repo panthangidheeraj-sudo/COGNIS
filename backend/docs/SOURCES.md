@@ -106,8 +106,9 @@ be checked"; it never removes or lowers what the company's own pages established
 Order of sources for company announcements (`connectors/newsroom.py`, then `connectors/news_discovery.py`):
 
 1. **The company's own newsroom and investor-relations pages**, on the identity-verified website only: pages the site crawl already read, then newsroom / investor pages linked from the site, then the sitemap, then a few
-   common paths (`/news`, `/nyheter`, `/investors` …) only if the site links none. Dated items are read from listings (`<time>`, printed dates, table rows) and from JSON-LD `NewsArticle` data.
-2. **RSS / Atom feeds** that those pages advertise (same site only, at most two).
+   common paths (`/news`, `/nyheter`, `/investors` …) only if the site links none. Listings (`<time>`, printed dates, table rows) and JSON-LD `NewsArticle` data on them yield *candidates* only (Version 2.1:
+   each candidate's own article page is fetched and verified before anything is published).
+2. **RSS / Atom feeds** that those pages advertise (same site only, at most two). Feed items are candidates too; the item's own `pubDate` / Atom `published` can supply the date, the linked page is still fetched and verified.
 3. **Reputable secondary sources** found by search (Tavily, restricted to `SECONDARY_NEWS_DOMAINS`: business and trade press, wire services, exchange notices). Search results are *candidates*: every article is fetched,
    dated, and tied to this exact organisation before it is used (organisation number on the page; or the exact registered name in the headline plus a link to the verified website; or the exact registered name in the
    headline, unless that name continues into a longer one — "Autobjørn Bergen AS" is a different company; a page stating another organisation's number is rejected; generic names are not searched at all).
@@ -166,9 +167,57 @@ printed date on the item). `dateModified`, `dateCreated`, RSS `updated`, modifie
 readable article text and must name this exact company. Rejections are kept with their reasons (`diagnostics.news_rejected`). Press discovery still needs a search
 API: without one the report says press coverage was not checked, never that none exists.
 
+**News, Version 2.1 — the article page is the evidence.** A newsroom card, listing JSON-LD or feed item is a *candidate*; it is published only after its own page has been fetched
+(`connectors/news_article.py`, `newsroom.verify_candidates`) and passes every rule: a real article URL on the company's own verified registrable domain (links to other sites are not
+followed); a headline on the page and readable article text; the exact legal entity named — its organisation number in the article text, or its exact registered name (A/S = AS) in the headline or
+article text, never a parent group, sister company, longer name ("Autobjørn Bergen AS") or shared brand word — with a page that carries a different organisation number rejected (a page listing
+several organisation numbers is accepted only when its headline names this entity); and a publication date the page states as such: JSON-LD `datePublished`, `article:published_time` or an
+article-scoped `<time itemprop="datePublished">` (feed: RSS `pubDate`, Atom `published`). `dateModified`, `dateCreated`, RSS/Atom `updated`, `lastBuildDate`, generic `<time datetime>`, generic `<date>` /
+`dc:date`, dates printed on a listing card, the retrieval date and the `Last-Modified` header are never publication dates. The claim cites the fetched article (URL, title, retrieval time, content hash, excerpt
+from its text) and records the date source, the identity basis and where the candidate was found (`attributes.found_in`). Each article URL is requested once (listing and feed duplicates, and pages
+the crawl already read, are not requested again), within `NEWS_ARTICLE_MAX_FETCHES` (default 10) and the per-company request budget. An article that is blocked, missing or times out is kept in
+`news.newsroom.rejected` with its real outcome (`blocked`, `not_found`, `unreadable`, `not_checked`) and is never read as "no news". With `ENABLE_NEWS_DISCOVERY=false` no company news is published at all.
+
 **Trends.** `agent/trends.py` builds multi-year revenue, operating-profit and net-income series from published accounts claims: one accounting basis (company or
 consolidated, never mixed), full twelve-month periods, one filing currency (no conversion), gaps shown, percentages only from a positive base. No model is involved.
 Employees are not trended: the register states only the current headcount.
 
 **Network failures.** A host whose `robots.txt` cannot be retrieved is still treated as off limits (RFC 9309), but is now recorded as the network failure it is
 (`network`, `timeout`, `server_error`), not as "disallowed by robots.txt".
+
+## Version 2.1 improvements — request reporting, stall diagnostics, social declarations, news prioritisation
+
+**Request reporting (`competition/batch.py`).** The shared NAV job-ad index is synchronised once per run and is not part of any company's research. The report separates the two:
+`operations.requests` is the run total (company + shared index, unchanged meaning), `operations.company_requests` counts only requests made while researching companies,
+`operations.shared_index_requests` (and `shared_index_requests_by_connector`) counts the index synchronisation, and `operations.requests_per_company` is **company requests only** divided by
+companies. `PER_COMPANY_MAX_REQUESTS` limits company requests; it never applied to the shared index, so a single-company run can legitimately show a run total above that limit. Mandatory
+requests (register, accounts) are still exempt from the optional-request cap.
+
+**Event-loop stall diagnostics (`runtime/lag.py`).** A stall is a wake-up later than `stall_seconds` (default **3.0**, was 5.0). Each entry in `event_loop_lag.stalls` now carries `seconds`,
+`ended_at`, `cpu_seconds`, `cpu_share` and `kind`: `cpu_bound` (share ≥ 0.6: synchronous Python was computing) or `blocked_or_suspended` (share below: blocked in I/O or sleeping, or the whole process
+was paused, for example laptop sleep or a security scan). A watchdog thread (`loop-lag-watchdog`) samples the loop thread's call stack while the loop is overdue (at most three samples per stall,
+25 frames, paths shortened to project-relative) and stores `stack`, `top_frame` and, for a long stall, `top_frames_sampled`. When the process itself was suspended the watchdog is suspended too, so no stack
+is stored and the entry says so in `note`. The monitor observes only; it changes no scheduling and no parsing.
+
+**Social profiles — declared, not verified on the platform (`identity/social.py`, `extraction/html.py`, `connectors/website.py`).** Profile pages are still not fetched, so every accepted profile is one the
+company's own verified website links to. This is now stated, not implied: each accepted profile carries `verification = "linked_from_company_site"` and `platform_verified = false`, and the claim text says
+"linked from the company website, not verified on the platform". Declarations are ranked by where the link is: JSON-LD `sameAs` of an organisation (0.85) > footer link (0.80) > header link (0.76) > link in the
+page body (0.62). The handle must carry the exact registered name or the verified brand, optionally with a plain affix (`no`, `norge`, `norway`, `official`, `asa`, `as`, `hq`); an affix match costs 0.05. A name *fragment*
+("equinorfans" for "equinor") is rejected. The confidence is `(declaration base − affix penalty) × (0.7 + 0.3 × website identity score)`, and it is a ceiling for the evidence gate
+(`attributes.confidence_ceiling`), so a weaker website identity lowers its social profiles. A body-only profile on a network for which the site's `sameAs`/footer/header already declares another accepted
+profile is demoted to `unverified`. The verification summary reports `accepted_linked_from_company_site`, `accepted_platform_verified` (0 while platform pages are not read) and `accepted_by_declaration`.
+
+**News candidates — prioritise, merge, count, reserve (`connectors/news_priority.py`, `connectors/newsroom.py`, `agent/orchestrator.py`).** Before any article page is fetched, candidates are
+(1) **merged** when they are the same article (same address ignoring scheme, `www`, trailing slash and tracking parameters, or the same headline and date), the sources being kept together; (2) **ordered** so
+likely articles come first: a dated `/news/YYYYMMDD-…` address, a feed or JSON-LD source and a full-sentence headline rank up; event, conference and calendar pages, generic listings and very short headlines
+rank down (a dated news address that merely mentions an event is penalised less than an undated event address). Ordering only changes which candidates are fetched first when the budget is short; every rule of
+Version 2.1 still applies to each fetched page. **True totals:** `news.newsroom.rejected_total`, `rejected_by_status`, `rejected_reasons` and `duplicates_merged` count every candidate even though at most 60
+examples are stored; the batch report's `candidates_rejected_or_unusable` uses the true total (previously capped at the stored examples), with `rejected_examples_stored` beside it.
+**Accurate reasons:** a candidate that was not read says why — "company's request limit (N requests)", "article-page limit (N)", "not part of the research plan", "company time", "run time" or "the run's request
+budget" — instead of calling every case "the research budget for optional pages". **Reserve:** when news is planned, the orchestrator holds `NEWS_ARTICLE_RESERVED_REQUESTS` (default 10, never more than a third of
+the company's request limit) for article verification, so website crawling and other optional work cannot spend the whole company allowance first; the hold is released when the website turns out not to be verified
+and when the news step finishes. Mandatory requests ignore holds. Holds are per purpose (`spend_purpose`), visible in the budget snapshot as `held_for`.
+
+**Output schema impact.** Additive only: new keys in the batch report (`company_requests`, `shared_index_requests*`, `rejected_examples_stored`, `candidates_merged_as_duplicates`, social `accepted_*` counters,
+stall `kind`/`cpu_*`/`stack`/`top_frame`) and in envelope diagnostics (`news_rejected_total`, `news_rejected_by_status`, `news_rejected_reasons`, `news_duplicates_merged`, only when non-zero). No key was removed
+or renamed. Meaning changes: `requests_per_company` (company only), `event_loop_lag.threshold_seconds` (3.0), `candidates_rejected_or_unusable` (true total), social confidence (no longer a flat 0.88).

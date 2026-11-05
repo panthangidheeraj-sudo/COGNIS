@@ -197,6 +197,9 @@ def _confidence(claim: Claim) -> float:
         base = min(0.99, base + 0.02)
     if claim.conflict:
         base = max(0.5, base - 0.1)
+    ceilings = [o.attributes["confidence_ceiling"] for o in claim.observations if isinstance((o.attributes or {}).get("confidence_ceiling"), (int, float))]
+    if ceilings:  # an observation that is weaker than its source class's usual standing (e.g. a profile judged only by its handle) says how much weaker
+        base = min(base, min(ceilings))
     return round(base, 2)
 
 

@@ -24,7 +24,7 @@ from app.evidence.gate import check
 from app.evidence.models import Observation
 from app.extraction.html import parse_html
 from app.identity.model import CanonicalIdentity
-from app.testing.fixtures import FixtureNetwork, company_page, verified_site
+from app.testing.fixtures import FixtureNetwork, article_page, company_page, verified_site
 
 NAME = "AUTOBJØRN A/S"
 FOOTER = "AUTOBJØRN A/S · Org.nr. 810 359 862 · Oslo"
@@ -94,12 +94,21 @@ def titles(act: dict[str, Any], tier: str | None = None) -> list[str]:
     return [e["title"] for e in act["events"] if tier is None or e["significance"] == tier]
 
 
+def story(title: str, days_ago: int, text: str) -> str:
+    """The article page a newsroom card, an investor-relations row or a feed item points to: it names the company and states its own publication date."""
+    return article_page(title, day(days_ago), f"{text} {NAME} har gjort saken kjent i dag. Mer informasjon følger fra selskapet.", footer=FOOTER, links=LINKS)
+
+
 def full_site() -> dict[str, str]:
     news = article(20, CONTRACT, "/nyheter/kontrakt", "Avtalen gjelder leveranse av tjenestebiler i fire år.") + article(5, WEBINAR, "/nyheter/webinar") + article(40, OFFICE, "/nyheter/bergen")
     ir = f'<ul><li><a href="/investor/q2">{RESULTS}</a> <span>{date.fromisoformat(day(50)).strftime("%d.%m.%Y")}</span></li></ul>'
     rss = feed((20, CONTRACT, "https://www.autobjorn.no/nyheter/kontrakt", "Avtalen gjelder leveranse av tjenestebiler i fire år."),
                (12, CFO, "https://www.autobjorn.no/nyheter/cfo", "Kari Nordmann tiltrer som ny finansdirektør."))
-    return company_site(newsroom=news, investor=ir, feed_xml=rss)
+    pages = company_site(newsroom=news, investor=ir, feed_xml=rss)
+    pages.update({"/nyheter/kontrakt": story(CONTRACT, 20, "Avtalen gjelder leveranse av tjenestebiler i fire år."), "/nyheter/webinar": story(WEBINAR, 5, "Webinaret handler om elbil for bedriftskunder."),
+                  "/nyheter/bergen": story(OFFICE, 40, "Det nye kontoret ligger sentralt i Bergen."), "/investor/q2": story(RESULTS, 50, "Driftsinntektene økte med 14 prosent i andre kvartal."),
+                  "/nyheter/cfo": story(CFO, 12, "Kari Nordmann tiltrer som ny finansdirektør.")})
+    return pages
 
 
 def tavily(hits: list[dict[str, str]], calls: list[dict[str, Any]]):  # noqa: ANN201
@@ -163,15 +172,18 @@ def test_dozens_of_establishment_registrations_stay_available_but_are_not_major(
     assert max(e["rank"] for e in act["events"] if e["significance"] == "major") < min(e["rank"] for e in registry)
 
 
-def test_the_same_announcement_in_the_newsroom_and_the_feed_is_one_event_with_both_sources() -> None:
-    act = activity(run(network(full_site())))
+def test_the_same_announcement_in_the_newsroom_and_the_feed_is_one_event_with_the_article_as_evidence() -> None:
+    rec = run(network(full_site()))
+    act = activity(rec)
     contract = [e for e in act["events"] if e["title"] == CONTRACT]
     assert len(contract) == 1
     event = contract[0]
-    urls = {s["url"] for s in event["sources"]}
-    assert "https://www.autobjorn.no/feed.xml" in urls and any(u.endswith("/nyheter") for u in urls)
-    assert len(event["evidence"]) == 2 and event["url"].endswith("/nyheter/kontrakt")
-    assert any("2 places" in r for r in event["reasons"])
+    # V2.1: the listing page and the feed only say where the article was found; the evidence is the article page itself, fetched once (not one "source" per place it was listed)
+    assert {s["url"] for s in event["sources"]} == {"https://www.autobjorn.no/nyheter/kontrakt"}
+    assert len(event["evidence"]) == 1 and event["evidence"][0]["url"] == "https://www.autobjorn.no/nyheter/kontrakt" and event["url"].endswith("/nyheter/kontrakt")
+    claim = next(c for c in rec["claims"] if c["field"] == "news_item" and c["value"] == CONTRACT)
+    assert {f["kind"] for f in claim["attributes"]["found_in"]} == {"newsroom_listing", "rss_item"}  # discovery is kept, as provenance of how it was found
+    assert len([u for u in rec["news"]["newsroom"]["sources"] if u["kind"] == "feed"]) == 1 and rec["news"]["newsroom"]["articles_fetched"] == 5
 
 
 def test_every_event_has_date_description_source_url_source_type_and_evidence() -> None:
@@ -347,7 +359,7 @@ def test_press_and_newsroom_reports_of_the_same_announcement_are_consolidated(se
     act = activity(run(net))
     events = [e for e in act["events"] if "rammeavtale" in e["title"]]
     assert len(events) == 1 and events[0]["sourceType"] == "company_newsroom"  # the company's own wording is the primary source
-    assert {s["sourceType"] for s in events[0]["sources"]} == {"company_newsroom", "secondary_news"} and len(events[0]["sources"]) >= 3
+    assert {s["sourceType"] for s in events[0]["sources"]} == {"company_newsroom", "secondary_news"} and len(events[0]["sources"]) == 2  # the company's article page and the press article
     assert act["consolidated"] >= 1
 
 
@@ -479,11 +491,13 @@ def test_company_news_is_part_of_the_research_plan() -> None:
         assert "news" in [s["key"] for s in plan_for(mode, None, llm=True)["steps"]]
 
 
-def test_newsroom_discovery_can_be_switched_off_and_falls_back_to_crawled_pages(settings: Settings) -> None:
+def test_newsroom_discovery_switched_off_publishes_no_listing_only_news(settings: Settings) -> None:
     settings.enable_news_discovery = False
     rec = run(network(verified_site(NAME, AUTO)))
     assert rec["news"]["newsroom"]["state"] == "not_applicable"
-    assert any(c["field"] == "news_item" for c in rec["claims"])  # the previous behaviour: items on pages the crawl already read
+    # V2.1: a card on a listing page the crawl already read is not an article. Without article verification nothing is published, and the report says why.
+    assert not any(c["field"] == "news_item" for c in rec["claims"])
+    assert "no company news is published" in rec["news"]["newsroom"]["note"]
     assert next(c for c in activity(rec)["sourcesChecked"] if c["kind"] == "newsroom")["status"] == "not_run"
 
 

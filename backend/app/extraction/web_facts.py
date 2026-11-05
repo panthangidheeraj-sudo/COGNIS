@@ -12,7 +12,7 @@ from typing import Any
 
 from ..connectors.jobs import JobItem
 from ..connectors.website import SiteCrawl
-from ..core.util import clean_ws, date_only, parse_iso, truncate
+from ..core.util import date_only, parse_iso, truncate
 from ..evidence.models import Observation
 from ..identity.normalization import email_domain, normalize_phone
 from .boilerplate import is_boilerplate
@@ -64,12 +64,19 @@ def website_observations(crawl: SiteCrawl) -> list[Observation]:
                                extraction_method="html_meta", label="Website description", document_title=home.title or None, excerpt_language=_lang(home),
                                **_page_base(crawl, home)))
 
-    # Social profiles linked from the verified site (company pages only; personal profiles are never collected).
+    # Social profiles linked from the verified site (company pages only; personal profiles are never collected). They are *linked from the company's website*, not
+    # verified on the platform itself: the claim says so, and its confidence is capped by how the company declared it and how well the website was verified.
+    declared_text = {"jsonld_sameAs": "JSON-LD sameAs", "footer": "footer link", "header": "header link", "page_body": "link"}
     for prof in sorted(crawl.social, key=lambda s: (s["network"], s["url"])):
         page = next((d for d in crawl.docs() if d.final_url == prof.get("page")), home)
+        how = prof.get("declared_by") or "page_body"
         obs.append(Observation(field=f"social_profile_{prof['network']}", value=prof["url"], key_suffix=prof["url"],
-                               claim_span=f'link on {page.final_url}: {prof["url"]} ({prof.get("evidence") or "handle " + str(prof.get("handle"))})', extraction_method="company_linked_profile",
-                               label=f"{prof['network'].title() if prof['network'] != 'x' else 'X'} profile", attributes={"network": prof["network"], "handle": prof.get("handle"), "verified_by": prof.get("basis")},
+                               claim_span=f'{declared_text.get(how, "link")} on {page.final_url}: {prof["url"]} ({prof.get("evidence") or "handle " + str(prof.get("handle"))}; '
+                                          f'linked from the company website, not verified on the platform)', extraction_method="company_linked_profile",
+                               label=f"{prof['network'].title() if prof['network'] != 'x' else 'X'} profile",
+                               attributes={"network": prof["network"], "handle": prof.get("handle"), "verified_by": prof.get("basis"), "declared_by": how,
+                                           "verification": prof.get("verification") or "linked_from_company_site", "platform_verified": bool(prof.get("platform_verified")),
+                                           **({"confidence_ceiling": prof["confidence"]} if prof.get("confidence") is not None else {})},
                                **{**_page_base(crawl, page), "source_class": "company_linked_social_profile"}))
 
     # Contact details: e-mail on the company's own domain, phone numbers on the contact page.
@@ -148,39 +155,6 @@ def description_observation(crawl: SiteCrawl) -> Observation | None:
                                label="What the company does (company-stated)", document_title=home.title or None, excerpt_language=_lang(home),
                                **_page_base(crawl, home))
     return None
-
-
-def news_observations(crawl: SiteCrawl, *, limit: int = 8) -> list[Observation]:
-    """Dated news items published on the verified site (newsroom / press pages) — only items with their own article URL and a publication date."""
-    if not crawl.verified:
-        return []
-    from datetime import date as _date
-
-    from ..connectors import news_validation as nv
-
-    items: dict[str, Observation] = {}
-    for doc in crawl.docs("news") + crawl.docs("investors"):
-        for art in jsonld_of_type(doc, "NewsArticle", "Article", "BlogPosting", "PressRelease"):
-            title = clean_ws(str(art.get("headline") or art.get("name") or ""))
-            day = date_only(str(art.get("datePublished") or ""))  # dateCreated / dateModified are not publication dates
-            url = art.get("url") if isinstance(art.get("url"), str) else None
-            verdict = nv.validate_item(title=title, url=url, day=day, date_source="datePublished", today=_date.today(), max_age_days=3650, listing_url=doc.final_url)
-            if len(title) >= NEWS_TITLE_MIN and verdict.ok and day:
-                key = f"{day}|{title.casefold()}"
-                items.setdefault(key, Observation(field="news_item", value=title, key_suffix=key, as_of=day, effective_from=day,
-                                                  claim_span=f'{art.get("@type")} "{truncate(title, 200)}" datePublished {day}', extraction_method="json_ld",
-                                                  label="Company news", attributes={"url": url, "date": day, "date_source": "datePublished"},
-                                                  document_title=doc.title or None, **_page_base(crawl, doc)))
-        for it in doc.items:
-            verdict = nv.validate_item(title=it.title, url=it.url, day=it.date, date_source="printed_date", today=_date.today(), max_age_days=3650, listing_url=doc.final_url)
-            if not verdict.ok:
-                continue
-            key = f"{it.date}|{it.title.casefold()[:80]}"
-            items.setdefault(key, Observation(field="news_item", value=truncate(it.title, 180), key_suffix=key, as_of=it.date, effective_from=it.date,
-                                              claim_span=truncate(it.context, 300), extraction_method="newsroom_listing", label="Company news",
-                                              attributes={"url": it.url, "date": it.date, "date_source": "printed_date"}, document_title=doc.title or None, **_page_base(crawl, doc)))
-    ordered = sorted(items.values(), key=lambda o: o.as_of or "", reverse=True)
-    return ordered[:limit]
 
 
 def job_observations(crawl: SiteCrawl, jobs: list[JobItem], status_note: str, checked: bool) -> list[Observation]:

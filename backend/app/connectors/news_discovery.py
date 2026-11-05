@@ -24,36 +24,37 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import Any
 
-from ..core.util import clean_ws, date_only, fold, now_iso, truncate
+from ..core.util import fold, now_iso, truncate
 from ..evidence.models import ModuleResult, Observation
-from ..extraction.html import PageDoc, jsonld_of_type
+from ..extraction.html import PageDoc
 from ..identity.employer import org_numbers_in
 from ..identity.model import CanonicalIdentity
-from ..identity.normalization import continues_into_longer_name, is_generic_name, name_in_text, normalize_name  # noqa: F401  (re-exported for callers)
+from ..identity.normalization import (  # noqa: F401  (re-exported for callers)
+    continues_into_longer_name,
+    is_generic_name,
+    name_in_text,
+    normalize_name,
+)
 from ..security.urls import host_of, registrable_domain
 from . import news_validation as nv
 from . import search
 from .base import ConnectorContext, not_run
 from .job_discovery import _can_spend, short_name
+from .news_article import (  # noqa: F401  (re-exported: the article reader is shared with the newsroom)
+    ARTICLE_TYPES,
+    BOILERPLATE,
+    EXCERPT_CHARS,
+    Article,
+    read_article,
+)
 from .website import SiteCrawl, fetch_page
 
 MODULE = "news_discovery"
 SOURCE_ID = "news_discovery"
 SOURCE_NAME = "News coverage found by search (Tavily)"
 SOURCE_CLASS = "secondary_news"
-ARTICLE_TYPES = ("NewsArticle", "Article", "ReportageNewsArticle", "AnalysisNewsArticle", "BlogPosting", "PressRelease")
 MAX_ACCEPTED = 10
-EXCERPT_CHARS = 300
-BOILERPLATE = re.compile(r"(cookie|personvern|privacy|javascript|abonnement|subscribe|logg inn|log in|©|all rights reserved)", re.I)
 IDENTITY_SCORE = {"organisation_number_on_page": 1.0, "exact_name_and_website_link": 0.97, "exact_legal_name_in_headline": 0.95}
-
-
-@dataclass
-class Article:
-    headline: str
-    day: str
-    lead: str
-    nosnippet: bool = False
 
 
 @dataclass
@@ -80,54 +81,6 @@ def outlet_of(url: str, allowed: list[str]) -> str | None:
     """The allowlisted outlet this URL belongs to, or None."""
     host = host_of(url)
     return next((d for d in allowed if host == d or host.endswith("." + d)), None)
-
-
-def _norm(text: str) -> str:
-    return re.sub(r"[^\w]+", " ", fold(text)).strip()
-
-
-def _strip_site_name(title: str) -> str:
-    """"Headline | E24" → "Headline" (only when what remains is still a headline)."""
-    for sep in (" | ", " – ", " — ", " - "):
-        head, _, tail = title.rpartition(sep)
-        if head and len(head) >= 12 and len(tail) <= 32:
-            return head.strip()
-    return title
-
-
-def _article_url(art: dict[str, Any]) -> str:
-    main = art.get("mainEntityOfPage")
-    return str(art.get("url") or (main.get("@id") if isinstance(main, dict) else main) or "")
-
-
-def read_article(doc: PageDoc) -> tuple[Article | None, str | None]:
-    """The article a page is, or why it is not one: (article, None) | (None, reason). Reads the page only; nothing is guessed."""
-    ld = jsonld_of_type(doc, *ARTICLE_TYPES)
-    chosen: dict[str, Any] | None = None
-    if len(ld) == 1:
-        chosen = ld[0]
-    elif len(ld) > 1:
-        here = {u.rstrip("/") for u in (doc.final_url, doc.canonical) if u}
-        chosen = next((a for a in ld if _article_url(a).rstrip("/") in here), None)
-        if chosen is None:
-            return None, "the page lists several articles (a section page), not one article"
-    candidates = [clean_ws(str((chosen or {}).get("headline") or (chosen or {}).get("name") or "")), clean_ws(doc.og.get("title", "")),
-                  clean_ws(doc.headings[0]) if doc.headings else "", clean_ws(doc.title)]
-    surface = _norm(" ".join([doc.title, doc.og.get("title", ""), *doc.headings[:6], doc.text[:6000]]))
-    headline = next((h for h in (_strip_site_name(c) for c in candidates) if len(h) >= 12 and _norm(h)[:48] in surface), "")
-    if not headline:
-        return None, "no headline could be read from the page"
-    # Only a stated PUBLICATION date counts: datePublished or article:published_time. dateCreated, dateModified, <time> elements of unknown meaning and the
-    # retrieval date are never substituted.
-    raw_date = str((chosen or {}).get("datePublished") or doc.og.get("published_time") or "")
-    day = date_only(raw_date)
-    if not day:
-        modified = (chosen or {}).get("dateModified") or doc.og.get("modified_time")
-        return None, ("the page states only a modification date, not a publication date" if modified or (chosen or {}).get("dateCreated")
-                      else "the page states no publication date")
-    lead = next((p for p in doc.paragraphs if len(p) >= 60 and not BOILERPLATE.search(p) and _norm(p)[:40] != _norm(headline)[:40]), "")
-    nosnippet = any(flag in doc.robots_meta for flag in ("nosnippet", "noarchive", "none"))
-    return Article(headline=truncate(headline, 220), day=day, lead="" if nosnippet else truncate(lead, EXCERPT_CHARS), nosnippet=nosnippet), None
 
 
 def identity_basis(doc: PageDoc, article: Article, identity: CanonicalIdentity, verified_domain: str | None) -> tuple[str | None, str | None]:

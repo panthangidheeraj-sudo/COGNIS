@@ -14,10 +14,10 @@ from typing import Any
 from bs4 import BeautifulSoup
 
 from ..evidence.models import ModuleResult
-from ..extraction.html import Link, PageDoc, classify_link, is_ats, looks_parked, parse_html, social_profile
+from ..extraction.html import Link, PageDoc, classify_link, declared_same_as, is_ats, looks_parked, parse_html, social_profile
 from ..identity.match import IdentityAudit, audit_site
 from ..identity.model import CanonicalIdentity
-from ..identity.social import SocialVerdict, assess_social
+from ..identity.social import DECLARATION_RANK, assess_social
 from ..net.http import FetchResult
 from ..security.urls import canonical_url, host_of, registrable_domain
 from .base import ConnectorContext, module_from_fetch
@@ -196,21 +196,40 @@ async def crawl_site(
 
 
 async def collect_links_and_social(ctx: ConnectorContext, crawl: SiteCrawl, identity: CanonicalIdentity, related: list[dict] | None = None) -> None:
-    """Social links on a verified site are candidates: each is judged by its handle before it is published; rejected and unverified ones stay in diagnostics."""
-    candidates: list[SocialVerdict] = []
-    seen: set[str] = set()
+    """Social links on a verified site are candidates: each is judged by its handle before it is published; rejected and unverified ones stay in diagnostics.
+
+    How the company presents a profile decides how far it is trusted: a JSON-LD ``sameAs`` entry is a deliberate declaration, a footer or header link is where companies
+    list their own profiles, a link inside page content may point at anyone. The same profile found several ways keeps its strongest declaration. When a network has a
+    profile declared in ``sameAs`` / footer / header, a different profile of that network found only inside page content is kept in diagnostics, not published."""
+    found: dict[str, tuple[str, str, str, str]] = {}  # canonical url → (declared_by, network, handle, page)
+    seen_ats: set[str] = set()
+    score = crawl.audit.score if crawl.audit else None
+
+    def offer(url: str, declared_by: str, page: str) -> None:
+        prof = social_profile(url)
+        if not prof:
+            return
+        key = canonical_url(url)
+        if key not in found or DECLARATION_RANK[declared_by] > DECLARATION_RANK[found[key][0]]:
+            found[key] = (declared_by, prof[0], prof[1], page)
+
     for doc in crawl.docs():
+        for url in declared_same_as(doc):
+            offer(url, "jsonld_sameAs", doc.final_url)
         for link in doc.links:
-            prof = social_profile(link.url)
-            if prof:
-                url = canonical_url(link.url)
-                if url not in seen:
-                    seen.add(url)
-                    candidates.append(assess_social(identity, crawl.domain, prof[0], prof[1], url, doc.final_url, related=related))
-            if is_ats(link.url) and all(canonical_url(a.url) != canonical_url(link.url) for a in crawl.ats_links):
+            offer(link.url, link.zone if link.zone in ("footer", "header") else "page_body", doc.final_url)
+            if is_ats(link.url) and all(canonical_url(a.url) != canonical_url(link.url) for a in crawl.ats_links) and canonical_url(link.url) not in seen_ats:
+                seen_ats.add(canonical_url(link.url))
                 crawl.ats_links.append(link)
+    candidates = [assess_social(identity, crawl.domain, network, handle, key, page, related=related, declared_by=declared_by, site_score=score)
+                  for key, (declared_by, network, handle, page) in found.items()]
+    deliberate = {v.network for v in candidates if v.decision == "accepted" and v.declared_by != "page_body"}
+    for v in candidates:
+        if v.decision == "accepted" and v.declared_by == "page_body" and v.network in deliberate:
+            v.decision, v.basis, v.match, v.verification, v.confidence = "unverified", None, None, None, None
+            v.reasons.append(f"not published: the company declares a different {v.network} profile in its structured data, footer or header, and this one appears only inside page content")
     for verdict in candidates:
         if verdict.decision == "unverified":  # social networks forbid automated profile reads (and LinkedIn is never fetched): the handle check is all that can be done
             verdict.reasons.append("profile page not fetched (platform terms); only the handle could be checked")
     crawl.social_candidates = [v.to_dict() for v in sorted(candidates, key=lambda v: (v.network, v.url))]
-    crawl.social = [v.profile() for v in candidates if v.decision == "accepted"]
+    crawl.social = [v.profile() for v in sorted(candidates, key=lambda v: (v.network, v.url)) if v.decision == "accepted"]

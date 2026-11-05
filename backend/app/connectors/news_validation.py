@@ -23,8 +23,12 @@ from ..core.util import fold
 from ..identity.normalization import normalize_name
 
 # Where a date came from. Only these describe when the item was published.
-PUBLICATION_DATE_SOURCES = {"datePublished", "published_time", "rss_pubDate", "rss_published", "dc_date", "time_element", "printed_date"}
-NON_PUBLICATION_DATE_SOURCES = {"dateModified", "dateCreated", "updated", "lastBuildDate", "retrieved_at", "last_modified_header"}
+# ``datePublished`` is JSON-LD, ``published_time`` is ``article:published_time``, ``time_itemprop_datePublished`` an article-scoped <time itemprop="datePublished">,
+# ``rss_pubDate`` / ``atom_published`` the item's own field in a same-site feed. A feed date can supply the date, but the linked article page is still fetched and checked.
+PUBLICATION_DATE_SOURCES = {"datePublished", "published_time", "time_itemprop_datePublished", "rss_pubDate", "atom_published"}
+# Everything else is a hint at best: a generic <time datetime>, a date printed on a listing card, a generic <date> / dc:date feed field, modification and build dates.
+NON_PUBLICATION_DATE_SOURCES = {"dateModified", "dateCreated", "updated", "lastBuildDate", "retrieved_at", "last_modified_header", "listing_card_date", "generic_time_element",
+                                "time_element", "printed_date", "dc_date", "feed_date_field"}
 
 SECTION_SEGMENTS = {
     "nyheter", "news", "presse", "press", "pressemeldinger", "pressroom", "newsroom", "media", "mediesenter", "arkiv", "archive", "arkivet", "category", "kategori",

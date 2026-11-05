@@ -198,6 +198,13 @@ def build_envelope(record: dict[str, Any], *, run_id: str, started_at: str | Non
                                                                                 if c.get("status") in ("rejected", "unverified", "blocked", "unreadable")],
         "website_identity": (website.get("audit") or {}),
     }
+    newsroom = news.get("newsroom") or {}
+    if newsroom.get("rejected_total"):  # the examples above are limited; these are the real totals
+        diagnostics["news_rejected_total"] = int(newsroom["rejected_total"])
+        diagnostics["news_rejected_by_status"] = dict(newsroom.get("rejected_by_status") or {})
+        diagnostics["news_rejected_reasons"] = dict(newsroom.get("rejected_reasons") or {})
+    if newsroom.get("duplicates_merged"):
+        diagnostics["news_duplicates_merged"] = int(newsroom["duplicates_merged"])
     if any(diagnostics.values()):
         envelope["diagnostics"] = diagnostics
     conflicts = [{"field": c["field"], "reporting_period": c.get("reporting_period"), **c["conflict"]} for c in record.get("claims") or [] if c.get("conflict")]

@@ -291,8 +291,13 @@ class Orchestrator:
 
         t_jobs: float | None = None
         # ---- 3. website: discover → verify identity → enrich ---------------
+        news_planned = s.enable_news_discovery and "news" in wanted and st.options.mode != "registry"
         if s.enable_website and st.options.include_website and "website" in wanted:
+            if news_planned:  # keep part of the company's request allowance for the newsroom step: crawling and the other optional steps must not use all of it first
+                budget.hold("news", min(s.news_article_reserved_requests, budget.max_requests // 3))
             await self._website(st, ctx, budget, emit)
+            if not (st.crawl is not None and st.crawl.verified):
+                budget.release("news")  # no verified website, no newsroom: nothing to keep back
         else:
             st.modules["website"] = not_run("website", source_id="website", source_name="Official company website", source_class="company_owned", state="not_applicable",
                                             note="Website research not part of this run.")
@@ -339,6 +344,7 @@ class Orchestrator:
 
         # ---- 4b. company announcements: own newsroom / investor relations / feeds, then reputable press found by search -------
         await self._news(st, ctx, emit, wanted)
+        budget.release("news")
 
         # ---- 5. public procurement (free: TED + Doffin open data; exact org-number matches only) -
         if st.options.mode != "registry":
@@ -429,10 +435,8 @@ class Orchestrator:
             st.modules["news"] = not_run("news", source_id=newsroom.SOURCE_ID, source_name=newsroom.SOURCE_NAME, source_class="company_owned", state="not_applicable", note=why)
             st.news = {"newsroom": {"state": "not_applicable", "note": why, "sources": []}, "search": {"state": "not_applicable", "note": why}}
             return
-        if not s.enable_news_discovery:  # switched off: only the items the site crawl itself shows, as before
-            if crawl is not None and crawl.verified:
-                st.observations += wf.news_observations(crawl)
-            note = "Newsroom discovery is switched off by configuration; only news items on pages the site crawl already read are used."
+        if not s.enable_news_discovery:  # switched off: nothing is published from a listing page, because an item is only used after its own article page has been verified
+            note = "Newsroom discovery is switched off by configuration, so no company news is published (a news item is only used after its own article page has been fetched and verified)."
             st.modules["news"] = not_run("news", source_id=newsroom.SOURCE_ID, source_name=newsroom.SOURCE_NAME, source_class="company_owned", state="not_applicable", note=note)
             st.news = {"newsroom": {"state": "not_applicable", "note": note, "sources": []}, "search": {"state": "not_applicable", "note": note}}
             return
@@ -443,7 +447,7 @@ class Orchestrator:
         today = date.today()
         if crawl is not None:
             try:
-                own = await newsroom.discover_newsroom(ctx, crawl, today=today, crawled_only=not planned)
+                own = await newsroom.discover_newsroom(ctx, crawl, identity=st.identity, related=related_names_of(st.observations), today=today, crawled_only=not planned)
             except Exception as exc:  # a connector bug becomes a recorded failure, never an empty "no news"
                 log.exception("newsroom discovery failed", extra={"org_number": st.org_number})
                 own = newsroom.NewsroomResult(module=not_run("news", source_id=newsroom.SOURCE_ID, source_name=newsroom.SOURCE_NAME, source_class="company_owned", state="failed",
@@ -471,7 +475,8 @@ class Orchestrator:
             st.modules[news_discovery.MODULE] = press.module
         if press.searched:
             st.trace.append({"action": "search_news", "state": press.module.state if press.module else None, "accepted": len(press.observations), "considered": len(press.candidates)})
-        st.news = {"newsroom": {"state": own.module.state if own.module else None, "note": own.module.note if own.module else None, "sources": own.sources, "rejected": own.rejected},
+        st.news = {"newsroom": {"state": own.module.state if own.module else None, "note": own.module.note if own.module else None, "sources": own.sources, "rejected": own.rejected, "candidates": own.candidates, "articles_fetched": own.articles_fetched, "published": len(own.observations),
+                               "rejected_total": own.rejected_total, "rejected_by_status": own.rejected_by_status, "rejected_reasons": own.rejected_reasons, "duplicates_merged": own.duplicates_merged},
                    "search": press.summary()}
         total = len(own.observations) + len(press.observations)
         state = "available" if total else (own.module.state if own.module else "not_available")

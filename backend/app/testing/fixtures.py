@@ -167,6 +167,12 @@ def company_page(title: str, body: str, *, footer: str = "", links: list[tuple[s
             f"<footer>{footer}</footer></body></html>")
 
 
+def article_page(title: str, published: str | None, body: str, *, footer: str = "", links: list[tuple[str, str]] | None = None, date_markup: str = "jsonld") -> str:
+    """A company-site article page: one article with its headline, text and (``date_markup="jsonld"``) a JSON-LD ``datePublished``. ``published=None`` gives an undated page."""
+    ld = [{"@context": "https://schema.org", "@type": "NewsArticle", "headline": title, "datePublished": published}] if published and date_markup == "jsonld" else None
+    return company_page(f"{title} – nyheter", f"<article><h1>{title}</h1><p>{body}</p></article>", footer=footer, links=links, jsonld=ld)
+
+
 def verified_site(name: str, org: str, *, city: str = "Oslo", jobs: list[str] | None = None, about: str | None = None) -> dict[str, str]:
     spaced = f"{org[:3]} {org[3:6]} {org[6:]}"
     links = [("/om-oss", "Om oss"), ("/kontakt", "Kontakt"), ("/karriere", "Karriere"), ("/nyheter", "Nyheter"),
@@ -188,6 +194,9 @@ def verified_site(name: str, org: str, *, city: str = "Oslo", jobs: list[str] | 
                                   footer=footer, links=links, jsonld=postings),
         "/nyheter": company_page(f"Nyheter – {name}", '<article><time datetime="2026-08-14">14. august 2026</time><h2><a href="/nyheter/vi-apner-nytt-kontor-i-bergen">Vi åpner nytt kontor i Bergen og ansetter flere rådgivere</a></h2></article>',
                                  footer=footer, links=links),
+        "/nyheter/vi-apner-nytt-kontor-i-bergen": article_page(
+            "Vi åpner nytt kontor i Bergen og ansetter flere rådgivere", "2026-08-14",
+            f"{name} åpner nytt kontor i Bergen og ansetter flere rådgivere i løpet av høsten. Kontoret skal betjene kunder i hele Vestlandet.", footer=footer, links=links),
     }
 
 

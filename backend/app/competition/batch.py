@@ -91,11 +91,13 @@ async def run_batch(cfg: BatchConfig, settings: Settings | None = None) -> dict[
 
     records: dict[str, dict[str, Any]] = {}
     resumed = 0
+    resumed_orgs: set[str] = set()
     if cfg.resume:
         for org in orgs:
             rec = repo.company_run_record(db, run_id, org)
             if rec is not None:
                 records[org] = rec
+                resumed_orgs.add(org)
                 resumed += 1
     runtimes: list[int] = []
     lag = LoopLagMonitor()  # measures event-loop stalls so a slow run can be explained from the report (diagnostics only)
@@ -103,6 +105,7 @@ async def run_batch(cfg: BatchConfig, settings: Settings | None = None) -> dict[
         provider = cfg.provider if cfg.use_provider_override else build_provider(http, s)
         orch = Orchestrator(http=http, run_budget=budget, provider=provider, settings=s, db=db)
         nav_meta: dict[str, Any] | None = None
+        before_sync = budget.snapshot()
         if s.enable_nav_jobs:
             # One bounded refresh of the local NAV job-ad index serves every company in the batch. It spends at most
             # NAV_SYNC_RUN_SHARE of the run's request and time budget; an index that is not fully caught up is reported, never hidden.
@@ -114,6 +117,10 @@ async def run_batch(cfg: BatchConfig, settings: Settings | None = None) -> dict[
             except Exception as exc:  # the batch never fails because an optional index could not be refreshed
                 nav_meta = {"status": "failed", "error": type(exc).__name__}
             log_event(log, "nav index", run_id=run_id, **{k: v for k, v in (nav_meta or {}).items() if k in ("status", "pages", "error")})
+        after_sync = budget.snapshot()
+        shared_requests = {"total": after_sync["requests"] - before_sync["requests"],
+                           "by_connector": {k: v - before_sync["requests_by_connector"].get(k, 0) for k, v in after_sync["requests_by_connector"].items()
+                                            if v - before_sync["requests_by_connector"].get(k, 0)}}
         sem = asyncio.Semaphore(workers)
         done = 0
 
@@ -164,8 +171,9 @@ async def run_batch(cfg: BatchConfig, settings: Settings | None = None) -> dict[
     write_jsonl(cfg.output, envelopes)
     if cfg.profiles_output:
         write_jsonl(cfg.profiles_output, profiles)
+    company_requests = sum(int((rec.get("operations") or {}).get("requests") or 0) for org, rec in records.items() if org not in resumed_orgs)
     report = _report(run_id, started_at, completed_at, time.monotonic() - t0, orgs, envelopes, records, budget, bulk_meta, validation, resumed, change_total,
-                     previous, runtimes, s)
+                     previous, runtimes, s, company_requests=company_requests, shared_requests=shared_requests)
     report["free_source_indexes"] = {"nav_job_ads": nav_meta}
     report["event_loop_lag"] = lag.report()
     if cfg.report:
@@ -216,15 +224,27 @@ def verification_summary(orgs: list[str], envelopes: list[dict[str, Any]], recor
     cands = [c for env in envelopes for c in (env.get("diagnostics") or {}).get("social_candidates") or []]
     social = {"candidates": len(cands), "accepted": sum(1 for c in cands if c["decision"] == "accepted"), "rejected": sum(1 for c in cands if c["decision"] == "rejected"),
               "unverified": sum(1 for c in cands if c["decision"] == "unverified"),
+              "accepted_linked_from_company_site": sum(1 for c in cands if c["decision"] == "accepted" and c.get("verification") == "linked_from_company_site"),
+              "accepted_platform_verified": sum(1 for c in cands if c["decision"] == "accepted" and c.get("platform_verified")),
+              "accepted_by_declaration": {how: sum(1 for c in cands if c["decision"] == "accepted" and c.get("declared_by") == how) for how in ("jsonld_sameAs", "footer", "header", "page_body")},
               "companies_with_accepted_profile": sum(1 for env in envelopes if any(c["field"].startswith("social_profile_") and c["availability"] == "available" for c in env["claims"]))}
     rejected_news = [r for env in envelopes for r in (env.get("diagnostics") or {}).get("news_rejected") or []]
     news_reasons: dict[str, int] = {}
-    for r in rejected_news:
-        key = str(r.get("reason") or "?")[:90]
-        news_reasons[key] = news_reasons.get(key, 0) + 1
+    diags = [env.get("diagnostics") or {} for env in envelopes]
+    for d in diags:
+        if d.get("news_rejected_reasons"):  # the true per-reason counts of a company (its stored examples are limited)
+            for reason, n in d["news_rejected_reasons"].items():
+                news_reasons[str(reason)] = news_reasons.get(str(reason), 0) + int(n)
+        else:
+            for r in d.get("news_rejected") or []:
+                key = str(r.get("reason") or "?")[:90]
+                news_reasons[key] = news_reasons.get(key, 0) + 1
+    rejected_total = sum(int(d["news_rejected_total"]) if d.get("news_rejected_total") is not None else len(d.get("news_rejected") or []) for d in diags)
     news = {"items_published": sum(1 for _e, c in claims if c["field"] == "news_item" and c["availability"] == "available"),
             "companies_with_news": sum(1 for env in envelopes if any(c["field"] == "news_item" and c["availability"] == "available" for c in env["claims"])),
-            "candidates_rejected_or_unusable": len(rejected_news), "rejection_reasons": dict(sorted(news_reasons.items(), key=lambda kv: -kv[1])[:10])}
+            "candidates_rejected_or_unusable": rejected_total, "rejected_examples_stored": len(rejected_news),
+            "candidates_merged_as_duplicates": sum(int(d.get("news_duplicates_merged") or 0) for d in diags),
+            "rejection_reasons": dict(sorted(news_reasons.items(), key=lambda kv: -kv[1])[:10])}
     trend_counts = {k: sum(1 for r in records.values() if len(((r.get("trends") or {}).get("metrics") or {}).get(k, {}).get("series") or []) >= 2) for k in ("revenue", "operating_result", "annual_result")}
     failures: dict[str, dict[str, int]] = {}
     for env in envelopes:
@@ -248,7 +268,7 @@ def verification_summary(orgs: list[str], envelopes: list[dict[str, Any]], recor
 
 def _report(run_id: str, started_at: str, completed_at: str, elapsed: float, orgs: list[str], envelopes: list[dict[str, Any]], records: dict[str, dict[str, Any]],
             budget: RunBudget, bulk_meta: dict[str, Any], validation: dict[str, Any], resumed: int, change_total: int, previous: dict[str, Any],
-            runtimes: list[int], s: Settings) -> dict[str, Any]:
+            runtimes: list[int], s: Settings, *, company_requests: int | None = None, shared_requests: dict[str, Any] | None = None) -> dict[str, Any]:
     field_counts: dict[str, dict[str, int]] = {}
     for env in envelopes:
         for c in env["claims"]:
@@ -268,6 +288,8 @@ def _report(run_id: str, started_at: str, completed_at: str, elapsed: float, org
             rejections[r.get("reason", "?")] = rejections.get(r.get("reason", "?"), 0) + 1
     runtimes_sorted = sorted(runtimes)
     snap = budget.snapshot()
+    shared = shared_requests or {"total": 0, "by_connector": {}}
+    own = snap["requests"] - shared["total"] if company_requests is None else company_requests  # requests the companies themselves made (the shared index refresh is not theirs)
     return {
         "run_id": run_id,
         "started_at": started_at,
@@ -280,7 +302,10 @@ def _report(run_id: str, started_at: str, completed_at: str, elapsed: float, org
         "llm": describe(s),
         "search_enabled": s.search_enabled,
         "operations": {
-            "requests": snap["requests"],
+            "requests": snap["requests"],  # the whole run: company requests + shared index refresh
+            "company_requests": own,
+            "shared_index_requests": shared["total"],  # one refresh of the NAV job-ad index serves every company; it is not charged to any company
+            "shared_index_requests_by_connector": shared["by_connector"],
             "third_party_cost_usd": snap["third_party_cost_usd"],
             "llm_calls": snap["llm_calls"],
             "cache_hits": snap["cache_hits"],
@@ -292,7 +317,7 @@ def _report(run_id: str, started_at: str, completed_at: str, elapsed: float, org
                 "p95": runtimes_sorted[min(len(runtimes_sorted) - 1, int(len(runtimes_sorted) * 0.95))] if runtimes_sorted else None,
                 "mean": int(statistics.mean(runtimes_sorted)) if runtimes_sorted else None,
             },
-            "requests_per_company": round(snap["requests"] / max(1, len(orgs) - resumed), 2),
+            "requests_per_company": round(own / max(1, len(orgs) - resumed), 2),  # company-level requests only
             "cost_per_company_usd": round(snap["third_party_cost_usd"] / max(1, len(orgs) - resumed), 6),
         },
         "budget": snap["limits"],

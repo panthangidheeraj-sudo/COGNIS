@@ -165,6 +165,8 @@ class Settings(BaseSettings):
     news_discovery_max_pages: int = 4  # extra newsroom / investor-relations pages fetched per company (beyond what the site crawl already read)
     news_max_age_days: int = 1825  # five years; older items are not collected as "recent activity"
     news_max_items: int = 40  # announcements kept per source group
+    news_article_max_fetches: int = 10  # individual article pages fetched and verified per company (every published newsroom / feed item is read from its own page)
+    news_article_reserved_requests: int = 10  # part of the per-company request allowance kept back for the newsroom step (listing pages, feeds, article pages) so crawling and other optional steps cannot use it all up; capped at a third of the allowance
     enable_secondary_news: bool = True  # reputable-outlet articles found by search; each one is fetched, identity-checked and robots-checked
     secondary_news_max_pages: int = 6  # candidate articles fetched per company
     secondary_news_domains: str = (
