@@ -330,6 +330,8 @@
 }
 .person-name {
   font-weight: 500;
+  line-height: 1.25;
+  overflow-wrap: anywhere; /* long registered names wrap instead of being cut off */
 }
 .row-btn {
   display: flex;

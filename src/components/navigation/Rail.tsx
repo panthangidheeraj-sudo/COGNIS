@@ -2,10 +2,12 @@ import { NavLink, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/api';
 import { CognisLogo } from '@/components/common/CognisLogo';
+import { useCompare } from '@/stores/ui';
 import { PRIMARY_NAV, SECONDARY_NAV } from './navItems';
 
 /** Compact desktop/tablet rail. */
 export function Rail() {
+  const compareCount = useCompare((s) => s.selected.length);
   const { data: watch } = useQuery({ queryKey: ['watchlist'], queryFn: api.watchlist.get, staleTime: 60_000 });
   return (
     <nav className="rail" aria-label="Primary">
@@ -20,6 +22,11 @@ export function Rail() {
             {to === '/watchlist' && watch && watch.changedCount > 0 && (
               <span className="rail-badge" aria-label={`${watch.changedCount} companies changed`}>
                 {watch.changedCount}
+              </span>
+            )}
+            {to === '/compare' && compareCount > 0 && (
+              <span className="rail-badge" aria-label={`${compareCount} ${compareCount === 1 ? 'company' : 'companies'} selected for comparison`}>
+                {compareCount}
               </span>
             )}
           </NavLink>

@@ -265,7 +265,14 @@ export default function DiscoverPage() {
               ))}
             </div>
           ) : res.items.length === 0 ? (
-            <EmptyState title="No companies match these criteria." text="Try removing a filter. Filters like hiring only include companies with verified evidence, so unresearched companies may be excluded." />
+            <EmptyState
+              title="No companies match these criteria."
+              text={
+                activeCount > 0
+                  ? 'Try removing a filter. Filters like hiring only include companies with verified evidence, so unresearched companies may be excluded.'
+                  : 'Check the spelling, try part of the name, or search by the 9-digit organisation number.'
+              }
+            />
           ) : view === 'landscape' ? (
             <Landscape companies={res.items} onSelect={(org) => nav(`/company/${org}`)} />
           ) : view === 'table' && !mobile ? (

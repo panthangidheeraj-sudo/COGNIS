@@ -511,7 +511,8 @@ describe('7 · compare tray', () => {
     expect(useCompare.getState().selected).toHaveLength(2); // the selection is preserved
     fireEvent.click(screen.getByText('compare'));
     const tray = await screen.findByRole('region', { name: /selected for comparison/ });
-    expect(within(tray).getByText('Alpha AS')).toBeInTheDocument();
+    expect(within(tray).getByText('2')).toBeInTheDocument(); // the count; the companies themselves are the page's own chips
+    expect(within(tray).queryByText('Alpha AS')).not.toBeInTheDocument();
   });
   it('is absent without a selection, and without a data router (no route can opt in)', () => {
     useCompare.getState().clear();

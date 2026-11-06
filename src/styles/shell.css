@@ -308,11 +308,15 @@
 .compare-tray.glass {
   background: var(--glass-sheen), var(--glass-bg-strong);
 }
-.compare-tray-list {
-  display: flex;
-  gap: 6px;
-  overflow-x: auto;
-  scrollbar-width: none;
+.compare-tray-count {
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+  white-space: nowrap;
+  margin-right: 6px;
+}
+.compare-tray-count strong {
+  color: var(--text-1);
+  font-weight: 600;
 }
 
 /* ---------- Command palette ---------- */

@@ -13,6 +13,7 @@ import { formatDate, formatRelative } from '@/utils/format';
 export function WebsiteSection({ profile }: { profile: CompanyProfile }) {
   const w = profile.website;
   const ctx = profile.company.legalName;
+  const openEv = useOpenEvidence(profile.sourceIndex, ctx);
   return (
     <div className="stack" style={{ gap: 16 }}>
       <SectionState meta={w} sourceIndex={profile.sourceIndex} />
@@ -78,18 +79,37 @@ export function WebsiteSection({ profile }: { profile: CompanyProfile }) {
               <h3>Social presence</h3>
             </div>
             {w.social.length ? (
-              <ul className="stack" style={{ gap: 8 }}>
-                {w.social.map((s) => (
-                  <li key={s.network} className="row" style={{ justifyContent: 'space-between' }}>
-                    <span className="t-sm" style={{ textTransform: 'capitalize' }}>
-                      {s.network}
-                    </span>
-                    <ExternalLink href={s.url}>{s.handle}</ExternalLink>
-                  </li>
-                ))}
-              </ul>
+              <>
+                <ul className="stack" style={{ gap: 12 }}>
+                  {w.social.map((s) => {
+                    const src = s.fact.evidence[0] ? profile.sourceIndex[s.fact.evidence[0].sourceId] : undefined;
+                    return (
+                      <li key={s.network} className="stack" style={{ gap: 2 }}>
+                        <span className="row" style={{ justifyContent: 'space-between', gap: 10 }}>
+                          <span className="t-sm" style={{ textTransform: 'capitalize' }}>
+                            {s.network}
+                          </span>
+                          <ExternalLink href={s.url}>{s.handle}</ExternalLink>
+                        </span>
+                        {/* never "verified": the record says where the link was found, not that the profile was opened on the platform */}
+                        <span className="t-xs t-muted">
+                          {src ? `Link found via ${src.name}` : 'Link found in the searched sources'} · not checked on the platform itself
+                          {s.fact.evidence.length > 0 && (
+                            <>
+                              {' · '}
+                              <button type="button" className="link-btn" onClick={() => openEv(s.fact)}>
+                                View evidence
+                              </button>
+                            </>
+                          )}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </>
             ) : (
-              <p className="t-sm t-muted">No verified social profiles.</p>
+              <p className="t-sm t-muted">No social profiles established from the searched sources.</p>
             )}
           </section>
           <section className="card" data-search-block="website-signals">

@@ -3,6 +3,7 @@ import { Monitor, Moon, Sun } from 'lucide-react';
 import { api } from '@/api';
 import { usePreferences } from '@/stores/preferences';
 import { Segmented } from '@/components/common/Tabs';
+import { replayIntro } from '@/components/intro/introSeen';
 import { Skeleton } from '@/components/common/Skeleton';
 import { formatDateTime } from '@/utils/format';
 import { SOURCE_AVAILABILITY, toneClass } from '@/utils/status';
@@ -71,6 +72,15 @@ export default function SettingsPage() {
                 { value: 'compact', label: 'Compact' },
               ]}
             />
+          </div>
+          <div className="set-row">
+            <div>
+              <strong>Introduction</strong>
+              <p>The launch introduction is shown on your first visit only. Play it again whenever you like.</p>
+            </div>
+            <button type="button" className="btn" onClick={replayIntro}>
+              Replay intro
+            </button>
           </div>
         </section>
 

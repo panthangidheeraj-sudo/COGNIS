@@ -47,7 +47,7 @@ export function PeopleSection({ profile, showNetwork = true }: { profile: Compan
                   {initials(p.name)}
                 </span>
                 <span className="stack" style={{ gap: 2, minWidth: 0, flex: 1, textAlign: 'left' }}>
-                  <span className="person-name truncate">{p.name}</span>
+                  <span className="person-name">{p.name}</span>
                   <span className="t-sm t-soft truncate">{p.role}</span>
                   <span className="t-xs t-muted">
                     {p.since ? `Since ${formatDate(p.since)}` : 'Start date not recorded'}

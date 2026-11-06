@@ -116,6 +116,7 @@
   --col-min: 228px;
   --gap: 10px;
   overflow-x: auto;
+  position: relative; /* anchors absolutely positioned cell content (visually hidden text, badges) to the scroller; without it that content escapes it and widens the whole page on phones */
   margin: 0 calc(var(--gap) * -1);
   padding-bottom: 6px;
   outline: none;

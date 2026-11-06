@@ -61,16 +61,27 @@ interface CompareState {
   setAll: (c: Pick<CompanySummary, 'orgNumber' | 'legalName'>[]) => void;
 }
 export const MAX_COMPARE = 5;
-export const useCompare = create<CompareState>((set) => ({
+export const useCompare = create<CompareState>((set, get) => ({
   selected: [],
-  toggle: (c) =>
+  toggle: (c) => {
     set((s) =>
       s.selected.some((x) => x.orgNumber === c.orgNumber)
         ? { selected: s.selected.filter((x) => x.orgNumber !== c.orgNumber) }
         : s.selected.length >= MAX_COMPARE
           ? s
           : { selected: [...s.selected, { orgNumber: c.orgNumber, legalName: c.legalName }] },
-    ),
+    );
+    // The comparison tray only lives on /compare, so say that the company was added and how to get there.
+    const { selected } = get();
+    if (selected.some((x) => x.orgNumber === c.orgNumber)) {
+      const ready = selected.length >= 2;
+      useUi.getState().toast({
+        tone: 'ok',
+        text: ready ? `${c.legalName} added to comparison (${selected.length}/${MAX_COMPARE}).` : `${c.legalName} added. Pick one more company to compare.`,
+        action: ready ? { label: 'Open comparison', href: `/compare?orgs=${selected.map((x) => x.orgNumber).join(',')}` } : undefined,
+      });
+    }
+  },
   remove: (org) => set((s) => ({ selected: s.selected.filter((x) => x.orgNumber !== org) })),
   clear: () => set({ selected: [] }),
   setAll: (selected) => set({ selected: selected.slice(0, MAX_COMPARE) }),

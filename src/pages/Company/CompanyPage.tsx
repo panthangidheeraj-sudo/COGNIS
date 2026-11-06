@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Columns3, Download, Ellipsis, FileText, History, MapPin, Radar, RefreshCw, Sparkles, Telescope } from 'lucide-react';
+import { Columns3, Download, Ellipsis, FileText, History, MapPin, Radar, RefreshCw, Search, Sparkles, Telescope } from 'lucide-react';
 import { api, ApiError } from '@/api';
 import type { AmbiguousMatch, Change, CompanyProfile, ExplainSubject } from '@/types';
 import { useCompare, useUi } from '@/stores/ui';
@@ -54,6 +54,18 @@ export default function CompanyPage() {
       return (
         <div className="page">
           <AmbiguousCandidates match={err.details as AmbiguousMatch} />
+        </div>
+      );
+    // A company that is not in the register will not appear on a second try: offer a new search instead of Retry.
+    if (err instanceof ApiError && err.code === 'not_found')
+      return (
+        <div className="page stack" style={{ gap: 12 }}>
+          <ErrorState error={err} />
+          <div>
+            <Link to="/discover" className="btn btn--primary">
+              <Search aria-hidden /> Search companies
+            </Link>
+          </div>
         </div>
       );
     return (

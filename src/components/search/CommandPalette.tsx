@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import {
   ArrowRight,
   Building2,
+  CircleAlert,
   Clock,
   Columns3,
   Compass,
@@ -24,6 +25,7 @@ import {
   Telescope,
 } from 'lucide-react';
 import { api } from '@/api';
+import { API_MODE } from '@/api/http';
 import { useUi } from '@/stores/ui';
 import { usePreferences } from '@/stores/preferences';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -74,7 +76,7 @@ function PaletteBody({ initial, onClose }: { initial: string; onClose: () => voi
 
   // "open nordvik" → search for "nordvik" (the Open company command).
   const searchQ = dq.replace(/^open\s+/i, '');
-  const { data, isFetching } = useQuery({
+  const { data, isFetching, isError: searchFailed } = useQuery({
     queryKey: ['palette-search', searchQ],
     queryFn: ({ signal }) => api.search.global(searchQ, signal),
     enabled: searchQ.length >= 2,
@@ -82,8 +84,8 @@ function PaletteBody({ initial, onClose }: { initial: string; onClose: () => voi
   });
 
   useEffect(() => {
+    const prev = document.activeElement as HTMLElement | null; // read before the input takes focus, or "return focus" would return it to the input itself
     inputRef.current?.focus();
-    const prev = document.activeElement as HTMLElement | null;
     return () => prev?.focus?.();
   }, []);
 
@@ -238,7 +240,16 @@ function PaletteBody({ initial, onClose }: { initial: string; onClose: () => voi
           <span className="kbd">Esc</span>
         </div>
         <div className="palette-list" id="palette-list" role="listbox" ref={listRef} aria-label="Results">
-          {items.length === 0 && (
+          {searchFailed && !isFetching && (
+            <div className="notice notice--warn" role="alert" style={{ margin: '8px 10px' }}>
+              <CircleAlert aria-hidden />
+              <div className="stack" style={{ gap: 2 }}>
+                <strong>Company search is unavailable right now.</strong>
+                <span>Results may be missing. Check the status indicator, then try again.</span>
+              </div>
+            </div>
+          )}
+          {items.length === 0 && !searchFailed && (
             <div className="empty empty--center" style={{ margin: 10, border: 0 }}>
               <p className="empty-text">{dq.length >= 2 && !isFetching ? 'No matches. Press Enter to run a discovery search.' : 'Search by company, industry, location or organization number.'}</p>
             </div>
@@ -275,7 +286,7 @@ function PaletteBody({ initial, onClose }: { initial: string; onClose: () => voi
           <span>↵ open</span>
           <span>{modKeyLabel} K toggle</span>
           <span className="spacer" />
-          <span>Try “research Nordvik”, “compare Tindra + Lumen”, “find SaaS companies in Oslo”</span>
+          <span>{API_MODE === 'live' ? 'Try a company name, an organisation number such as 923609016, or “IT services companies in Oslo”' : 'Try “research Nordvik”, “compare Tindra + Lumen”, “find SaaS companies in Oslo”'}</span>
         </div>
       </div>
     </div>

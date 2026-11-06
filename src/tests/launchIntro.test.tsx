@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { Link, MemoryRouter, Route, Routes } from 'react-router-dom';
 import introTourSource from '@/components/intro/IntroTour.tsx?raw';
 import { LaunchGate, LEAVE_MS } from '@/components/intro/LaunchGate';
+import { replayIntro } from '@/components/intro/introSeen';
 import { TOUR_SLIDES } from '@/components/intro/slides';
 import { DotCursor } from '@/components/common/DotCursor';
 import { usePreferences } from '@/stores/preferences';
@@ -36,6 +37,7 @@ function App() {
 }
 
 beforeEach(() => {
+  window.localStorage.clear(); // each test starts as a first visit
   usePreferences.setState({ theme: 'dark', motion: 'full' });
   vi.useFakeTimers();
 });
@@ -73,6 +75,7 @@ describe('launch intro', () => {
     leave();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     first.unmount();
+    window.localStorage.clear(); // a new first visit
     render(<App />);
     fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
     leave();
@@ -90,16 +93,59 @@ describe('launch intro', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
-  it('shows again on the next fresh launch, and remembers nothing in storage', () => {
-    const local = vi.spyOn(Storage.prototype, 'setItem');
+  it('shows on the first visit only: a reload or deep link after entering goes straight to the app', () => {
+    const a = render(<App />);
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Enter COGNIS/ }));
+    leave();
+    expect(window.localStorage.getItem('cognis.intro.seen.v1')).toBe('1');
+    a.unmount();
+    render(<App />); // a reload
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByText('Dashboard')).toBeInTheDocument();
+  });
+
+  it('is recorded as seen as soon as it is dismissed, by any route (Enter, Skip, Escape)', () => {
+    for (const dismiss of [
+      () => fireEvent.click(screen.getByRole('button', { name: 'Skip intro' })),
+      () => fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' }),
+    ]) {
+      window.localStorage.clear();
+      const r = render(<App />);
+      dismiss();
+      expect(window.localStorage.getItem('cognis.intro.seen.v1')).toBe('1');
+      r.unmount();
+    }
+  });
+
+  it('shows again on every launch when the browser blocks storage, and never throws', () => {
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('blocked');
+    });
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('blocked');
+    });
     const a = render(<App />);
     fireEvent.click(screen.getByRole('button', { name: /Enter COGNIS/ }));
     leave();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    expect(local.mock.calls.filter(([k]) => /intro|launch|enter|dismiss/i.test(String(k)))).toHaveLength(0);
     a.unmount();
-    render(<App />); // a fresh launch
+    render(<App />);
     expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('can be replayed on demand without unmounting the application, and returns to the same page', () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: /Enter COGNIS/ }));
+    leave();
+    fireEvent.click(screen.getByText('go discover'));
+    act(() => replayIntro());
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByText('Discover page')).toBeInTheDocument(); // still mounted behind the intro
+    fireEvent.click(screen.getByRole('button', { name: 'Skip intro' }));
+    leave();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByText('Discover page')).toBeInTheDocument();
   });
 
   it('locks background scrolling while it is up and restores it when dismissed or unmounted', () => {
@@ -109,6 +155,7 @@ describe('launch intro', () => {
     leave();
     expect(document.documentElement).not.toHaveClass('cg-intro-lock');
     a.unmount();
+    window.localStorage.clear(); // a new first visit
     render(<App />);
     expect(document.documentElement).toHaveClass('cg-intro-lock');
     cleanup();

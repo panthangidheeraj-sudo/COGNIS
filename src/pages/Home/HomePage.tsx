@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ArrowUpRight, Compass, Library, Search, Table2, Telescope } from 'lucide-react';
 import { ArtifactIcon, artifactHref } from '@/components/library/artifactNav';
 import { api } from '@/api';
+import { API_MODE } from '@/api/http';
 import { useGlobe } from '@/stores/ui';
 import { GlobeStage } from '@/components/globe/GlobeStage';
 import { HeroSearch } from '@/components/search/HeroSearch';
@@ -17,7 +18,11 @@ import { formatOrgNumber, formatRelative } from '@/utils/format';
 import { ARTIFACT_TYPE_LABEL, SIGNAL_LABEL } from '@/utils/status';
 import './home.css';
 
-const EXAMPLES = ['Nordvik Helseteknologi', '921604337', 'SaaS companies in Oslo', 'Healthcare companies with revenue above 200M NOK'];
+// The built-in demo backend knows fictional sample companies; the live backend searches the real registry, where those would only lead to an empty result.
+const EXAMPLES =
+  API_MODE === 'live'
+    ? ['Equinor ASA', '923609016', 'IT services companies in Oslo', 'Companies in Bergen with more than 100 employees']
+    : ['Nordvik Helseteknologi', '921604337', 'SaaS companies in Oslo', 'Healthcare companies with revenue above 200M NOK'];
 
 const ACTIONS = [
   { to: '/research', icon: Telescope, title: 'Research a company', text: 'Deep research with verified sources' },

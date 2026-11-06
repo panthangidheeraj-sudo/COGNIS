@@ -312,7 +312,10 @@ export function OverviewSection({ profile, onTab, hideSnapshotMetrics }: { profi
             <dt>Locations</dt>
             <dd>
               <button className="link-btn" onClick={() => onTab('locations')}>
-                {new Set(profile.locations.locations.map((l) => l.municipality)).size} municipality(ies)
+                {(() => {
+                  const n = new Set(profile.locations.locations.map((l) => l.municipality)).size;
+                  return `${n} ${n === 1 ? 'municipality' : 'municipalities'}`;
+                })()}
               </button>
             </dd>
           </dl>

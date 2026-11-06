@@ -6,22 +6,41 @@ import { useReducedMotion } from '@/hooks/useMediaQuery';
 import { TOUR_SLIDES } from './slides';
 import { IntroBackdrop } from './IntroBackdrop';
 import { IntroTour } from './IntroTour';
+import { introSeen, markIntroSeen, REPLAY_INTRO_EVENT } from './introSeen';
 import './intro.css';
 
 /** Time the intro takes to fade out once dismissed. */
 export const LEAVE_MS = 450;
 
 /**
- * Launch gate: shows the introduction on every fresh launch and the application after it is dismissed.
+ * Launch gate: shows the introduction on the first visit from this browser and the application after it is dismissed.
  *
- * The decision lives in React state, so it survives SPA navigation (the gate sits above the router) and is gone on the next reload or
- * app start. Nothing is written to storage. The application itself is not mounted until the intro is dismissed, so the dashboard never
- * flashes behind the intro and its own entrance animations play when the user enters.
+ * That the intro was seen is remembered on the device (`introSeen`), so reloads, deep links and later visits go straight to the page that was
+ * asked for. The phase itself lives in React state, so it survives SPA navigation (the gate sits above the router). Settings can bring the intro
+ * back on demand (`replayIntro`); the application stays mounted behind it then. On a first visit the application is not mounted until the intro is
+ * dismissed, so the dashboard never flashes behind the intro and its own entrance animations play when the user enters.
  */
 export function LaunchGate({ children }: { children: ReactNode }) {
   const reduced = useReducedMotion();
-  const [phase, setPhase] = useState<'intro' | 'leaving' | 'done'>('intro');
-  const dismiss = useCallback(() => setPhase((p) => (p === 'intro' ? 'leaving' : p)), []);
+  const [phase, setPhase] = useState<'intro' | 'leaving' | 'done'>(() => (introSeen() ? 'done' : 'intro'));
+  const [appMounted, setAppMounted] = useState(phase !== 'intro');
+  const dismiss = useCallback(
+    () =>
+      setPhase((p) => {
+        if (p !== 'intro') return p;
+        markIntroSeen();
+        return 'leaving';
+      }),
+    [],
+  );
+  useEffect(() => {
+    if (phase !== 'intro') setAppMounted(true);
+  }, [phase]);
+  useEffect(() => {
+    const replay = () => setPhase('intro');
+    window.addEventListener(REPLAY_INTRO_EVENT, replay);
+    return () => window.removeEventListener(REPLAY_INTRO_EVENT, replay);
+  }, []);
   useEffect(() => {
     if (phase !== 'leaving') return;
     const t = window.setTimeout(() => setPhase('done'), reduced ? 0 : LEAVE_MS);
@@ -29,7 +48,7 @@ export function LaunchGate({ children }: { children: ReactNode }) {
   }, [phase, reduced]);
   return (
     <>
-      {phase !== 'intro' && children}
+      {(phase !== 'intro' || appMounted) && children}
       {phase !== 'done' && createPortal(<LaunchIntro leaving={phase === 'leaving'} onEnter={dismiss} />, document.body)}
     </>
   );

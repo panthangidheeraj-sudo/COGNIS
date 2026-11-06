@@ -906,8 +906,9 @@
 }
 .sact-top {
   display: flex;
+  flex-wrap: wrap; /* the state label drops below a long source name rather than squeezing it */
   align-items: center;
-  gap: 6px;
+  gap: 2px 6px;
   min-width: 0;
 }
 .sact-top svg {
@@ -918,7 +919,9 @@
   font-size: var(--fs-sm);
   font-weight: 500;
   min-width: 0;
-  overflow-wrap: anywhere;
+  flex: 1 1 9em;
+  overflow-wrap: break-word;
+  hyphens: auto;
 }
 .sact-state {
   margin-left: auto;
