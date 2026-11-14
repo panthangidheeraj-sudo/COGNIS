@@ -151,6 +151,8 @@ def check(obs: Observation) -> str | None:
     """Return a rejection reason, or None when the observation may be published."""
     if obs.source_class in NEVER_EVIDENCE or obs.tier == "C":
         return "search results and discovery hints are candidates, not evidence"
+    if (obs.attributes or {}).get("withheld_reason"):  # a true statement that would still mislead: e.g. the register lists the manager's website for a cooperative
+        return str(obs.attributes["withheld_reason"])
     if not obs.source_url:
         return "no source URL"
     if not obs.retrieved_at:
@@ -319,11 +321,15 @@ FIELD_ORDER = {name: i for i, name in enumerate([
 _STATE_PRIORITY = {"blocked": 0, "failed": 1, "ambiguous": 2, "not_applicable": 3, "not_available": 4}
 
 
-def absences(claims: list[Claim], modules: dict[str, ModuleResult], *, legal_form: str | None = None) -> list[Absence]:
+def absences(claims: list[Claim], modules: dict[str, ModuleResult], *, legal_form: str | None = None, rejections: list[Rejection] | None = None) -> list[Absence]:
     present = {c.field for c in claims}
+    withheld = {r.field: r.reason for r in rejections or [] if r.reason.startswith("withheld:")}
     out: list[Absence] = []
     for fld, (mods, explanation) in CORE_FIELDS.items():
         if fld in present:
+            continue
+        if fld in withheld:  # the value exists but was deliberately not published: never say the source lists nothing
+            out.append(Absence(field=fld, availability="ambiguous", modules=[m for m in mods if m in modules], note=withheld[fld].removeprefix("withheld: ")))
             continue
         consulted = [modules[m] for m in mods if m in modules]
         if not consulted:

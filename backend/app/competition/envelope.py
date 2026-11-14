@@ -187,7 +187,7 @@ def build_envelope(record: dict[str, Any], *, run_id: str, started_at: str | Non
         "modules": module_states,
         "synthesis": synthesis_block(record, claims, changes),
     }
-    attempts = [{k: a.get(k) for k in ("domain", "origin", "state", "decision", "score", "signals", "conflicts", "note")} for a in record.get("site_attempts") or []]
+    attempts = [{k: a.get(k) for k in ("domain", "origin", "state", "decision", "score", "signals", "conflicts", "note", "scope", "other_party", "reasons")} for a in record.get("site_attempts") or []]
     if attempts:
         envelope["website_attempts"] = attempts
     website = record.get("website") or {}

@@ -74,6 +74,9 @@ class SiteCrawl:
 
     def value(self) -> dict[str, Any]:
         home = self.homepage
+        if not self.verified:  # an unverified site's content is not the company's: keep the diagnosis, not the title / description / pages
+            return {"final_url": home.final_url if home else None, "domain": self.domain, "identity_assessment": self.audit.to_dict() if self.audit else None, "origin": self.origin,
+                    "verified": False}
         return {
             "final_url": home.final_url if home else None,
             "domain": self.domain,

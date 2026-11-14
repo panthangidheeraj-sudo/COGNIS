@@ -387,6 +387,11 @@ class Builder:
                 msg = "Source access blocked. " + msg
             if status == "ambiguous":
                 msg = "A website was found, but it could not be verified as belonging to this exact company. " + (mod.get("note") or "")
+            audit = w.get("audit") or {}
+            if audit.get("other_party"):  # a manager's, portal's or directory's site: not this company's, so neither its address nor its content is shown as the company's
+                why = "; ".join((audit.get("reasons") or [])[:1])
+                return {"status": "not_available", "message": ("A website associated with this company in other sources was checked and belongs to another party, so it is not published as the "
+                                                               "company's website. " + why).strip(), "pages": [], "social": [], "signals": [], "searchedSourceIds": ["brreg"]}
             out = {"status": status, "message": msg.strip(), "pages": [], "social": [], "signals": [], "searchedSourceIds": ["brreg"]}
             if w.get("domain"):
                 out["domain"] = w["domain"]

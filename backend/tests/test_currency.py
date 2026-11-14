@@ -238,7 +238,8 @@ def test_equinor_summary_and_sheet_cell_use_usd(net: Any) -> None:
     register(net)
     record = run(research(net, EQUINOR, provider=FakeProvider(malformed=True), mode="quick"))  # LLM unusable → deterministic template summary
     summary = record["summary"]["text"]
-    assert "revenue of USD 67.96B" in summary and "annual result of USD 5.73B" in summary and "NOK" not in summary
+    # the summary now leads with the sourced revenue trend (two filed years) instead of the registry sentence; the currency must still be the filed one
+    assert "to USD 67.96B in FY2025" in summary and "annual result of USD 5.73B" in summary and "NOK" not in summary
     revenue = next(c for c in record["claims"] if c["field"] == "revenue" and c["period_label"] == "FY2025")
     assert (revenue["value"], revenue["currency"], revenue["unit"]) == (REV_2025, "USD", "USD")
     assert "USD" in next(e for e in record["evidence"] if e["id"] in revenue["evidence_ids"])["claim_span"]
