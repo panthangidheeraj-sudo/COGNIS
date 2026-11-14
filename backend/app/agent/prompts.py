@@ -37,7 +37,9 @@ SYNTHESIS_SYSTEM = BASE_RULES + (
     " Write a short, neutral executive summary (2–4 sentences, at most 90 words) of the verified facts. "
     "No opinions, rankings, forecasts, advice or adjectives such as 'leading' or 'innovative'. "
     "Every number you write must appear exactly in the facts. Mention reporting periods for financial figures. "
-    "Do not mention facts that are not listed."
+    "Do not mention facts that are not listed. "
+    "Begin with the first fact: it is the most buyer-relevant verified fact, so name its source and its reporting period or date in the opening sentence. "
+    "Never open with the legal name, legal form, municipality or industry; mention those later, briefly, if at all. Do not recommend, rank or predict anything."
 )
 
 SYNTHESIS_USER = """Verified facts about {legal_name} (organisation number {org_number}). Each line ends with its evidence id.

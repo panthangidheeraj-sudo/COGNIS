@@ -9,6 +9,7 @@ summary; Python executes and validates everything.
 from __future__ import annotations
 
 import asyncio
+import re
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -36,7 +37,7 @@ from ..providers.llm_base import LLMProvider
 from ..runtime.budgets import CompanyBudget, RunBudget
 from ..security.urls import canonical_url, host_of, normalize_website, registrable_domain
 from ..storage.db import Database
-from . import crosscheck, hiring, llm_tasks, modes
+from . import buyer_signal, crosscheck, hiring, llm_tasks, modes
 from .trends import build_trends
 from .focus import focus_kinds
 from .record import build_record
@@ -524,9 +525,25 @@ class Orchestrator:
         else:
             st.crawl = best
             st.modules["website"] = best.module()
+        self._withhold_third_party_registry_website(st)
         self._step_done(st, emit, "website", t, st.modules["website"],
                         facts=1 if st.crawl and st.crawl.verified else 0,
                         message=None if st.crawl and st.crawl.verified else st.modules["website"].note)
+
+    def _withhold_third_party_registry_website(self, st: ResearchState) -> None:
+        """The register may list a manager's, a portal's or a directory's site as the website of a cooperative. "The register lists X" is true, but published as the
+        company's website it is read as a wrong-company claim, so it stays in the diagnostics (site_attempts) and is not published when the site demonstrably
+        belongs to someone else. Never done for a merely unverified site."""
+        other = {a["domain"]: a for a in st.site_attempts if a.get("other_party") and a.get("domain")}
+        if not other:
+            return
+        for obs in st.observations:
+            if obs.field != "registered_website" or not isinstance(obs.value, str):
+                continue
+            attempt = other.get(registrable_domain(host_of(normalize_website(obs.value) or obs.value)))
+            if attempt is not None:  # the domain and the full reasons stay in website_attempts / the identity diagnostics; the claim-level note does not repeat the other party's address
+                obs.attributes = {**(obs.attributes or {}), "withheld_reason": "withheld: the register lists a website for this entity, but the site belongs to another party (a manager, "
+                                                                                 "portal or directory), so it is not published as this company's website; see the website identity diagnostics"}
 
     async def _crawl_with_norid(self, ctx: ConnectorContext, url: str, identity: CanonicalIdentity, *, origin: str, max_pages: int, st: ResearchState) -> SiteCrawl:
         crawl = await crawl_site(ctx, url, identity, origin="registry" if origin == "registry" else ("email_domain" if origin == "email_domain" else "search"),
@@ -544,7 +561,9 @@ class Orchestrator:
                     await _enrich_verified(ctx, crawl, max_pages, identity, related_names_of(st.observations))
         st.site_attempts.append({"url": url, "domain": crawl.domain, "origin": crawl.origin, "state": crawl.state,
                                  "decision": crawl.audit.decision if crawl.audit else "not_fetched", "score": round(crawl.audit.score, 2) if crawl.audit else None,
-                                 "signals": crawl.audit.signals if crawl.audit else [], "conflicts": crawl.audit.conflicts if crawl.audit else [], "note": crawl.note})
+                                 "signals": crawl.audit.signals if crawl.audit else [], "conflicts": crawl.audit.conflicts if crawl.audit else [], "note": crawl.note,
+                                 "scope": crawl.audit.scope if crawl.audit else None, "other_party": bool(crawl.audit and crawl.audit.other_party),
+                                 "reasons": list(crawl.audit.reasons) if crawl.audit else []})
         return crawl
 
     async def _probe_name_domains(self, st: ResearchState, ctx: ConnectorContext, identity: CanonicalIdentity, max_pages: int, emit: EventSink) -> SiteCrawl | None:
@@ -777,7 +796,7 @@ class Orchestrator:
         for name in ("roles", "locations", "financials", "group", "financial_history", "website", "jobs"):
             if name not in st.modules:
                 st.modules[name] = _missing_module(name, st)
-        st.absence_list = absences(st.claims, st.modules, legal_form=st.identity.legal_form if st.identity else None)
+        st.absence_list = absences(st.claims, st.modules, legal_form=st.identity.legal_form if st.identity else None, rejections=st.rejections)
         if st.summary is None and st.claims:
             st.summary = _deterministic_summary(st)
 
@@ -1107,6 +1126,9 @@ def _fact_lines(st: ResearchState) -> list[tuple[str, str, list[str]]]:
         return evidence_id(o) if o else ""
 
     lines: list[tuple[str, str, list[str]]] = []
+    lead = buyer_signal.lead_signal(st.claims, st.trends, eid)
+    if lead is not None and lead["evidence_ids"]:  # the most buyer-relevant verified fact comes first, with its source and period already in the sentence
+        lines.append((lead["text"], lead["evidence_ids"][-1], ["buyer_signal", *lead["fields"]]))
     name = first("legal_name")
     form = first("legal_form")
     ind = first("industry_label")
@@ -1171,12 +1193,27 @@ async def _summarise(st: ResearchState, runner: llm_tasks.LLMRunner) -> dict[str
     if st.identity is None or not st.claims:
         return None
     lines = _fact_lines(st)
-    if runner.enabled and st.options.mode not in ("quick", "registry"):
+    has_lead = bool(lines) and "buyer_signal" in lines[0][2]
+    # Without a verified buyer-relevant fact the model has nothing to lead with: the deterministic text says so instead of opening with registry fields.
+    if runner.enabled and st.options.mode not in ("quick", "registry") and has_lead:
         text, method = await llm_tasks.synthesize(runner, st.identity, [(t, e) for t, e, _ in lines])
+        if text and _opens_with_registry_fields(text, st.identity):
+            runner.errors.append({"stage": "llm:synthesis", "error": "summary rejected: it opens with registry fields instead of the verified buyer-relevant fact"})
+            text = None
         if text:
             return {"text": text, "method": method, "evidence_ids": [e for _, e, _ in lines if e], "generated_at": now_iso(),
                     "sentences": [{"text": t, "evidence_ids": [e]} for t, e, _ in lines]}
     return _deterministic_summary(st, lines)
+
+
+_REGISTRY_OPENING = re.compile(r"^[^.]{0,120}?\b(is an?|is registered|er et|er en|registered as|registered in)\b", re.I)
+
+
+def _opens_with_registry_fields(text: str, identity: CanonicalIdentity | None) -> bool:
+    """True when the first sentence is the legal-name / legal-form / municipality / industry sentence the evaluator criticised."""
+    first = re.split(r"(?<=[.!?])\s", clean_ws(text), maxsplit=1)[0] if text else ""
+    name = (identity.legal_name or "").split(" ")[0].lower() if identity else ""
+    return bool(first and _REGISTRY_OPENING.search(first) and (not name or name in first.lower()))
 
 
 def _deterministic_summary(st: ResearchState, lines: list[tuple[str, str, list[str]]] | None = None) -> dict[str, Any] | None:
@@ -1193,30 +1230,44 @@ def _deterministic_summary(st: ResearchState, lines: list[tuple[str, str, list[s
         if ids:
             sentences.append({"text": text, "evidence_ids": ids})
 
+    from .record import evidence_id
+
+    signal = buyer_signal.lead_signal(st.claims, st.trends, lambda c: evidence_id(c.primary) if c.primary else "")
+    if signal is not None and signal["evidence_ids"]:
+        sentences.append({"text": signal["text"], "evidence_ids": list(signal["evidence_ids"]), "kind": signal["kind"]})
+    else:
+        sentences.append({"text": buyer_signal.NO_SIGNAL_TEXT, "evidence_ids": [], "kind": "no_signal"})
+    covered = set(signal["fields"]) if signal else set()
     name = by.get("legal_name")
-    lead = f"{name.value if name else ident.legal_name}"
+    ident_text = f"{name.value if name else ident.legal_name}"
     form = by.get("legal_form")
     form_text = str(form.attributes.get("description") or form.value) if form else ""
-    lead += f" is a Norwegian {form_text[:1].lower() + form_text[1:]}" if form else " is a registered Norwegian entity"
+    ident_text += f" is a Norwegian {form_text[:1].lower() + form_text[1:]}" if form else " is a registered Norwegian entity"
     muni = by.get("municipality")
     if muni:
-        lead += f" registered in {muni.value}"
+        ident_text += f" registered in {muni.value}"
     ind = by.get("industry_label")
     if ind:
-        lead += f", in the industry “{ind.value}”"
-    add(lead + ".", "legal_name", "legal_form", "municipality", "industry_label")
+        ident_text += f", in the industry “{ind.value}”"
+    add(ident_text + ".", "legal_name", "legal_form", "municipality", "industry_label")
     desc = by.get("business_description")
-    if desc:
+    if desc and "business_description" not in covered:
         text = desc.attributes.get("translation") or desc.value
         add(f"The company describes itself as follows: “{truncate(clean_ws(text), 220)}”", "business_description")
     revs = sorted([c for c in st.claims if c.field == "revenue"], key=lambda c: c.reporting_period or "", reverse=True)
-    if revs:
+    if revs and signal and signal["kind"] == "revenue_trend":  # the lead states the revenue trend; the latest filed annual result is still worth one sentence
+        latest = next((c for c in st.claims if c.field == "annual_result" and c.reporting_period == revs[0].reporting_period), None)
+        if latest is not None:
+            add(f"The latest filing ({latest.period_label}) states an annual result of {format_money(latest.value, latest.currency)}.", "annual_result")
+    elif revs and not covered & {"revenue", "annual_result"}:
         r = revs[0]
         res = next((c for c in st.claims if c.field == "annual_result" and c.reporting_period == r.reporting_period), None)
         sent = f"Filed accounts for {r.period_label} show revenue of {format_money(r.value, r.currency)}"
         sent += f" and an annual result of {format_money(res.value, res.currency)}." if res else "."
         add(sent, "revenue", "annual_result")
     for key, metric in ((st.trends or {}).get("metrics") or {}).items():
+        if key == "revenue" and "revenue" in covered and signal and signal["kind"] == "revenue_trend":
+            continue  # the lead already states the revenue trend with its source
         if len(metric["series"]) >= 2 and metric["evidence_ids"]:
             sentences.append({"text": metric["statement"], "evidence_ids": list(metric["evidence_ids"])})
     emp = by.get("registered_employees")
